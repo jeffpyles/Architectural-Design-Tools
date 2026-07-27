@@ -81,6 +81,17 @@ const DEFAULT_SPEC = {
 
   venting: 'ridge-gable', // 'ridge-gable' | 'ridge-soffit' | 'gable' | 'none'
 
+  /* Lean-to: a shed roof off one wall, ledger at the top plate, rafters down
+     to a beam on posts. Projection 0 means solve for the furthest it can
+     reach before the beam drops below leanToClear. */
+  leanTo: false,
+  leanToWall: 'W',
+  leanToProjection: 0,
+  leanToClear: 78,        // required clear height under the beam
+  leanToPosts: 3,
+  leanToSpacing: 24,      // rafter o.c.
+  leanToDrift: true,      // count the snow that drifts off the taller roof
+
   ceilingDrywall: true,
   wallDrywall: true,
   insulation: true,

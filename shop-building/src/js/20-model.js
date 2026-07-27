@@ -336,6 +336,78 @@ function buildModel(spec, openings) {
       { len: W + spec.rakeOverhang * 2, size: '2x6' });
   }
 
+  /* ---------- 3b. Lean-to ----------
+     Ledger at the wall top, rafters down to a beam on posts. Drawn on the
+     outboard side of whichever wall it is attached to. */
+  const lt = leanToDesign(spec);
+  if (lt && !lt.impossible) {
+    const e = wallExtent(lt.wall, spec);
+    const out = e.dir;                       // -1 west/north, +1 east/south
+    const face = e.out;                      // the wall's outside coordinate
+    const rd = LUMBER[lt.rafter.size].d;
+    const P = lt.projection;
+
+    // A point `d` out from the wall at height y, at position u along the wall
+    const at = (d, y, u) => (e.axis === 'x'
+      ? [u, y, face + out * d]
+      : [face + out * d, y, u]);
+
+    // Ledger, lagged into the wall studs
+    add('trusses', 'leanto', 'firDark', `${lt.rafter.size} ledger`,
+      wallBox(lt.wall, spec, e.u0, e.u1 - e.u0, H - rd, rd, T, 1.5),
+      { len: e.u1 - e.u0, size: lt.rafter.size });
+
+    // Rafters
+    const yWall = H - rd / 2 / Math.cos(lt.angle);
+    for (let u = 0; u <= lt.run - 1.5 + 0.01; u += spec.leanToSpacing) {
+      const uu = Math.min(u, lt.run - 1.5);
+      add('trusses', 'leanto', 'fir', `${lt.rafter.size} lean-to rafter`,
+        memberBox3(at(0, yWall, uu + 0.75), at(P, yWall - P * lt.slope, uu + 0.75), 1.5, rd),
+        { len: lt.rafterLen, size: lt.rafter.size });
+    }
+
+    // Beam at the outer edge, carried on posts
+    const beamMid = lt.beamTop - lt.beam.depth / 2;
+    add('trusses', 'leanto', lt.beam.kind === 'lvl' ? 'lvl' : 'firDark',
+      `Lean-to beam ${lt.beam.label}`,
+      (e.axis === 'x'
+        ? boxPart([lt.run / 2, beamMid, face + out * (P - lt.beam.thickness / 2)],
+          [lt.run, lt.beam.depth, lt.beam.thickness])
+        : boxPart([face + out * (P - lt.beam.thickness / 2), beamMid, lt.run / 2],
+          [lt.beam.thickness, lt.beam.depth, lt.run])),
+      { len: lt.run, size: lt.beam.label });
+
+    // Posts and their piers
+    for (let i = 0; i < lt.posts; i++) {
+      const u = 2.75 + (lt.run - 5.5) * (i / (lt.posts - 1));
+      const pc = at(P - lt.beam.thickness / 2, lt.beamBot / 2, u);
+      add('trusses', 'leanto', 'firDark', '6x6 post',
+        boxPart([pc[0], lt.beamBot / 2, pc[2]], [5.5, lt.beamBot, 5.5]),
+        { len: lt.beamBot, size: '6x6' });
+      add('site', 'slab', 'concrete', 'Lean-to pier',
+        boxPart([pc[0], -18, pc[2]], [18, 36, 18]));
+    }
+
+    // Purlins and the roof panel, on the rafters
+    const nP = Math.max(2, Math.floor(lt.rafterLen / spec.purlinSpacing) + 1);
+    for (let i = 0; i <= nP; i++) {
+      const along = Math.min(i * spec.purlinSpacing, lt.rafterLen - 1.75);
+      const d = along * Math.cos(lt.angle);
+      const y = H - rd / Math.cos(lt.angle) - d * lt.slope + 1.75;
+      add('dryin', 'leanto', 'fir', `${spec.purlinSize} lean-to purlin`,
+        (e.axis === 'x'
+          ? boxPart([lt.run / 2, y, face + out * d], [lt.run, 1.5, 3.5])
+          : boxPart([face + out * d, y, lt.run / 2], [3.5, 1.5, lt.run])),
+        { len: lt.run, size: spec.purlinSize });
+    }
+    const yTop = H - rd / Math.cos(lt.angle) + 3.9;
+    add('roof', 'leanto', spec.roofing === 'metal' ? 'metal' : 'shingle',
+      spec.roofing === 'metal' ? 'Lean-to metal panel' : 'Lean-to shingle',
+      memberBox3(at(-2, yTop + 0.5, lt.run / 2),
+        at(P + 4, yTop - (P + 4) * lt.slope, lt.run / 2), lt.run, 0.7),
+      { area: (P + 6) * lt.run / 144 });
+  }
+
   /* ---------- 4. Dry-in: purlins or deck, girts or sheathing ---------- */
   const roofTopOffset = tr.perp;                 // vertical thickness of the sloped chord
   const roofRunSloped = (tr.half + spec.eaveOverhang) / Math.cos(tr.angle);

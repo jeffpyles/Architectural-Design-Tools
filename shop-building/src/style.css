@@ -105,7 +105,6 @@ body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100svh;
-  min-height: 560px;
 }
 
 /* Flex and grid children default to min-width:auto, which lets the wide
@@ -168,10 +167,15 @@ main[data-inspector="closed"] { grid-template-columns: minmax(0, 1fr) 6px 0px; }
 .vp-tools {
   position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 8px;
   align-items: flex-start; pointer-events: none;
+  max-width: calc(100% - 24px);
 }
 .vp-tools > * { pointer-events: auto; }
 
-.chipset { display: flex; background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; box-shadow: var(--shadow); overflow: hidden; }
+.chipset {
+  display: flex; flex-wrap: wrap; max-width: 100%;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 3px;
+  box-shadow: var(--shadow); overflow: hidden;
+}
 .chipset button {
   font-family: var(--f-display); font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase;
   padding: 6px 11px; background: transparent; color: var(--ink-2);
@@ -491,6 +495,25 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--rule); border-bottom: 0
   .inspector { border-top: 1px solid var(--rule); }
   .legend { display: none; }
   .tb-id h1 { font-size: 21px; }
+}
+
+/* Short window, or zoomed in — which is common. The chrome shrinks so the
+   stage rail stays on screen; a fixed min-height on .app used to push it
+   below the fold instead, where nothing suggested it was there. */
+@media (max-height: 700px) {
+  .tb-id { padding: 6px 14px; }
+  .tb-id h1 { font-size: 19px; }
+  .tb-id p { display: none; }
+  .tb-facts > div { padding: 5px 12px; }
+  .tabs button { padding: 6px 10px 5px; font-size: 12.5px; }
+  .stage { padding: 5px 10px; }
+  .stage .nm { font-size: 13px; }
+  .rail-compact { padding: 5px 12px; }
+  .vp-tools { top: 8px; left: 8px; gap: 6px; }
+}
+@media (max-height: 560px) {
+  .tb-facts { display: none; }
+  .stage .num { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

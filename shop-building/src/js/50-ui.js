@@ -516,6 +516,17 @@ const CONTROLS = [
   { g: 'Structure', k: 'eaveOverhang', label: 'Eave overhang', type: 'len' },
   { g: 'Structure', k: 'rakeOverhang', label: 'Rake overhang', type: 'len' },
 
+  { g: 'Lean-to', k: 'leanTo', label: 'Add a lean-to', type: 'bool' },
+  { g: 'Lean-to', k: 'leanToWall', label: 'On which wall', type: 'sel',
+    opts: [['W', 'West'], ['N', 'North'], ['E', 'East'], ['S', 'South']] },
+  { g: 'Lean-to', k: 'leanToProjection', label: 'Projection (0 = as far as it goes)', type: 'len' },
+  { g: 'Lean-to', k: 'leanToClear', label: 'Clear height under the beam', type: 'len' },
+  { g: 'Lean-to', k: 'leanToPosts', label: 'Posts', type: 'sel',
+    opts: [[2, '2 — ends only'], [3, '3 — ends and middle'], [4, '4'], [5, '5']], num: true },
+  { g: 'Lean-to', k: 'leanToSpacing', label: 'Rafter spacing', type: 'sel',
+    opts: [[16, '16" o.c.'], [24, '24" o.c.']], num: true },
+  { g: 'Lean-to', k: 'leanToDrift', label: 'Count drifted snow', type: 'bool' },
+
   { g: 'Site & loads', k: 'groundSnow', label: 'Ground snow (psf)', type: 'num' },
   { g: 'Site & loads', k: 'windSpeed', label: 'Basic wind speed (mph)', type: 'num' },
   { g: 'Site & loads', k: 'exposure', label: 'Wind exposure', type: 'sel',
@@ -703,6 +714,42 @@ function renderReview() {
       + 'continuous lateral restraint for those chords, so it can stand in for the 2x4 restraint rows. '
       + 'It does not replace the diagonal bracing that keeps the trusses plumb as a group, '
       + 'and it does nothing for the roof plane — and none of it exists on the day you set the trusses.'));
+  }
+
+  const lt = leanToDesign(s);
+  if (lt) {
+    p.append(el('h3', null, 'Lean-to'));
+    if (lt.impossible) {
+      p.append(note(`No lean-to fits on the ${WALLS[lt.wall].label.toLowerCase()} wall — ${lt.reason}. `
+        + `A ${fmtFt(s.wallHeight)} wall leaves ${fmtFt(s.wallHeight - lt.clear)} above the required `
+        + `${fmtFt(lt.clear)} clearance, and the rafter and beam have to fit inside that.`));
+    } else {
+      p.append(note(lt.fixed
+        ? `Set to ${fmtFt(lt.projection)}. Reach is limited by headroom, not by the pitch: `
+          + `every inch of wall height buys ${fmtN(12 / s.pitch, 0)} inches of projection.`
+        : `The furthest it reaches before the beam drops below ${fmtFt(lt.clear)}. `
+          + `Reach is limited by headroom, not by the pitch: every inch of wall height buys `
+          + `${fmtN(12 / s.pitch, 0)} inches of projection.`));
+      const kvl = el('dl', 'kv');
+      for (const [k, v] of [
+        ['Projection', fmtFt(lt.projection)],
+        ['Covered area', `${fmtN(lt.area)} sf`],
+        ['Ledger at', fmtFt(lt.ledgerTop)],
+        ['Beam bottom', fmtFt(lt.beamBot)],
+        ['Rafters', `${lt.count} × ${lt.rafter.label} at ${fmtIn(s.leanToSpacing)} o.c.`],
+        ['Rafter length', fmtFt(lt.rafterLen)],
+        ['Beam', `${lt.beam.label} over ${fmtFt(lt.beamSpan)}`],
+        ['Posts', `${lt.posts} × 6x6, ${fmtFt(lt.beamBot)} tall`],
+        ['Design load', `${fmtN(lt.psf, 1)} psf`],
+      ]) kvl.append(el('dt', null, k), el('dd', null, v));
+      p.append(kvl);
+      if (s.leanToDrift && lt.drift.pd > 0) {
+        p.append(note(`Includes drifted snow: ${fmtN(lt.drift.pd)} psf over the `
+          + `${fmtN(lt.drift.width, 1)} ft nearest the wall, smeared across the span. `
+          + 'Snow blows off the main roof and piles against the building, so the lean-to '
+          + 'carries more than the flat ground-snow figure.'));
+      }
+    }
   }
 
   if (s.ceilingDrywall) {

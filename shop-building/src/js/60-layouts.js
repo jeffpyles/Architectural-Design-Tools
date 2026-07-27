@@ -360,9 +360,12 @@ function renderLayouts() {
     }
   }
 
-  /* starting points */
-  p.append(el('h3', null, 'Starting points'));
-  for (const preset of PRESETS) {
+  /* Starting points. Once a preset has been published to the shared library
+     it is listed above, so drop it here rather than showing it twice. */
+  const published = new Set((sharedLayouts || []).map((x) => (x.name || '').toLowerCase()));
+  const localOnly = PRESETS.filter((x) => !published.has(x.name.toLowerCase()));
+  if (localOnly.length) p.append(el('h3', null, 'Starting points'));
+  for (const preset of localOnly) {
     const { spec, openings } = preset.build();
     const worst = Math.min(...bracingCheck(spec, openings).flatMap((d) => d.lines.map((l) => l.ratio)));
     const row = el('div', 'saved-row');

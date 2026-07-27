@@ -65,6 +65,132 @@ const LVL = {
   '1.75x14':     { t: 1.75, d: 14.0,   Sx: 57.17, Ix: 400.2 },
 };
 
+/* Shallowest member from a ladder that carries wPlf over clearSpan inches.
+   Cr applies to repetitive members — rafters and joists at 24" o.c. or
+   tighter, and built-up beams of three plies or more. */
+function pickMember(clearSpan, wPlf, ladder, defDiv, repetitive) {
+  const L = clearSpan;
+  const win = wPlf / 12;
+  const M = win * L * L / 8;
+  const defLimit = L / defDiv;
+  for (const opt of ladder) {
+    const isLvl = opt.kind === 'lvl';
+    const sec = isLvl ? LVL[opt.size] : LUMBER[opt.size];
+    if (!sec) continue;
+    const Sx = sec.Sx * opt.plies;
+    const Ix = sec.Ix * opt.plies;
+    const Cr = repetitive || opt.plies >= 3 ? 1.15 : 1.0;
+    const Fb = isLvl ? 2600 * 1.15 : 900 * 1.15 * sec.Cf * Cr;
+    const E = isLvl ? 2.0e6 : 1.6e6;
+    const capM = Fb * Sx;
+    const defl = 5 * win * Math.pow(L, 4) / (384 * E * Ix);
+    if (capM >= M && defl <= defLimit) {
+      return { size: opt.size, plies: opt.plies, kind: opt.kind || 'sawn',
+        depth: sec.d, thickness: opt.plies * sec.t, M, capM, defl, defLimit,
+        w: wPlf, ratio: M / capM,
+        label: isLvl
+          ? `(${opt.plies}) 1¾×${opt.size.endsWith('14') ? '14' : '11⅞'} LVL`
+          : (opt.plies === 1 ? opt.size : `(${opt.plies}) ${opt.size}`) };
+    }
+  }
+  return null;
+}
+
+const RAFTER_LADDER = [
+  { size: '2x6', plies: 1 }, { size: '2x8', plies: 1 },
+  { size: '2x10', plies: 1 }, { size: '2x12', plies: 1 },
+];
+
+/* ---- lean-to ----
+   Reach is set by headroom, not by the pitch. Drop the ledger height by the
+   rafter depth and the beam depth, and whatever is left above the required
+   clearance is what the slope has to spend: P = (H - dr - db - clear) / slope.
+   Both depths depend on P, so it iterates. */
+function leanToLoads(spec) {
+  const r = roofLoads(spec);
+  return { live: r.live, dead: r.tcDead, total: r.live + r.tcDead };
+}
+
+/* ASCE 7 leeward drift where a lower roof meets a taller wall. Snow blows off
+   the main roof and piles against it, so the lean-to carries more than the
+   flat ground-snow figure near the building. */
+function leanToDrift(spec) {
+  const pg = spec.groundSnow;
+  const gamma = Math.min(0.13 * pg + 14, 30);
+  const lu = spec.width / 12;
+  const hd = Math.max(0, 0.43 * Math.cbrt(lu) * Math.pow(pg + 10, 0.25) - 1.5);
+  return { gamma, hd, pd: hd * gamma, width: 4 * hd };
+}
+
+function leanToDesign(spec) {
+  if (!spec.leanTo) return null;
+  const wall = spec.leanToWall;
+  const e = wallExtent(wall, spec);
+  const run = wallRun(wall, spec);
+  const H = spec.wallHeight;
+  const slope = spec.pitch / 12;
+  const angle = Math.atan(slope);
+  const clear = spec.leanToClear;
+  const posts = Math.max(2, Math.round(spec.leanToPosts));
+  const beamSpan = run / (posts - 1);
+  const loads = leanToLoads(spec);
+  const drift = spec.leanToDrift ? leanToDrift(spec) : { hd: 0, pd: 0, width: 0, gamma: 0 };
+  const fixed = spec.leanToProjection > 0;
+
+  /* Bisect: the widest projection whose own members still leave the required
+     clearance under the beam. Deeper members eat headroom, which shortens the
+     reach, which lets the members get shallower — so search rather than guess. */
+  const evalAt = (P) => {
+    const Pft = Math.max(P, 1) / 12;
+    const surcharge = drift.pd * Math.min(drift.width, Pft) / Pft;
+    const psf = loads.total + surcharge;
+    const rafter = pickMember(Math.max(P, 12), psf * spec.leanToSpacing / 12,
+      RAFTER_LADDER, 180, true);
+    const beam = pickMember(beamSpan, psf * (Pft / 2), HEADER_LADDER, 240, false);
+    if (!rafter || !beam) return null;
+    const dr = LUMBER[rafter.size].d / Math.cos(angle);
+    const reach = (H - dr - beam.depth - clear) / slope;
+    return { psf, rafter, beam, dr, reach, ok: reach >= P };
+  };
+
+  let found = null, P = 0;
+  if (fixed) {
+    P = spec.leanToProjection;
+    found = evalAt(P);
+  } else {
+    let lo = 0, hi = Math.max(0, (H - clear) / slope);
+    for (let i = 0; i < 44; i++) {
+      const mid = (lo + hi) / 2;
+      const r = evalAt(mid);
+      if (r && r.ok) { found = r; P = mid; lo = mid; } else hi = mid;
+    }
+  }
+
+  if (!found) {
+    return { wall, run, posts, beamSpan, projection: 0, impossible: true,
+      reason: fixed ? 'past dimension lumber at that projection' : 'no headroom left',
+      clear, drift, psf: loads.total };
+  }
+  const rafter = found.rafter, beam = found.beam, psf = found.psf;
+
+  P = Math.round(P * 16) / 16;
+  const dr = LUMBER[rafter.size].d / Math.cos(angle);
+  const ledgerTop = H;
+  const rafterBotAtWall = H - dr;
+  const beamTop = rafterBotAtWall - P * slope;
+  const beamBot = beamTop - beam.depth;
+  return {
+    wall, run, posts, beamSpan, projection: P, fixed,
+    rafter, beam, psf, drift, clear,
+    ledgerTop, rafterBotAtWall, beamTop, beamBot,
+    headroom: beamBot,
+    rafterLen: P / Math.cos(angle),
+    area: P * run / 144,
+    count: Math.floor(run / spec.leanToSpacing) + 1,
+    angle, slope,
+  };
+}
+
 function sizeHeader(clearSpan, wall, spec) {
   const loads = roofLoads(spec);
   const bearing = WALLS[wall].bearing;
@@ -77,31 +203,15 @@ function sizeHeader(clearSpan, wall, spec) {
   const M = win * L * L / 8;                      // lb-in
   const defLimit = L / 240;
 
-  for (const opt of HEADER_LADDER) {
-    const isLvl = opt.kind === 'lvl';
-    const sec = isLvl ? LVL[opt.size] : LUMBER[opt.size];
-    const Sx = sec.Sx * opt.plies;
-    const Ix = sec.Ix * opt.plies;
-    const Fb = isLvl ? 2600 * 1.15
-      : 900 * 1.15 * sec.Cf * (opt.plies >= 3 ? 1.15 : 1.0);
-    const E = isLvl ? 2.0e6 : 1.6e6;
-    const capM = Fb * Sx;
-    const defl = 5 * win * Math.pow(L, 4) / (384 * E * Ix);
-    if (capM >= M && defl <= defLimit) {
-      const thickness = opt.plies * sec.t;
-      const wallT = LUMBER[spec.studSize].t === 1.5 ? LUMBER[spec.studSize].d : 5.5;
-      return {
-        size: opt.size, plies: opt.plies, kind: opt.kind, depth: sec.d,
-        thickness, spacers: Math.max(0, Math.round((wallT - thickness) / 0.5)),
-        M, capM, defl, defLimit, w,
-        label: isLvl
-          ? `(${opt.plies}) 1¾×${opt.size.endsWith('14') ? '14' : '11⅞'} LVL`
-          : `(${opt.plies}) ${opt.size}`,
-        ratio: M / capM,
-      };
-    }
+  const picked = pickMember(L, w, HEADER_LADDER, 240, false);
+  if (!picked) {
+    return { size: null, label: 'Needs an engineered beam — span is past dimension lumber',
+      over: true, M, w };
   }
-  return { size: null, label: 'Needs an engineered beam — span is past dimension lumber', over: true, M, w };
+  const wallT = LUMBER[spec.studSize].d;
+  return { ...picked, defLimit,
+    spacers: Math.max(0, Math.round((wallT - picked.thickness) / 0.5)),
+    label: picked.plies === 1 ? `(1) ${picked.size}` : picked.label };
 }
 
 /* ---- truss geometry ----
@@ -472,6 +582,32 @@ function auditBuilding(spec, openings) {
         'Moisture from the shop will collect above the drywall. Vent it or make the lid airtight and unvented by design.');
     }
   }
+  const lt = leanToDesign(spec);
+  if (lt && lt.impossible) {
+    add('crit', 'The lean-to does not fit', `On a ${fmtFt(spec.wallHeight)} wall with `
+      + `${fmtFt(spec.leanToClear)} of clearance required, ${lt.reason}.`);
+  } else if (lt) {
+    if (lt.beamBot < spec.leanToClear - 0.5) {
+      add('crit', 'Lean-to beam is below the clearance you asked for',
+        `Beam bottom lands at ${fmtFt(lt.beamBot)} against ${fmtFt(spec.leanToClear)} required. `
+        + 'Shorten the projection or raise the walls.');
+    }
+    if (lt.beamSpan > 168) {
+      add('warn', `Lean-to beam spans ${fmtFt(lt.beamSpan)}`,
+        `${lt.posts} posts over ${fmtFt(lt.run)} is a long span, and a deeper beam eats the `
+        + `headroom that sets the reach. One more post would shorten it to `
+        + `${fmtFt(lt.run / lt.posts)} and buy back projection.`);
+    }
+    add('info', 'Lean-to ledger carries the whole roof into the wall',
+      `${fmtN(lt.psf * lt.projection / 2 / 12, 0)} lb per foot of wall. Lag or through-bolt into `
+      + 'every stud, not into the siding or the girts, and flash the top under the rake trim.');
+    if (lt.wall === 'W' || lt.wall === 'E') {
+      add('info', 'The lean-to lands on a gable wall',
+        'The ledger is under the top plate, so it clears the gable. It does add wind area '
+        + 'on that side without adding any braced panel — worth a look at the Review bars.');
+    }
+  }
+
   if (spec.bracing === 'diaphragm') {
     add('warn', 'Steel skin counted as the diaphragm',
       'This is how post-frame buildings stand up, and it works — but only as a designed assembly. '

@@ -45,6 +45,7 @@ whatever permissions this repository already has.
 ```sh
 cd shop-building && node build.mjs   # → dist/index.html and dist/shop.html
 node tools/check.mjs                 # headless model + engineering assertions
+node tools/viewport-check.mjs        # browser layout check across window shapes
 
 cd .. && node tools/serve.mjs        # assemble _site/ as CI does, serve on :8099
 ```

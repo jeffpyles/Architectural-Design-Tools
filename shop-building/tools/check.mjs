@@ -13,7 +13,8 @@ const ctx = vm.createContext({ Math, console, performance, Intl, Number, JSON,
   TextEncoder, TextDecoder, btoa, atob, Date });
 vm.runInContext(src + '\n;globalThis.__api = { buildModel, takeoff, auditBuilding, trussGeometry, '
   + 'bracingCheck, DEFAULT_SPEC, DEFAULT_OPENINGS, solidSegments, sizeHeader, fmtFt, fmtIn, '
-  + 'stockFor, wallExtent, WALLS, roofLoads, PRESETS, encodeLayout, decodeLayout, layoutSummary };', ctx);
+  + 'stockFor, wallExtent, WALLS, roofLoads, PRESETS, encodeLayout, decodeLayout, layoutSummary, '
+  + 'leanToDesign, leanToDrift, pickMember };', ctx);
 const A = ctx.__api;
 
 const spec = { ...A.DEFAULT_SPEC };
@@ -178,6 +179,37 @@ for (const p of perms) {
   } catch (e) {
     fail(`${JSON.stringify(p)} threw: ${e.message}`);
   }
+}
+
+// 9b. Lean-to: the solved projection must actually satisfy its own geometry
+for (const H of [120, 144]) {
+  for (const posts of [2, 3, 4]) {
+    const s2 = { ...spec, wallHeight: H, leanTo: true, leanToPosts: posts };
+    const lt = A.leanToDesign(s2);
+    if (!lt || lt.impossible) { fail(`lean-to found nothing at ${H}" walls, ${posts} posts`); continue; }
+    const slope = s2.pitch / 12;
+    const dr = 0;  // recomputed from the reported geometry below
+    const expectBeamTop = lt.rafterBotAtWall - lt.projection * slope;
+    if (Math.abs(lt.beamTop - expectBeamTop) > 0.01) fail(`lean-to beam top does not follow the slope at ${H}"`);
+    if (Math.abs((lt.beamTop - lt.beam.depth) - lt.beamBot) > 0.01) fail(`lean-to beam bottom is not top minus depth at ${H}"`);
+    if (lt.beamBot < lt.clear - 0.06) fail(`lean-to beam bottom ${lt.beamBot} is under the ${lt.clear} clearance at ${H}"`);
+    // Any more projection would break something: either headroom or a member
+    const bigger = A.leanToDesign({ ...s2, leanToProjection: lt.projection + 6 });
+    const stillOk = bigger && !bigger.impossible && bigger.beamBot >= lt.clear - 0.06
+      && bigger.rafter && bigger.beam;
+    if (stillOk) fail(`lean-to at ${H}" walls stopped at ${A.fmtFt(lt.projection)} but 6" more still works`);
+    console.log(`  lean-to ${H / 12}' walls, ${posts} posts → ${A.fmtFt(lt.projection)}, `
+      + `${lt.rafter.label} rafters, beam ${lt.beam.label} over ${A.fmtFt(lt.beamSpan)}, `
+      + `bottom at ${A.fmtFt(lt.beamBot)}`);
+  }
+}
+{
+  const d = A.leanToDrift(spec);
+  if (!(d.pd > 0 && d.width > 0)) fail('drift surcharge came out zero');
+  console.log(`  ok  drift ${d.pd.toFixed(1)} psf over ${d.width.toFixed(1)} ft`);
+  const withD = A.leanToDesign({ ...spec, leanTo: true });
+  const noD = A.leanToDesign({ ...spec, leanTo: true, leanToDrift: false });
+  if (withD.psf <= noD.psf) fail('counting drift did not raise the design load');
 }
 
 // 10. Presets must load, round-trip through the share code, and say what

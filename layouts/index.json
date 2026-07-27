@@ -1,5 +1,26 @@
 [
   {
+    "file": "10-walls-bracing-passes-lean-to.json",
+    "tool": "shop-building",
+    "name": "10' walls, bracing passes + lean-to",
+    "note": "10' walls, bracing passes with a shed roof off the west wall: reaches 8'-6⅛\" before the beam bottom hits 6'-7⁹⁄₁₆\". Rafters 2x6 at 24\" o.c., beam (2) 2x10 on 3 posts over 13'-0\".",
+    "code": "SHOP1-eyJ2IjoxLCJzIjp7IndhbGxIZWlnaHQiOjEyMCwic3R1ZFNwYWNpbmciOjI0LCJ0cnVzc1NwYWNpbmciOjQ4LCJicmFjaW5nIjoiZnVsbCIsImxlYW5UbyI6dHJ1ZX0sIm8iOltbIlciLCJXMSIsIndpbmRvdyIsNDIsOTYsMCwwXSxbIk4iLCJXMiIsIndpbmRvdyIsMTE0LDk2LDAsMF0sWyJXIiwiVzEiLCJ3aW5kb3ciLDIxMCw5NiwwLDBdLFsiUyIsIkQyIiwib3ZlcmhlYWQiLDI0LjUsMTA4LDAsMTA4XSxbIlMiLCJXMiIsIndpbmRvdyIsMTYzLjUsOTYsMCwwXSxbIkUiLCJEMSIsIm1hbiIsMjQxLjUsODIuNSwwLDBdLFsiRSIsIkQxIiwibWFuIiwzNiw4Mi41LDAsMF1dfQ"
+  },
+  {
+    "file": "10-walls-bracing-passes.json",
+    "tool": "shop-building",
+    "name": "10' walls, bracing passes",
+    "note": "",
+    "code": "SHOP1-eyJ2IjoxLCJzIjp7IndhbGxIZWlnaHQiOjEyMCwic3R1ZFNwYWNpbmciOjI0LCJ0cnVzc1NwYWNpbmciOjQ4LCJicmFjaW5nIjoiZnVsbCJ9LCJvIjpbWyJXIiwiVzEiLCJ3aW5kb3ciLDQyLDk2LDAsMF0sWyJOIiwiVzIiLCJ3aW5kb3ciLDExNCw5NiwwLDBdLFsiVyIsIlcxIiwid2luZG93IiwyMTAsOTYsMCwwXSxbIlMiLCJEMiIsIm92ZXJoZWFkIiwyNC41LDEwOCwwLDEwOF0sWyJTIiwiVzIiLCJ3aW5kb3ciLDE2My41LDk2LDAsMF0sWyJFIiwiRDEiLCJtYW4iLDI0MS41LDgyLjUsMCwwXSxbIkUiLCJEMSIsIm1hbiIsMzYsODIuNSwwLDBdXX0"
+  },
+  {
+    "file": "as-sketched-lean-to.json",
+    "tool": "shop-building",
+    "name": "As sketched + lean-to",
+    "note": "As sketched with a shed roof off the west wall: reaches 15'-8⅞\" before the beam bottom hits 6'-6\". Rafters 2x10 at 24\" o.c., beam (3) 2x10 on 3 posts over 13'-0\".",
+    "code": "SHOP1-eyJ2IjoxLCJzIjp7ImxlYW5UbyI6dHJ1ZX0sIm8iOltbIlciLCJXMSIsIndpbmRvdyIsNDIsMTIwLDAsMF0sWyJXIiwiVzIiLCJ3aW5kb3ciLDEyNiwxMjAsMCwwXSxbIlciLCJXMSIsIndpbmRvdyIsMjEwLDEyMCwwLDBdLFsiUyIsIkQyIiwib3ZlcmhlYWQiLDI0LDEyMCwwLDBdLFsiUyIsIlcyIiwid2luZG93IiwxNzQsNzguNSwwLDBdLFsiUyIsIkQxIiwibWFuIiwyNDAsODIuNSwwLDBdLFsiRSIsIkQxIiwibWFuIiwzNiw4Mi41LDAsMF1dfQ"
+  },
+  {
     "file": "as-sketched.json",
     "tool": "shop-building",
     "name": "As sketched",

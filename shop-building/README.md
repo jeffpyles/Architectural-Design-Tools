@@ -35,7 +35,9 @@ src/js/50-ui.js      state, interaction, the six inspector panels
 src/js/99-boot.js    startup
 src/js/60-layouts.js share codes, presets, browser-saved and repo layouts
 assets/fonts/        subset woff2, committed so CI can build without fontTools
-tools/               font subsetting, headless checks, screenshots
+tools/check.mjs      headless model + engineering assertions
+tools/viewport-check.mjs  browser layout assertions across window shapes and zoom
+tools/               font subsetting, screenshots
 dist/index.html      standalone page, what GitHub Pages serves
 dist/shop.html       the same body without the document shell, for the Artifact host
 ```

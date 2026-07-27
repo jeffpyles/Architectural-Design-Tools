@@ -36,6 +36,15 @@ jobs:
       - name: Collect the shared layouts
         run: node tools/build-layout-index.mjs
 
+      # The stage rail has slipped out of reach twice in ways the node checks
+      # cannot see, so the layout gets asserted in a real browser.
+      - name: Check the page layout in a browser
+        working-directory: shop-building
+        run: |
+          npm install --no-save playwright@1.61.1
+          npx playwright install --with-deps chromium
+          node tools/viewport-check.mjs
+
       - name: Assemble the site
         run: |
           mkdir -p _site/shop-building _site/layouts
