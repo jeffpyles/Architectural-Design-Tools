@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architectural Design Tools</title>
+<meta name="description" content="Interactive building models: draw a structure, move the openings, and read the framing, loads and material list off the model.">
+<style>
+:root {
+  --paper: #eaeeec; --surface: #f6f8f7; --surface-2: #e0e6e4;
+  --ink: #18211f; --ink-2: #57645f; --ink-3: #8b9793;
+  --rule: #c6d1ce; --rule-soft: #d7dfdd;
+  --chalk: #0f5187; --keel: #bb4218;
+  --grid: rgba(30, 70, 90, 0.055);
+  --shadow: 0 1px 2px rgba(20,40,36,.07), 0 8px 24px -12px rgba(20,40,36,.22);
+  --f-display: 'Haettenschweiler', 'Arial Narrow', 'Oswald', sans-serif;
+  --f-body: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #101516; --surface: #171d1f; --surface-2: #202829;
+    --ink: #e2e9e7; --ink-2: #94a3a0; --ink-3: #6d7b78;
+    --rule: #2a3436; --rule-soft: #212a2c;
+    --chalk: #61b0e9; --keel: #e57c4e;
+    --grid: rgba(120,190,220,.05);
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 0 20px 64px;
+  font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  color: var(--ink); background-color: var(--paper);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 13px 13px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 760px; margin: 0 auto; }
+header { padding: 56px 0 8px; }
+h1 {
+  margin: 0 0 6px; font-family: var(--f-display); font-weight: 700;
+  font-size: clamp(30px, 6vw, 46px); line-height: 1; letter-spacing: 0.01em;
+  text-transform: uppercase; text-wrap: balance;
+}
+header p { margin: 0; color: var(--ink-2); max-width: 60ch; }
+h2 {
+  margin: 40px 0 12px; font-family: var(--f-display); font-size: 15px;
+  letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--rule-soft); padding-bottom: 5px;
+}
+a { color: var(--chalk); }
+.tool {
+  display: block; text-decoration: none; color: inherit;
+  border: 1px solid var(--rule); border-radius: 4px; background: var(--surface);
+  padding: 18px 20px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.tool:hover { border-color: var(--chalk); }
+.tool:focus-visible { outline: 2px solid var(--keel); outline-offset: 2px; }
+.tool h3 {
+  margin: 0 0 4px; font-family: var(--f-display); font-size: 22px;
+  letter-spacing: 0.02em; text-transform: uppercase;
+}
+.tool p { margin: 0 0 10px; color: var(--ink-2); font-size: 14px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.facts span {
+  font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2);
+  background: var(--surface-2); border-radius: 2px; padding: 2px 7px;
+}
+.note { color: var(--ink-2); font-size: 14px; }
+.note code {
+  font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2);
+  padding: 1px 5px; border-radius: 2px;
+}
+ol.steps { padding-left: 20px; color: var(--ink-2); font-size: 14px; }
+ol.steps li { margin-bottom: 7px; }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule-soft); color: var(--ink-3); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Architectural Design Tools</h1>
+    <p>Interactive building models. Draw a structure, slide the doors and windows
+       around, and read the framing, the loads and the material list straight off
+       the model as you go.</p>
+  </header>
+
+  <h2>Tools</h2>
+
+  <a class="tool" href="shop-building/">
+    <h3>Shop Building</h3>
+    <p>A 24' × 26' stick-framed shop with a 3/12 gable, built stud by stud from a
+       pair of pencil sketches. Move the openings and watch the headers, the racking
+       check and the takeoff follow. Steps through the build from slab to drywall.</p>
+    <div class="facts">
+      <span>3D model</span><span>truss cut list</span><span>bracing check</span>
+      <span>material takeoff</span><span>shareable layouts</span>
+    </div>
+  </a>
+
+  <h2>Sharing a layout</h2>
+  <p class="note">Every layout in these tools encodes to a short <code>SHOP1-</code>
+     code and to a plain web link. Both open the exact same building on any machine,
+     so a layout travels in an email with nothing to install.</p>
+  <ol class="steps">
+    <li>Open the <strong>Layouts</strong> tab in a tool.</li>
+    <li><strong>Copy link</strong> for a message, or <strong>Copy code</strong> to paste
+        into the same tab somewhere else.</li>
+    <li><strong>Publish on GitHub</strong> adds it to the shared library here, where
+        it shows up for everyone. If you can write to this repository it commits
+        directly; if not, GitHub walks you into a pull request. No account details
+        are ever stored in the page.</li>
+  </ol>
+
+  <footer>
+    Preliminary sizing for owner-built structures — useful for laying a building out,
+    not a substitute for an engineer's review.
+    <a href="https://github.com/jeffpyles/architectural-design-tools">Source on GitHub</a>.
+  </footer>
+</div>
+</body>
+</html>

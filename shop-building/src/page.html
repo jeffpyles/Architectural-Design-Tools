@@ -1,0 +1,91 @@
+<style>{{CSS}}</style>
+
+<div class="app">
+  <header class="titleblock">
+    <div class="tb-id">
+      <h1>Shop Building</h1>
+      <p>From the sketches, <span id="tbSub">24'-0" × 26'-0", ridge east–west</span></p>
+    </div>
+    <dl class="tb-facts" id="tbFacts"></dl>
+  </header>
+
+  <main>
+    <div class="viewport">
+      <canvas id="cv" aria-label="Three-dimensional model of the shop building"></canvas>
+
+      <div class="vp-tools">
+        <div class="chipset" role="group" aria-label="Camera">
+          <button data-view="iso">Iso</button>
+          <button data-view="plan">Plan</button>
+          <button data-view="W">West</button>
+          <button data-view="S">South</button>
+          <button data-view="E">East</button>
+          <button data-view="N">North</button>
+        </div>
+        <div class="chipset" role="group" aria-label="Display">
+          <button id="btnCutaway" aria-pressed="true">Cutaway: walls + roof</button>
+          <button id="btnEdges" aria-pressed="true">Edges</button>
+          <button id="btnStack" aria-pressed="true">Stack stages</button>
+        </div>
+      </div>
+
+      <div class="compass" aria-hidden="true">
+        <svg viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" stroke-opacity="0.18" />
+          <polygon class="needle" points="50,12 56,48 50,42 44,48" />
+          <polygon points="50,88 56,52 50,58 44,52" fill="currentColor" fill-opacity="0.28" />
+          <text x="50" y="30" text-anchor="middle" dominant-baseline="middle">N</text>
+          <text class="house" x="84" y="52" text-anchor="middle" dominant-baseline="middle">HOUSE</text>
+        </svg>
+      </div>
+
+      <div class="readout" id="readout" role="status" aria-live="polite">
+        <button class="panel-x" id="roClose" aria-label="Dismiss">×</button>
+        <h4 id="roTitle">—</h4>
+        <p id="roBody"></p>
+      </div>
+
+      <div class="legend" id="legend">
+        <button class="legend-head" id="legendToggle" aria-expanded="true" aria-controls="legendBody">
+          <span>Materials</span><span class="caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="legend-body" id="legendBody"></div>
+      </div>
+    </div>
+
+    <div class="grip" id="grip" role="separator" aria-orientation="vertical"
+         aria-label="Resize the inspector" tabindex="0"></div>
+
+    <aside class="inspector" id="inspector">
+      <button class="collapse" id="btnCollapse" aria-label="Collapse the panel" title="Collapse the panel">›</button>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="openings" aria-selected="true">Openings</button>
+        <button role="tab" data-tab="structure" aria-selected="false">Structure</button>
+        <button role="tab" data-tab="review" aria-selected="false">Review</button>
+        <button role="tab" data-tab="truss" aria-selected="false">Truss</button>
+        <button role="tab" data-tab="takeoff" aria-selected="false">Takeoff</button>
+        <button role="tab" data-tab="layouts" aria-selected="false">Layouts</button>
+      </div>
+
+      <section class="panel on" id="panel-openings" role="tabpanel">
+        <p class="note">Drag an opening across its wall in the model, or type an offset.
+          Offsets are measured to the near edge of the rough opening, from the corner named on each card.</p>
+        <div id="opList"></div>
+        <h3>Windows on hand</h3>
+        <div class="stock" id="stockList"></div>
+        <h3>Add an opening</h3>
+        <div class="btn-row" id="addRow"></div>
+      </section>
+
+      <section class="panel" id="panel-structure" role="tabpanel"></section>
+      <section class="panel" id="panel-review" role="tabpanel"></section>
+      <section class="panel" id="panel-truss" role="tabpanel"></section>
+      <section class="panel" id="panel-takeoff" role="tabpanel"></section>
+      <section class="panel" id="panel-layouts" role="tabpanel"></section>
+    </aside>
+  </main>
+
+  <footer class="stagerail" id="stageRail" role="group" aria-label="Build stage"></footer>
+</div>
+
+<script>{{JS}}</script>

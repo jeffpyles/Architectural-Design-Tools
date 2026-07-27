@@ -1,0 +1,23 @@
+[
+  {
+    "file": "as-sketched.json",
+    "tool": "shop-building",
+    "name": "As sketched",
+    "note": "The two pencil sketches exactly as drawn: 12' walls, 10' x 10' overhead door. South and west walls have no qualifying braced panel.",
+    "code": "SHOP1-eyJ2IjoxLCJzIjp7fSwibyI6W1siVyIsIlcxIiwid2luZG93Iiw0MiwxMjAsMCwwXSxbIlciLCJXMiIsIndpbmRvdyIsMTI2LDEyMCwwLDBdLFsiVyIsIlcxIiwid2luZG93IiwyMTAsMTIwLDAsMF0sWyJTIiwiRDIiLCJvdmVyaGVhZCIsMjQsMTIwLDAsMF0sWyJTIiwiVzIiLCJ3aW5kb3ciLDE3NCw3OC41LDAsMF0sWyJTIiwiRDEiLCJtYW4iLDI0MCw4Mi41LDAsMF0sWyJFIiwiRDEiLCJtYW4iLDM2LDgyLjUsMCwwXV19"
+  },
+  {
+    "file": "openings-ganged.json",
+    "tool": "shop-building",
+    "name": "Openings ganged",
+    "note": "10' walls, 9' x 8' door, each wall's openings pushed together so the leftover wall lands in one run. Clears every wall line.",
+    "code": "SHOP1-eyJ2IjoxLCJzIjp7IndhbGxIZWlnaHQiOjEyMCwiYnJhY2VkUGFuZWxXaWR0aCI6NzJ9LCJvIjpbWyJXIiwiVzEiLCJ3aW5kb3ciLDEyLDEwMiwwLDBdLFsiVyIsIlcyIiwid2luZG93Iiw3OCwxMDIsMCwwXSxbIlciLCJXMSIsIndpbmRvdyIsMTQ0LDEwMiwwLDBdLFsiUyIsIkQyIiwib3ZlcmhlYWQiLDYsOTYsMTA4LDk2XSxbIlMiLCJXMiIsIndpbmRvdyIsMTIwLDc4LjUsMCwwXSxbIlMiLCJEMSIsIm1hbiIsMTg2LDgyLjUsMCwwXSxbIkUiLCJEMSIsIm1hbiIsMzYsODIuNSwwLDBdXX0"
+  },
+  {
+    "file": "ten-foot-walls-nine-foot-door.json",
+    "tool": "shop-building",
+    "name": "10' walls, 9' door",
+    "note": "Wall height and door size as revised. Bracing is still short on the south and west walls.",
+    "code": "SHOP1-eyJ2IjoxLCJzIjp7IndhbGxIZWlnaHQiOjEyMH0sIm8iOltbIlciLCJXMSIsIndpbmRvdyIsNDIsMTAyLDAsMF0sWyJXIiwiVzIiLCJ3aW5kb3ciLDEyNiwxMDIsMCwwXSxbIlciLCJXMSIsIndpbmRvdyIsMjEwLDEwMiwwLDBdLFsiUyIsIkQyIiwib3ZlcmhlYWQiLDI0LDk2LDEwOCw5Nl0sWyJTIiwiVzIiLCJ3aW5kb3ciLDE3NCw3OC41LDAsMF0sWyJTIiwiRDEiLCJtYW4iLDI0MCw4Mi41LDAsMF0sWyJFIiwiRDEiLCJtYW4iLDM2LDgyLjUsMCwwXV19"
+  }
+]

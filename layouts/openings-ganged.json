@@ -1,0 +1,6 @@
+{
+  "tool": "shop-building",
+  "name": "Openings ganged",
+  "note": "10' walls, 9' x 8' door, each wall's openings pushed together so the leftover wall lands in one run. Clears every wall line.",
+  "code": "SHOP1-eyJ2IjoxLCJzIjp7IndhbGxIZWlnaHQiOjEyMCwiYnJhY2VkUGFuZWxXaWR0aCI6NzJ9LCJvIjpbWyJXIiwiVzEiLCJ3aW5kb3ciLDEyLDEwMiwwLDBdLFsiVyIsIlcyIiwid2luZG93Iiw3OCwxMDIsMCwwXSxbIlciLCJXMSIsIndpbmRvdyIsMTQ0LDEwMiwwLDBdLFsiUyIsIkQyIiwib3ZlcmhlYWQiLDYsOTYsMTA4LDk2XSxbIlMiLCJXMiIsIndpbmRvdyIsMTIwLDc4LjUsMCwwXSxbIlMiLCJEMSIsIm1hbiIsMTg2LDgyLjUsMCwwXSxbIkUiLCJEMSIsIm1hbiIsMzYsODIuNSwwLDBdXX0"
+}
