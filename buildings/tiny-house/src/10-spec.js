@@ -70,10 +70,15 @@ const DEFAULT_SPEC = {
   tongueEnd: 'west',
   tongueOverhang: 48,           // hitch point beyond that end
 
+  /* How high the deck sits, and how high the whole thing may be. Fourteen
+     feet is what travels; everything above the road surface counts. */
+  deckHeight: 18,
+  roadEnvelope: 168,            // 14'-0"
+
   /* The house on top of it. */
   wallHeight: 135,              // top of frame to top of the top plate
   studSize: '2x4',
-  studSpacing: 16,
+  studSpacing: 24,
   ridgeRise: 9,                 // above the side walls, so 1.5/12
   eaveOverhang: 6,
   rakeOverhang: 6,
@@ -86,7 +91,13 @@ const DEFAULT_SPEC = {
 
   roofing: 'standing',          // standing seam / metal / membrane
   siding: 'metal',
-  sheathing: true,
+  /* Metal on girts outside, OSB inside. The sheathing that braces the walls
+     is the interior face, which is also the interior surface — one layer
+     doing three jobs, and the wall stays 3½" thick. */
+  wallSkin: 'girts',
+  girtSpacing: 24,
+  girtSize: '2x4',
+  roofDeck: true,
   wallInsulation: 'batt',
   ceilingInsulation: 9.25,
 
@@ -95,7 +106,7 @@ const DEFAULT_SPEC = {
   windSpeed: 100,
   exposure: 'C',
   seismicSDS: 0.75,
-  interiorFinish: 'ply',
+  interiorFinish: 'osb',
 };
 
 /* Openings as the sketch places them. Offsets on the north and south walls

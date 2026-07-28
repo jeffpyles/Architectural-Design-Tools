@@ -28,7 +28,7 @@ const PSF = {
   siding: { metal: 0.9, lap: 2.0 },
   glazing: 5.5, door: 4.5, trim: 0.8,
   wallBatt: 0.35, lidBatt: 0.9,
-  interior: { ply: 0.75, gyp: 2.2 },
+  interior: { ply: 0.75, gyp: 2.2, osb: 1.4 },
 };
 
 function buildModel(spec, openings) {
@@ -263,7 +263,20 @@ function buildModel(spec, openings) {
   }
 
   /* ---------- 6. Sheathing and dry-in ---------- */
-  if (spec.sheathing) {
+
+  /* Girts outside, because the metal hangs on them and there is no exterior
+     sheathing. The bracing sheathing is on the inside face, and goes on with
+     the interior finish. */
+  if (spec.wallSkin === 'girts') {
+    const gs = LUMBER[spec.girtSize];
+    for (const wall of ['N', 'S', 'W', 'E']) {
+      for (const g of girtRuns(wall, spec, openings)) {
+        add('dryin', 'girt', 'fir', `${spec.girtSize} girt`,
+          wallBox(wall, spec, g.u0, g.y, T, g.u1 - g.u0, gs.t, gs.d),
+          { size: spec.girtSize, len: g.u1 - g.u0, wall, y: g.y, u0: g.u0, u1: g.u1 });
+      }
+    }
+  } else {
     for (const wall of ['N', 'S', 'W', 'E']) {
       const e = wallExtent(wall, spec);
       const run = e.u1 - e.u0;
@@ -273,6 +286,8 @@ function buildModel(spec, openings) {
         wallBox(wall, spec, 0, y0, T, run, H - y0, 0.4375),
         { area: Math.max(0, run * (H - y0) - holes) / 144, psf: PSF.osb });
     }
+  }
+  if (spec.roofDeck) {
     for (const side of [-1, 1]) {
       const zMid = side < 0 ? (W / 2) / 2 : W - (W / 2) / 2;
       const slope = Math.hypot(halfW + spec.eaveOverhang, rise);
@@ -298,7 +313,7 @@ function buildModel(spec, openings) {
       { area: (L + spec.rakeOverhang * 2) * slope / 144, psf: PSF.roofing[spec.roofing] });
   }
   const sideKind = spec.siding === 'metal' ? 'Metal wall panel' : 'Lap siding';
-  const skinT = spec.sheathing ? 0.4375 : 0;
+  const skinT = spec.wallSkin === 'girts' ? LUMBER[spec.girtSize].d : 0.4375;
   for (const wall of ['N', 'S', 'W', 'E']) {
     const e = wallExtent(wall, spec);
     const run = e.u1 - e.u0;
@@ -345,13 +360,17 @@ function buildModel(spec, openings) {
         { area: L * halfW / 144, psf: PSF.lidBatt });
     }
   }
-  const finishName = spec.interiorFinish === 'gyp' ? '½" wall board' : '¼" plywood lining';
+  const finishName = spec.interiorFinish === 'gyp' ? '½" wall board'
+    : spec.interiorFinish === 'osb' ? '7/16" OSB, braced and finished'
+    : '¼" plywood lining';
+  const finishMat = spec.interiorFinish === 'gyp' ? 'drywall'
+    : spec.interiorFinish === 'osb' ? 'osb' : 'plywood';
   for (const wall of ['N', 'S', 'W', 'E']) {
     const e = wallExtent(wall, spec);
     const run = e.u1 - e.u0;
     const holes = openingsOn(wall, openings)
       .reduce((a, o) => a + roughOf(o).w * roughOf(o).h, 0);
-    add('finish', 'drywall', spec.interiorFinish === 'gyp' ? 'drywall' : 'plywood', finishName,
+    add('finish', 'drywall', finishMat, finishName,
       wallBox(wall, spec, 0, y0, -0.5, run, H - y0, 0.5),
       { area: Math.max(0, run * (H - y0) - holes) / 144, psf: PSF.interior[spec.interiorFinish] });
   }

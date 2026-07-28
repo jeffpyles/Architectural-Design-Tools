@@ -176,8 +176,38 @@ function renderReview() {
     }
   }
 
+  /* The height envelope, drawn as a stack, because what is spending it is the
+     point and a table hides that. */
+  const h = heightCheck(spec), hr = headroom(spec);
+  p.append(el('h3', null, 'Road height'));
+  const bar = el('div', 'stack-bar');
+  const rows = [
+    ['Deck above the road', h.deck],
+    ['Side wall', h.wall],
+    ['Ridge rise', h.rise],
+    ['Rafter', h.rafterDepth],
+    ['Deck and roofing', h.roofBuild - h.rafterDepth],
+  ];
+  for (const [k, v] of rows) {
+    const seg = el('div');
+    seg.style.cssText = `flex:${v} 0 0;min-width:2px`;
+    seg.title = `${k} — ${fmtIn(v)}`;
+    bar.append(seg);
+  }
+  p.append(bar);
+  const kvH = el('dl', 'kv');
+  for (const [k, v] of rows) kvH.append(el('dt', null, k), el('dd', null, fmtIn(v)));
+  kvH.append(el('dt', null, 'Road to ridge cap'), el('dd', null, fmtIn(h.total)));
+  kvH.append(el('dt', null, `Against ${fmtFt(h.envelope)}`),
+    el('dd', null, h.over > 0 ? `${fmtIn(h.over)} over` : `${fmtIn(-h.over)} to spare`));
+  kvH.append(el('dt', null, 'Tallest wall that fits'), el('dd', null, fmtIn(h.maxWall)));
+  kvH.append(el('dt', null, 'Headroom under the loft'), el('dd', null, fmtIn(hr.under)));
+  kvH.append(el('dt', null, 'In the loft'), el('dd', null, `${fmtIn(hr.atRidge)} at the ridge, ${fmtIn(hr.atWall)} at the wall`));
+  p.append(kvH);
+
   p.append(el('h3', null, 'Framing'));
   const rd = model.rafter, rg = model.ridge, lf = model.loft, L = model.loads;
+  const st = studCheck(spec);
   const kv = el('dl', 'kv');
   for (const [k, v] of [
     ['Roof pitch', `${roofPitch(spec).toFixed(1)}/12 — ${fmtIn(spec.ridgeRise)} over ${fmtFt(spec.width / 2)}`],
@@ -187,7 +217,8 @@ function renderReview() {
     ['Rafter capacity', `${fmtN(rd.ratio * 100)}% of allowable, ${fmtN(rd.defl, 3)}" of deflection`],
     ['Ridge beam', `${rg.label} over ${fmtFt(rg.span)} between the lofts`],
     ['Loft joists', `${lf.label} at 16" o.c. across ${fmtFt(lf.span)}, ${lf.live} psf live`],
-    ['Studs', `${spec.studSize} at ${fmtIn(spec.studSpacing)} o.c., ${fmtIn(spec.wallHeight - spec.subfloor - 4.5)} long`],
+    ['Studs', `${spec.studSize} at ${fmtIn(spec.studSpacing)} o.c., ${fmtIn(st.len)} long`],
+    ['Stud capacity', `${(st.ratio * 100).toFixed(0)}% — ${fmtN(st.demand, 0)} lb against ${fmtN(st.allow, 0)} lb, l/d ${st.slenderness.toFixed(0)}`],
   ]) kv.append(el('dt', null, k), el('dd', null, v));
   p.append(kv);
 }
@@ -224,6 +255,28 @@ function renderWeight() {
       `${fmtN(Math.round(r.lb))} lb`,
       `${(r.lb / w.total * 100).toFixed(0)}%`,
     ]), [false, true, true]));
+
+  /* The frame, which is the part of this that is genuinely load-bearing and
+     genuinely salvage. */
+  const fr = frameCheck(spec, w);
+  const finished = frameCheck(spec, { ...w, total: w.total * 1.9 });
+  p.append(el('h3', null, 'The frame'));
+  const kvF = el('dl', 'kv');
+  for (const [k, v] of [
+    ['Section', `2 × ${fr.rail.label} + 2 × ${fr.beam.label}`],
+    ['Section modulus', `${fmtN(fr.Sx, 2)} in³ about the strong axis`],
+    ['Bending capacity', `${fmtN(fr.capacity / 1000, 1)} kip-ft at 0.6 Fy`],
+    ['Towed, shell only', `${fmtN(fr.towed / 1000, 1)} kip-ft — ${fr.towedRatio.toFixed(1)}× capacity`],
+    ['Towed, finished', `${fmtN(finished.towed / 1000, 1)} kip-ft — ${finished.towedRatio.toFixed(1)}× capacity`],
+  ]) kvF.append(el('dt', null, k), el('dd', null, v));
+  p.append(kvF);
+  p.append(note('Towed, the frame is a beam between the hitch and the axles with everything past '
+    + `the axles hanging off the end — ${fmtN(fr.overhang, 1)} feet of it. Parked, it only spans between `
+    + 'whatever it is blocked on, which is a choice rather than a problem.'));
+  p.append(table(['Cribbing', 'Moment', 'Shell', 'Finished'],
+    fr.cribbing.map((c, i) => [`every ${c.ft} ft`, `${fmtN(c.M / 1000, 1)} kip-ft`,
+      c.ok ? 'ok' : 'over', finished.cribbing[i].ok ? 'ok' : 'over']),
+    [false, true, true, true]));
 
   p.append(el('h3', null, 'If it ever moves'));
   p.append(note('No axles are under it and none are on order, so nothing here constrains a single '

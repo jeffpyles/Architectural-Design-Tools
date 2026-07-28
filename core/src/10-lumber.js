@@ -109,18 +109,25 @@ function splitRun(len) {
 const STEEL_DENSITY = 0.2836;                 // lb per cubic inch
 
 function tubeSection(a, b, t) {
-  return { d: Math.max(a, b), w: Math.min(a, b), t, area: 2 * t * (a + b - 2 * t) };
+  const d = Math.max(a, b), w = Math.min(a, b);
+  const Ix = (w * d ** 3 - (w - 2 * t) * (d - 2 * t) ** 3) / 12;
+  return { d, w, t, area: 2 * t * (a + b - 2 * t), Ix, Sx: Ix / (d / 2) };
 }
 
 /* A fabricated I: two flanges and a web, all of the same material. Trailer
    builders call these by the same a × b × t shorthand as the tube. */
 function ibeamSection(flange, depth, t) {
-  return { d: depth, w: flange, t, area: 2 * flange * t + (depth - 2 * t) * t };
+  const Ix = 2 * (flange * t ** 3 / 12 + flange * t * ((depth - t) / 2) ** 2)
+    + t * (depth - 2 * t) ** 3 / 12;
+  return { d: depth, w: flange, t, area: 2 * flange * t + (depth - 2 * t) * t,
+    Ix, Sx: Ix / (depth / 2) };
 }
 
 const STEEL = {
-  'tube2x6x120':  { ...tubeSection(2, 6, 0.120), label: '2×6×.120 tube' },
-  'tube1.5x4x100': { ...tubeSection(1.5, 4, 0.100), label: '1½×4×.100 tube' },
-  'i1.5x6x120':   { ...ibeamSection(1.5, 6, 0.120), label: '1½×6×.120 I-beam' },
+  'tube2x6x120':  { ...tubeSection(2, 6, 0.120), label: '2×6×.120 tube', Fy: 46 },
+  'tube1.5x4x100': { ...tubeSection(1.5, 4, 0.100), label: '1½×4×.100 tube', Fy: 46 },
+  /* Salvage off a travel trailer frame: a formed section rather than a rolled
+     one, and of a grade nobody can now look up. 36 ksi is the honest floor. */
+  'i1.5x6x120':   { ...ibeamSection(1.5, 6, 0.120), label: '1½×6×.120 I-beam', Fy: 36 },
 };
 for (const s of Object.values(STEEL)) s.lbft = s.area * STEEL_DENSITY * 12;

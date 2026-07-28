@@ -4,9 +4,10 @@
 
 export const api = ['rafterDesign', 'ridgeDesign', 'loftDesign', 'roofLoads', 'roofPitch',
   'roofY', 'axleCheck', 'axleSizing', 'joistRuns', 'wallRun', 'roughOf', 'WINDOW_STOCK',
-  'DOOR_STOCK', 'STEEL', 'sizeHeader'];
+  'DOOR_STOCK', 'STEEL', 'sizeHeader', 'heightCheck', 'headroom', 'frameSection',
+  'frameCheck', 'studCheck', 'girtRuns', 'LUMBER'];
 
-export function run({ A, spec, openings, model, take: t, fail, log, permute }) {
+export function run({ A, spec, openings, model, take, fail, log, permute }) {
   /* The steel, against published section weights. A 2×6×.120 HSS is about
      6.27 lb/ft and a 1½×4×.100 about 3.55; computing from the section
      ignores the corner radii and so reads a per cent or so heavy. */
@@ -103,7 +104,7 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute }) {
 
   /* Weight and the tow statics. The one thing that has to hold: put the whole
      weight on the two supports and it has to add back up. */
-  const w = t.weight;
+  const w = take.weight;
   const ax = A.axleCheck(spec, w);
   const sum = ax.tongueAtSketch + ax.onAxles;
   if (Math.abs(sum - w.total) > 1) fail(`tongue plus axle load is ${sum.toFixed(0)}, not ${w.total.toFixed(0)}`);
@@ -129,10 +130,80 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute }) {
   log(`  ok  ${A.WINDOW_STOCK.length - shelf.length} windows placed, ${shelf.length} on the shelf`
     + (shelf.length ? ` (${shelf.map((s) => '#' + s.n).join(', ')})` : ''));
 
+  /* The road height envelope has to add up out of its own parts, and the
+     tallest-wall answer has to be the wall that exactly fills it. */
+  {
+    const h = A.heightCheck(spec);
+    const sum = h.deck + h.wall + h.rise + h.roofBuild;
+    if (Math.abs(sum - h.total) > 1e-9) fail(`height parts sum to ${sum}, total says ${h.total}`);
+    if (Math.abs(h.over - (h.total - h.envelope)) > 1e-9) fail('over-height does not follow from the total');
+    const atMax = A.heightCheck({ ...spec, wallHeight: h.maxWall });
+    if (Math.abs(atMax.total - h.envelope) > 0.01) {
+      fail(`the tallest wall that fits gives ${atMax.total}", not the ${h.envelope}" envelope`);
+    }
+    log(`  ok  ${A.fmtIn(h.total)} road to ridge cap against ${A.fmtFt(h.envelope)}`
+      + ` (${h.over > 0 ? A.fmtIn(h.over) + ' over' : A.fmtIn(-h.over) + ' spare'}),`
+      + ` tallest wall ${A.fmtIn(h.maxWall)}`);
+    const hr = A.headroom(spec);
+    if (hr.under <= 0 || hr.atRidge <= 0) fail('headroom came out non-positive');
+    log(`  ok  ${A.fmtIn(hr.under)} under the loft, ${A.fmtIn(hr.atRidge)} in it at the ridge`);
+  }
+
+  /* The frame. Its capacity has to follow from the sections, and the cribbing
+     spacing it reports has to be the one that exactly uses that capacity. */
+  {
+    const fr = A.frameCheck(spec, take.weight);
+    const bySection = 2 * fr.rail.Sx * 0.6 * fr.rail.Fy + 2 * fr.beam.Sx * 0.6 * fr.beam.Fy;
+    if (Math.abs(fr.capacity - bySection * 1000 / 12) > 1) fail('frame capacity does not follow from the sections');
+    const M = fr.plf * fr.maxCribbing ** 2 / 8;
+    if (Math.abs(M - fr.capacity) > 1) fail('the reported cribbing spacing does not use exactly the capacity');
+    for (const c of fr.cribbing) {
+      if (c.ok !== (c.M <= fr.capacity)) fail(`cribbing at ${c.ft} ft is flagged wrong`);
+    }
+    /* This frame came off a travel trailer, so it should be nowhere near
+       able to tow a house. If that ever stops being true, something changed. */
+    if (fr.towedRatio < 1.5) fail(`towed ratio is ${fr.towedRatio.toFixed(2)} — check the section, that seems too good`);
+    log(`  ok  frame ${A.fmtN(fr.capacity / 1000, 1)} kip-ft capacity, `
+      + `${A.fmtN(fr.towed / 1000, 1)} towed (${fr.towedRatio.toFixed(1)}×), `
+      + `blocks at ${A.fmtN(fr.maxCribbing, 1)} ft`);
+  }
+
+  /* Studs. Bracing the weak axis is what makes an eleven-foot 2x4 work, so
+     taking it away has to make it fail. */
+  {
+    const st = A.studCheck(spec);
+    if (st.ratio > 1) fail(`studs over capacity at ${(st.ratio * 100).toFixed(0)}%`);
+    if (!st.braced) fail('the default wall should have both faces attached');
+    const bare = A.studCheck({ ...spec, wallSkin: 'none', interiorFinish: 'none' });
+    if (bare.ratio <= st.ratio) fail('unbracing the weak axis should make the stud worse, not better');
+    log(`  ok  studs at ${(st.ratio * 100).toFixed(0)}% braced, `
+      + `${(bare.ratio * 100).toFixed(0)}% if neither face is on`);
+  }
+
+  /* No girt may run across a rough opening — the same thing that had to be
+     fixed on the shop, and for the same reason. */
+  {
+    let crossings = 0;
+    const gt = A.LUMBER[spec.girtSize].t;
+    for (const g of model.parts.filter((p) => p.sys === 'girt')) {
+      for (const o of openings.filter((x) => x.wall === g.wall)) {
+        const ro = A.roughOf(o);
+        const v = o.head - ro.h < g.y + gt && o.head > g.y;
+        const hOv = g.u0 < o.off + ro.w - 0.01 && g.u1 > o.off + 0.01;
+        if (v && hOv) {
+          crossings++;
+          if (crossings < 4) fail(`a girt on the ${g.wall} wall at ${A.fmtFt(g.y)} crosses ${A.stockFor(o).label}`);
+        }
+      }
+    }
+    if (!crossings) log(`  ok  no girt crosses an opening (${model.parts.filter((p) => p.sys === 'girt').length} girt pieces)`);
+  }
+
   /* Spec permutations must not throw or produce bad geometry. */
   permute({ studSize: '2x6', studSpacing: 24 });
   permute({ roofing: 'comp', siding: 'lap', interiorFinish: 'gyp' });
-  permute({ sheathing: false, wallInsulation: 'none', ceilingInsulation: 0 });
+  permute({ wallSkin: 'sheathing', roofDeck: false, wallInsulation: 'none', ceilingInsulation: 0 });
+  permute({ girtSpacing: 16, interiorFinish: 'ply' });
   permute({ ridgeRise: 24, eaveOverhang: 0, rakeOverhang: 0 });
   permute({ eastLoft: 0, westLoft: 0 }, 'no lofts');
   permute({ wallHeight: 108, loftHeight: 72 });

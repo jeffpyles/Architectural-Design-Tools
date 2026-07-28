@@ -530,3 +530,13 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--rule); border-bottom: 0
 }
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* A proportional stack: one flex child per component, sized by its share.
+   Used where what is spending a budget matters more than the numbers. */
+.stack-bar {
+  display: flex; height: 10px; margin: 10px 0 12px;
+  border: 1px solid var(--rule); border-radius: 2px; overflow: hidden;
+}
+.stack-bar > div { background: var(--chalk); opacity: 0.85; }
+.stack-bar > div:nth-child(even) { opacity: 0.45; }
+.stack-bar > div + div { border-left: 1px solid var(--paper); }

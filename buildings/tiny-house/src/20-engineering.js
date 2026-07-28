@@ -111,6 +111,30 @@ function solidSegments(wall, spec, openings) {
   return segs.filter(([a, b]) => b - a > 0.01);
 }
 
+/* Horizontal girts on the outside face, carrying the metal. Each course is
+   broken into the runs that miss the openings, so a girt never crosses a
+   hole — and the runs move when the openings do. */
+function girtRuns(wall, spec, openings) {
+  const run = wallRun(wall, spec);
+  const g = LUMBER[spec.girtSize].t;
+  const out = [];
+  const gable = WALLS[wall].gable;
+  for (let y = spec.subfloor + spec.girtSpacing; y < spec.wallHeight - 3; y += spec.girtSpacing) {
+    if (gable && y > roofY(0, spec) - 3) break;
+    const blocked = openingsOn(wall, openings)
+      .filter((o) => { const ro = roughOf(o); return o.head > y && o.head - ro.h < y + g; })
+      .map((o) => [o.off - 1.5, o.off + roughOf(o).w + 1.5])
+      .sort((a, b) => a[0] - b[0]);
+    let at = 0;
+    for (const [a, b] of blocked) {
+      if (a > at) out.push({ y, u0: at, u1: Math.min(a, run) });
+      at = Math.max(at, b);
+    }
+    if (at < run) out.push({ y, u0: at, u1: run });
+  }
+  return out.filter((r) => r.u1 - r.u0 > 3);
+}
+
 /* Cross joists in the trailer, skipping the run the wheel wells occupy. */
 function joistRuns(spec) {
   const wellW = spec.length - spec.wheelWellStart - spec.wheelWellLength;
@@ -245,6 +269,71 @@ function auditBuilding(spec, openings) {
       + 'penetrations, the ridge, the eave edge — wants detailing as though it were a flat roof.');
   }
 
+  /* The road height envelope. This is the constraint the ridge is pinned by,
+     and the rafter depth spends it as surely as the wall does. */
+  {
+    const h = heightCheck(spec);
+    const hr = headroom(spec);
+    if (h.over > 0.01) {
+      add('crit', `${fmtIn(h.over)} over the ${fmtFt(h.envelope)} road height`,
+        `${fmtIn(h.deck)} of deck, ${fmtFt(h.wall)} of wall, ${fmtIn(h.rise)} of ridge and `
+        + `${fmtIn(h.roofBuild)} of roof build-up (${fmtIn(h.rafterDepth)} of that is the rafter) `
+        + `comes to ${fmtIn(h.total)}. The tallest side wall that fits is ${fmtIn(h.maxWall)}.`);
+    } else {
+      add('info', `${fmtIn(-h.over)} of road height left`,
+        `${fmtIn(h.total)} from the road to the ridge cap, against ${fmtFt(h.envelope)}. `
+        + `A deeper rafter comes straight out of this — every inch of it costs an inch of wall.`);
+    }
+    add('info', `${fmtIn(hr.under)} of headroom under the loft`,
+      `And ${fmtIn(hr.atRidge)} in the loft at the ridge, ${fmtIn(hr.atWall)} at the wall. `
+      + 'Dropping the side walls buys road height and costs both of these — which is the trade '
+      + 'the stair to the main loft has to live inside.');
+  }
+
+  /* The frame. Repurposed travel-trailer beams were sized for a travel
+     trailer, and this is not one. */
+  {
+    const model0 = buildModel(spec, openings);
+    const w0 = takeoff(model0, spec).weight;
+    const fr = frameCheck(spec, w0);
+    if (fr.towedRatio > 1) {
+      add('crit', `The frame is ${fr.towedRatio.toFixed(1)}× short in bending to tow this`,
+        `Two ${fr.rail.label} rails and two ${fr.beam.label} beams give about `
+        + `${fmtN(fr.capacity / 1000, 1)} kip-ft. Towed, with ${fmtN(fr.overhang, 1)} ft hanging past the `
+        + `axles, the shell alone wants ${fmtN(fr.towed / 1000, 1)} kip-ft, and a finished house `
+        + `close to double. Those beams came off a travel trailer and are sized for one.`);
+      add('info', `Standing still it is fine — block it every ${fmtN(Math.floor(fr.maxCribbing), 0)} ft or closer`,
+        `Parked, the frame only spans between whatever it is cribbed on, so the demand is a choice. `
+        + `At ${fmtN(fr.plf, 0)} lb a foot the frame runs out at ${fmtN(fr.maxCribbing, 1)} ft between `
+        + `supports on the shell weight, and roughly ${fmtN(fr.maxCribbing / Math.sqrt(1.9), 1)} ft finished. `
+        + 'Blocking it well is the whole answer, and it is the cheap answer. A flatbed move works for '
+        + 'the same reason — the deck supports the frame the whole way.');
+    }
+  }
+
+  /* Slender studs. */
+  {
+    const st = studCheck(spec);
+    if (st.ratio > 1) {
+      add('crit', `${spec.studSize} studs are over capacity at ${(st.ratio * 100).toFixed(0)}%`,
+        `${fmtIn(st.len)} long at ${fmtIn(spec.studSpacing)} o.c. carries ${fmtN(st.demand, 0)} lb `
+        + `against ${fmtN(st.allow, 0)} lb allowable.`);
+    } else {
+      add('info', `${spec.studSize} studs run at ${(st.ratio * 100).toFixed(0)}% of allowable`,
+        `${fmtIn(st.len)} long, l/d of ${st.slenderness.toFixed(0)}, stability factor ${st.CP.toFixed(2)}. `
+        + `${fmtN(st.demand, 0)} lb a stud against ${fmtN(st.allow, 0)} lb. `
+        + (st.braced
+          ? 'That only works because both faces are attached — girts outside and sheathing inside '
+            + 'brace the thin way continuously. Before the skin goes on, this wall is very floppy.'
+          : 'With neither face attached the thin way is unbraced, and it does not work at all.'));
+    }
+    if (st.overPrescriptive) {
+      add('warn', `${fmtIn(st.len)} is past the prescriptive tables`,
+        `The IRC stops at ten feet for a ${spec.studSize} bearing wall. The numbers above say it works, `
+        + 'but nothing about this wall is a look-up any more.');
+    }
+  }
+
   /* Wall height against what you can buy. */
   const stud = spec.wallHeight - spec.subfloor - 1.5 - 3.0;
   const stock = STOCK_LENGTHS.find((s) => s >= stud);
@@ -285,4 +374,116 @@ function auditBuilding(spec, openings) {
     + 'for designing it as a building and solving the move later.');
 
   return out;
+}
+
+/* ---- the height envelope ------------------------------------------------- */
+
+/* Fourteen feet is what travels under a bridge, and everything between the
+   road and the highest thing on the roof counts against it. The rafter depth
+   is part of that, so a deeper rafter costs wall height — which makes this
+   the constraint that ties the roof to the loft headroom. */
+function heightCheck(spec) {
+  const rd = rafterDesign(spec);
+  const rafterDepth = (LUMBER[rd.size] || LUMBER['2x8']).d;
+  const roofBuild = rafterDepth + (spec.roofDeck ? 0.4375 : 0)
+    + (spec.roofing === 'comp' ? 0.75 : 0.5);
+  const ridge = spec.wallHeight + spec.ridgeRise;
+  const total = spec.deckHeight + ridge + roofBuild;
+  return {
+    deck: spec.deckHeight, wall: spec.wallHeight, rise: spec.ridgeRise,
+    rafterDepth, roofBuild, ridge, total,
+    envelope: spec.roadEnvelope,
+    over: total - spec.roadEnvelope,
+    /* The tallest side wall that still fits, everything else unchanged. */
+    maxWall: spec.roadEnvelope - spec.deckHeight - spec.ridgeRise - roofBuild,
+  };
+}
+
+/* Headroom under the loft, and in it. Both are what the wall height is
+   actually being spent on. */
+function headroom(spec) {
+  const lj = LUMBER[spec.loftJoist] || LUMBER['2x8'];
+  const rd = rafterDesign(spec);
+  const rafterDepth = (LUMBER[rd.size] || LUMBER['2x8']).d;
+  const under = spec.loftHeight - spec.subfloor - lj.d - 0.75;
+  const atRidge = spec.wallHeight + spec.ridgeRise - rafterDepth - spec.loftHeight;
+  const atWall = spec.wallHeight - rafterDepth - spec.loftHeight;
+  return { under, atRidge, atWall, joist: lj.d };
+}
+
+/* ---- the frame ----------------------------------------------------------- */
+
+/* What the trailer will carry in bending. Two perimeter rails and two beams
+   act together about the same axis; the cross joists do not, since they run
+   the other way.
+
+   The steel is allowed 0.6 Fy, and the salvaged beams are taken at 36 ksi
+   because nobody can now look up what they were. */
+function frameSection(spec) {
+  const rail = STEEL[spec.railSection], beam = STEEL[spec.beamSection];
+  const Sx = 2 * rail.Sx + 2 * beam.Sx;
+  const capacity = (2 * rail.Sx * 0.6 * rail.Fy + 2 * beam.Sx * 0.6 * beam.Fy) * 1000 / 12;
+  return { Sx, capacity, rail, beam };   // capacity in lb-ft
+}
+
+/* Two conditions, and they are nothing like each other.
+
+   Towed, the frame is a beam between the hitch and the axle group, with
+   everything past the axles hanging off the end — and that overhang is
+   where the moment lives.
+
+   Parked, it is a beam over whatever it is blocked on, so the demand is set
+   by how far apart the cribbing is. That is a choice, which makes it the
+   answer rather than the problem. */
+function frameCheck(spec, weight) {
+  const sec = frameSection(spec);
+  const w = weight.total / (spec.length / 12);          // plf, spread over the deck
+  const ax = axleCheck(spec, weight);
+  const axleFt = ax.fromTongue(ax.sketchAxle) / 12;
+  const overhang = spec.length / 12 - axleFt;
+  const towed = w * overhang * overhang / 2;
+  const spacingFor = (M) => Math.sqrt(8 * M / w);       // simple span, wL²/8
+  return {
+    ...sec,
+    plf: w,
+    towed,
+    towedRatio: towed / sec.capacity,
+    overhang,
+    maxCribbing: spacingFor(sec.capacity),
+    cribbing: [4, 6, 8, 10, 12].map((ft) => ({ ft, M: w * ft * ft / 8, ok: w * ft * ft / 8 <= sec.capacity })),
+  };
+}
+
+/* ---- the studs ----------------------------------------------------------- */
+
+/* A 2x4 nearly eleven feet long is a slender column. It only works because
+   both faces are attached — girts outside, sheathing inside — which braces
+   the weak axis continuously and leaves the 3½" dimension to buckle about.
+   NDS column stability, with the snow duration factor. */
+function studCheck(spec) {
+  const sec = LUMBER[spec.studSize];
+  const len = spec.wallHeight - spec.subfloor - 1.5 - 3.0;
+  const braced = spec.wallSkin === 'girts' || spec.interiorFinish !== 'none';
+  const d = braced ? sec.d : sec.t;                     // unbraced weak axis if neither face is on
+  const le = len / d;
+  const Fc = 1350, Emin = 580000;
+  const Fstar = Fc * 1.15 * (spec.studSize === '2x4' ? 1.15 : 1.1);
+  const FcE = 0.822 * Emin / (le * le);
+  const c = 0.8, F = FcE / Fstar;
+  const q = (1 + F) / (2 * c);
+  const CP = q - Math.sqrt(Math.max(0, q * q - F / c));
+  const cap = Fstar * CP * sec.t * sec.d;
+
+  const L = roofLoads(spec);
+  const trib = spec.width / 2 / 12 * (spec.studSpacing / 12);
+  const roof = L.total * trib;
+  const loft = 50 * trib;                               // where a loft lands on the wall
+  const self = 90;
+  return {
+    len, slenderness: le, braced, CP, allow: cap,
+    roof, loft, self, demand: roof + loft + self,
+    ratio: (roof + loft + self) / cap,
+    /* The IRC's prescriptive table stops at ten feet for a 2x4 bearing wall. */
+    overPrescriptive: len > 120,
+  };
 }
