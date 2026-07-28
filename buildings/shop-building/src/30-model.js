@@ -365,7 +365,8 @@ function buildModel(spec, openings) {
       spec.roofing === 'metal' ? 'Lean-to metal panel' : 'Lean-to shingle',
       memberBox3(at(-2, yTop + 0.5, lt.run / 2),
         at(P + 4, yTop - (P + 4) * lt.slope, lt.run / 2), lt.run, 0.7),
-      { area: (P + 6) * lt.run / 144 });
+      { area: (P + 6) * lt.run / 144,
+        psf: spec.roofing === 'metal' ? 0.9 : 2.6 });
   }
 
   /* ---------- 4. Dry-in: purlins or deck, girts or sheathing ---------- */
@@ -418,7 +419,8 @@ function buildModel(spec, openings) {
           const B = pos(s < 0 ? pn.a + pn.w : pn.a, H - 3);
           add('dryin', 'bracing', 'metal', '20 ga steel strap X-brace',
             memberBox3(A, B, 0.05, 1.5),
-            { len: Math.hypot(pn.w, H - 4.5), note: `${WALLS[wall].label} wall` });
+            { len: Math.hypot(pn.w, H - 4.5), note: `${WALLS[wall].label} wall`,
+              lbft: 1.25 * 0.036 * 0.2836 * 12 });
         }
       } else if (spec.bracing !== 'none') {
         add('dryin', 'sheathing', 'osb', '7/16" OSB braced panel',
@@ -484,6 +486,7 @@ function buildModel(spec, openings) {
   const roofW = W + spec.rakeOverhang * 2;
   const nPanels = Math.ceil(roofW / panelW);
   const roofMat = spec.roofing === 'metal' ? 'metal' : 'shingle';
+  const roofPsf = spec.roofing === 'metal' ? 0.9 : 2.6;
   for (const s of [-1, 1]) {
     const midAlong = roofRunSloped / 2;
     const zEave = s < 0 ? -spec.eaveOverhang : D + spec.eaveOverhang;
@@ -499,14 +502,14 @@ function buildModel(spec, openings) {
       add('roof', 'roofing', roofMat,
         spec.roofing === 'metal' ? '26 ga metal roof panel' : 'Architectural shingle',
         boxPart([cx, y, z], [pw - 0.5, 0.7, roofRunSloped], s * tr.angle),
-        { area: pw * roofRunSloped / 144 });
+        { area: pw * roofRunSloped / 144, psf: roofPsf });
     }
   }
   const vented = spec.venting === 'ridge-gable' || spec.venting === 'ridge-soffit';
   add('roof', 'roofing', roofMat,
     vented ? 'Vented ridge cap' : (spec.roofing === 'metal' ? 'Ridge cap' : 'Hip & ridge'),
     boxPart([W / 2, tr.peakY + tr.perp + (vented ? 2.6 : 1.6), tr.half], [roofW, vented ? 3.4 : 2.4, 14]),
-    { len: roofW });
+    { len: roofW, lb: roofW / 12 * 1.6 });
 
   // Gable louvres, sized off the net free area the ventilation check asks for
   if (spec.venting === 'ridge-gable' || spec.venting === 'gable') {
@@ -529,6 +532,9 @@ function buildModel(spec, openings) {
   }
 
   /* ---------- 6. Siding, doors, windows ---------- */
+  /* What a square foot of each covering actually weighs. The model draws
+     panel at 0.7" so it reads on screen; 26 ga steel is 0.018". */
+  const sidePsf = spec.siding === 'metal' ? 0.9 : 2.0;
   const skinOut = spec.wallSkin === 'girts' ? 0.4375 + LUMBER[spec.girtSize].t : 0.4375;
   const sidingT = spec.siding === 'metal' ? 0.75 : 0.5;
 
@@ -541,7 +547,7 @@ function buildModel(spec, openings) {
       add('skin', 'siding', spec.siding === 'metal' ? 'metal' : 'trim',
         spec.siding === 'metal' ? 'Metal wall panel' : 'Lap siding',
         wallBox(wall, spec, sg.a, sg.w, 0, H, T + skinOut, sidingT),
-        { area: sg.w * H / 144 });
+        { area: sg.w * H / 144, psf: sidePsf });
     }
     // Head and sill strips over the openings
     const sidingName = spec.siding === 'metal' ? 'Metal wall panel' : 'Lap siding';
@@ -549,13 +555,13 @@ function buildModel(spec, openings) {
       if (H - o.head > 1) {
         add('skin', 'siding', spec.siding === 'metal' ? 'metal' : 'trim', sidingName,
           wallBox(wall, spec, o.off, st.w, o.head, H - o.head, T + skinOut, sidingT),
-          { area: st.w * (H - o.head) / 144 });
+          { area: st.w * (H - o.head) / 144, psf: sidePsf });
       }
       const sill = o.head - st.h;
       if (sill > 1) {
         add('skin', 'siding', spec.siding === 'metal' ? 'metal' : 'trim', sidingName,
           wallBox(wall, spec, o.off, st.w, 0, sill, T + skinOut, sidingT),
-          { area: st.w * sill / 144 });
+          { area: st.w * sill / 144, psf: sidePsf });
       }
     }
     // Gable infill above the plate
@@ -563,7 +569,7 @@ function buildModel(spec, openings) {
       const gx = wall === 'W' ? -skinOut - sidingT : W + skinOut;
       add('skin', 'siding', spec.siding === 'metal' ? 'metal' : 'trim', sidingName,
         prismPart([[0, H], [D, H], [tr.half + 0.01, tr.peakY + tr.perp]], gx, gx + sidingT),
-        { area: D * (tr.peakY + tr.perp - H) / 2 / 144 });
+        { area: D * (tr.peakY + tr.perp - H) / 2 / 144, psf: sidePsf });
     }
     // Corner trim
     for (const uu of [e.u0, e.u1 - 3]) {
@@ -592,9 +598,12 @@ function buildModel(spec, openings) {
         wallBox(o.wall, spec, o.off + 1, st.w - 2, 0, st.h - 1.5, inset, 1.75),
         { pick: o.id, note: st.label });
     }
+    /* Drawn as a slab over the whole opening so it reads as a surround, but
+       it is a 4" band around the edge — weighed as one rather than as the
+       slab it is drawn as. */
     add('skin', 'trim', 'trim', 'Opening trim',
       wallBox(o.wall, spec, o.off - 2.5, st.w + 5, Math.max(0, sill - 2.5), st.h + 5, T + skinOut, sidingT + 0.25),
-      { pick: o.id });
+      { pick: o.id, lb: 2 * ((st.w + 5) + (st.h + 5)) * 4 * 0.75 * 0.0185 });
   }
 
   /* ---------- 7. Electrical ---------- */

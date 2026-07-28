@@ -122,8 +122,14 @@ counts it four ways, in the order it trusts them:
 | `psf` + `area` | a sheet good. Skin, glazing and membranes are drawn at a thickness you can *see* rather than the thickness they are, so their volume is fiction and their area is not |
 | nothing | volume × `DENSITY[mat]`, which is right for solid timber and concrete and wrong for nearly everything else |
 
-Getting this wrong is quiet and large: a 0.5"-thick sheet of "metal panel" weighed by
-volume turned a 34-foot wall into four tons of steel.
+Getting this wrong is quiet and large. It has happened twice: a fender box drawn as a
+box and weighed as one became four tons, and a wall of 26 ga steel came out at thirty
+pounds a square foot. Both were invisible in a total.
+
+`node tools/weigh.mjs <id>` lists every part with how it was weighed and, for anything
+falling back to volume × density, what that implies per square foot. Run it after adding
+parts. Nothing asserts — a slab legitimately weighs what a slab weighs — but the implied
+psf column gives a mis-weighed sheet away at a glance.
 
 Parts carrying `steel` (a key into `STEEL`) and `len` also roll up into a steel
 purchase table.
@@ -146,6 +152,7 @@ purchase table.
 node tools/build.mjs <id>            # → buildings/<id>/dist/
 node tools/check.mjs <id>            # headless model + engineering assertions
 node tools/viewport-check.mjs <id>   # browser layout, 28 window shapes
+node tools/weigh.mjs <id>            # every part, and how the takeoff weighed it
 node tools/serve.mjs                 # assemble _site/ as CI does, serve on :8099
 ```
 

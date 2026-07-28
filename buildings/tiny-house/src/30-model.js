@@ -250,7 +250,7 @@ function buildModel(spec, openings) {
       { size: spec.loftJoist, len: lf.x1 - lf.x0, note: lf.name });
     add('loft', 'deck', 'osb', '¾" loft deck',
       boxPart([(lf.x0 + lf.x1) / 2, y - 0.375, W / 2], [lf.x1 - lf.x0, 0.75, W - T * 2]),
-      { area: (lf.x1 - lf.x0) * (W - T * 2) / 144, note: lf.name });
+      { area: (lf.x1 - lf.x0) * (W - T * 2) / 144, psf: PSF.subfloor, note: lf.name });
   }
 
   /* ---------- 5. Roof framing ---------- */
