@@ -33,7 +33,7 @@ src/js/30-render.js  small WebGL renderer, no dependencies
 src/js/40-takeoff.js material list and cut list, counted off the parts
 src/js/50-ui.js      state, interaction, the six inspector panels
 src/js/99-boot.js    startup
-src/js/60-layouts.js share codes, presets, browser-saved and repo layouts
+src/js/60-layouts.js share codes, browser-saved layouts, the repo library
 assets/fonts/        subset woff2, committed so CI can build without fontTools
 tools/check.mjs      headless model + engineering assertions
 tools/viewport-check.mjs  browser layout assertions across window shapes and zoom
@@ -78,11 +78,14 @@ Served from GitHub Pages, the tab additionally reads the shared library at
 own new-file page. Opened from a file or from the Artifact host that fetch just fails
 and the section hides itself.
 
-Three presets ship inside the page regardless, as the offline fallback and as reference
-points: the sketch as drawn, the sketch with 10' walls and a 9' door, and a version with
-the openings ganged that clears every wall line. A preset already published to the shared
-library is listed once, not twice. `tools/check.mjs` asserts all three round-trip through
-the code and that the ganged one really does pass.
+The page ships no layouts of its own. Everything on offer comes from the library, so
+narrowing the design space is a matter of deleting files in `layouts/` rather than
+editing the tool. Opened somewhere the library cannot be reached, the tab says so and
+points at the live site.
+
+The layouts that used to ship as presets now live in `tools/check.mjs` as fixtures.
+They were always regression material — encoder round-trip, and a known-good layout that
+has to clear every wall line — rather than something a user should scroll past.
 
 ## What it is not
 

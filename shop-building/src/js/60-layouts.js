@@ -109,44 +109,6 @@ function decodeLayout(code) {
   return { spec, openings };
 }
 
-/* ---- built-in starting points ---- */
-const PRESETS = [
-  {
-    name: 'As sketched',
-    note: "12' walls, 10' × 10' overhead door, openings where the pencil put them",
-    build: () => ({ spec: { ...DEFAULT_SPEC }, openings: DEFAULT_OPENINGS.map((o) => ({ ...o })) }),
-  },
-  {
-    name: "10' walls, 9' door",
-    note: 'The same layout with your changes — shows the bracing still short',
-    build: () => ({
-      spec: { ...DEFAULT_SPEC, wallHeight: 120 },
-      openings: DEFAULT_OPENINGS.map((o) => {
-        const n = { ...o };
-        if (n.kind === 'overhead') { n.w = 108; n.h = 96; n.head = 96; }
-        if (n.wall === 'W') n.head = 102;
-        return n;
-      }),
-    }),
-  },
-  {
-    name: 'Openings ganged',
-    note: "Same openings, pushed together so each wall keeps one long run. Clears every wall line.",
-    build: () => ({
-      spec: { ...DEFAULT_SPEC, wallHeight: 120, bracedPanelWidth: 72 },
-      openings: [
-        { id: 'g1', wall: 'W', stock: 'W1', kind: 'window', off: 12, head: 102 },
-        { id: 'g2', wall: 'W', stock: 'W2', kind: 'window', off: 78, head: 102 },
-        { id: 'g3', wall: 'W', stock: 'W1', kind: 'window', off: 144, head: 102 },
-        { id: 'g4', wall: 'S', stock: 'D2', kind: 'overhead', off: 6, head: 96, w: 108, h: 96 },
-        { id: 'g5', wall: 'S', stock: 'W2', kind: 'window', off: 120, head: 78.5 },
-        { id: 'g6', wall: 'S', stock: 'D1', kind: 'man', off: 186, head: 82.5 },
-        { id: 'g7', wall: 'E', stock: 'D1', kind: 'man', off: 36, head: 82.5 },
-      ],
-    }),
-  },
-];
-
 /* ---- this browser's saved layouts ---- */
 function storageOK() {
   try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return true; }
@@ -329,8 +291,13 @@ function renderLayouts() {
   p.append(loadRow);
 
   /* shared library */
-  if (sharedLayouts !== false) {
-    p.append(el('h3', null, 'Shared library'));
+  p.append(el('h3', null, 'Shared library'));
+  if (sharedLayouts === false) {
+    p.append(note('This copy of the page cannot reach the library — it is open from a '
+      + 'file, or from somewhere other than the site it is published on. Paste a code '
+      + 'above to load a layout, or open the tool at '
+      + 'jeffpyles.github.io/architectural-design-tools to browse them.'));
+  } else {
     if (sharedLayouts === null) {
       p.append(note('Loading…'));
     } else if (!sharedLayouts.length) {
@@ -358,28 +325,6 @@ function renderLayouts() {
         p.append(row);
       }
     }
-  }
-
-  /* Starting points. Once a preset has been published to the shared library
-     it is listed above, so drop it here rather than showing it twice. */
-  const published = new Set((sharedLayouts || []).map((x) => (x.name || '').toLowerCase()));
-  const localOnly = PRESETS.filter((x) => !published.has(x.name.toLowerCase()));
-  if (localOnly.length) p.append(el('h3', null, 'Starting points'));
-  for (const preset of localOnly) {
-    const { spec, openings } = preset.build();
-    const worst = Math.min(...bracingCheck(spec, openings).flatMap((d) => d.lines.map((l) => l.ratio)));
-    const row = el('div', 'saved-row');
-    const meta = el('div');
-    meta.append(el('b', null, preset.name));
-    const sub = el('div', null, preset.note);
-    sub.style.cssText = 'font-size:11.5px;color:var(--ink-3)';
-    meta.append(sub);
-    const tag = el('span', 'tag ' + (worst >= 1 ? 'used' : 'over'),
-      worst >= 1 ? 'bracing ok' : `worst ${worst.toFixed(2)}`);
-    const b = el('button', 'btn', 'Load');
-    b.addEventListener('click', () => applyLayout(spec, openings));
-    row.append(meta, tag, b);
-    p.append(row);
   }
 
   /* saved on this device */

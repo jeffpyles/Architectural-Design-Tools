@@ -13,8 +13,8 @@ const ctx = vm.createContext({ Math, console, performance, Intl, Number, JSON,
   TextEncoder, TextDecoder, btoa, atob, Date });
 vm.runInContext(src + '\n;globalThis.__api = { buildModel, takeoff, auditBuilding, trussGeometry, '
   + 'bracingCheck, DEFAULT_SPEC, DEFAULT_OPENINGS, solidSegments, sizeHeader, fmtFt, fmtIn, '
-  + 'stockFor, wallExtent, WALLS, roofLoads, PRESETS, encodeLayout, decodeLayout, layoutSummary, '
-  + 'leanToDesign, leanToDrift, pickMember };', ctx);
+  + 'stockFor, wallExtent, WALLS, roofLoads, encodeLayout, decodeLayout, layoutSummary, '
+  + 'leanToDesign, leanToDrift, pickMember, openingsOn };', ctx);
 const A = ctx.__api;
 
 const spec = { ...A.DEFAULT_SPEC };
@@ -212,27 +212,58 @@ for (const H of [120, 144]) {
   if (withD.psf <= noD.psf) fail('counting drift did not raise the design load');
 }
 
-// 10. Presets must load, round-trip through the share code, and say what
-//     they claim about bracing
-for (const preset of A.PRESETS) {
-  const { spec: ps, openings: po } = preset.build();
-  const worst = Math.min(...A.bracingCheck(ps, po).flatMap((d) => d.lines.map((l) => l.ratio)));
-  const code = A.encodeLayout(ps, po);
+/* 10. Encoder round-trip and the bracing maths, against fixtures that used to
+   ship in the page as presets. They live here now: they are regression
+   material, not something a user should have to scroll past. */
+const FIXTURES = [
+  { name: 'As sketched', expectPass: false,
+    build: () => ({ spec: { ...spec }, openings: openings.map((o) => ({ ...o })) }) },
+  { name: "10' walls, 9' door", expectPass: false,
+    build: () => ({
+      spec: { ...spec, wallHeight: 120 },
+      openings: openings.map((o) => {
+        const n = { ...o };
+        if (n.kind === 'overhead') { n.w = 108; n.h = 96; n.head = 96; }
+        if (n.wall === 'W') n.head = 102;
+        return n;
+      }),
+    }) },
+  { name: 'Openings ganged', expectPass: true,
+    build: () => ({
+      spec: { ...spec, wallHeight: 120, bracedPanelWidth: 72 },
+      openings: [
+        { id: 'g1', wall: 'W', stock: 'W1', kind: 'window', off: 12, head: 102 },
+        { id: 'g2', wall: 'W', stock: 'W2', kind: 'window', off: 78, head: 102 },
+        { id: 'g3', wall: 'W', stock: 'W1', kind: 'window', off: 144, head: 102 },
+        { id: 'g4', wall: 'S', stock: 'D2', kind: 'overhead', off: 6, head: 96, w: 108, h: 96 },
+        { id: 'g5', wall: 'S', stock: 'W2', kind: 'window', off: 120, head: 78.5 },
+        { id: 'g6', wall: 'S', stock: 'D1', kind: 'man', off: 186, head: 82.5 },
+        { id: 'g7', wall: 'E', stock: 'D1', kind: 'man', off: 36, head: 82.5 },
+      ],
+    }) },
+  { name: 'With a lean-to', expectPass: false,
+    build: () => ({
+      spec: { ...spec, leanTo: true },
+      openings: openings.map((o) => ({ ...o })),
+    }) },
+];
+
+for (const fx of FIXTURES) {
+  const { spec: fs, openings: fo } = fx.build();
+  const worst = Math.min(...A.bracingCheck(fs, fo).flatMap((d) => d.lines.map((l) => l.ratio)));
+  const code = A.encodeLayout(fs, fo);
   const back = A.decodeLayout(code);
   const worst2 = Math.min(...A.bracingCheck(back.spec, back.openings).flatMap((d) => d.lines.map((l) => l.ratio)));
-  const same = JSON.stringify(back.spec) === JSON.stringify(ps)
-    && back.openings.length === po.length
-    && back.openings.every((o, i) => o.wall === po[i].wall && Math.abs(o.off - po[i].off) < 0.001
-      && Math.abs(A.stockFor(o).w - A.stockFor(po[i]).w) < 0.001);
-  console.log(`  ${preset.name.padEnd(22)} worst bracing ${worst.toFixed(2)}  `
+  const same = JSON.stringify(back.spec) === JSON.stringify(fs)
+    && back.openings.length === fo.length
+    && back.openings.every((o, i) => o.wall === fo[i].wall && Math.abs(o.off - fo[i].off) < 0.001
+      && Math.abs(A.stockFor(o).w - A.stockFor(fo[i]).w) < 0.001);
+  console.log(`  ${fx.name.padEnd(22)} worst bracing ${worst.toFixed(2)}  `
     + `code ${code.length} chars  round-trip ${same ? 'ok' : 'MISMATCH'}`);
-  if (!same) fail(`preset "${preset.name}" did not survive the share code`);
-  if (Math.abs(worst - worst2) > 0.001) fail(`preset "${preset.name}" decoded to different numbers`);
-  const crit = A.auditBuilding(ps, po).filter((n) => n.level === 'crit');
-  if (crit.length) console.log(`      still critical: ${crit.map((c) => c.title).join('; ')}`);
-}
-if (Math.min(...A.bracingCheck(...Object.values(A.PRESETS[2].build())).flatMap((d) => d.lines.map((l) => l.ratio))) < 1) {
-  fail('the "Openings ganged" preset does not actually clear every wall line');
+  if (!same) fail(`fixture "${fx.name}" did not survive the share code`);
+  if (Math.abs(worst - worst2) > 0.001) fail(`fixture "${fx.name}" decoded to different numbers`);
+  if (fx.expectPass && worst < 1) fail(`fixture "${fx.name}" should clear every wall line, worst ${worst.toFixed(2)}`);
+  if (!fx.expectPass && worst >= 1) fail(`fixture "${fx.name}" was expected to fall short somewhere`);
 }
 const badCode = (() => { try { A.decodeLayout('not-a-code'); return false; } catch (e) { return true; } })();
 if (!badCode) fail('a bad layout code should be rejected');

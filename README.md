@@ -27,7 +27,9 @@ one layout:
 ```
 
 `tools/build-layout-index.mjs` collects them into `layouts/index.json` at deploy time,
-so contributing is one new file with no manifest to keep in step.
+so contributing is one new file with no manifest to keep in step. The tools carry no
+built-in layouts, so this directory is the whole menu — deleting a file here removes it
+from the tool.
 
 ### Adding one
 
