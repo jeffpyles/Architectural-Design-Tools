@@ -214,6 +214,33 @@ export function run({ A, spec, openings, model, take, fail, log, permute }) {
     if (!crossings) log(`  ok  no girt crosses an opening (${model.parts.filter((p) => p.sys === 'girt').length} girt pieces)`);
   }
 
+  /* No sheet layer may cover an opening. Siding, sheathing, batt and the
+     interior face are all drawn as rectangles on a wall, and every one of
+     them used to run straight across the windows. */
+  {
+    let across = 0;
+    const sheets = model.parts.filter((p) => ['siding', 'sheathing', 'insulation', 'drywall'].includes(p.sys)
+      && p.geom.t === 'box');
+    for (const sh of sheets) {
+      const g = sh.geom;
+      const mn = [g.p[0] - g.s[0] / 2, g.p[1] - g.s[1] / 2, g.p[2] - g.s[2] / 2];
+      const mx = [g.p[0] + g.s[0] / 2, g.p[1] + g.s[1] / 2, g.p[2] + g.s[2] / 2];
+      for (const o of openings) {
+        const W = A.WALLS[o.wall], ro = A.roughOf(o);
+        const axis = W.axis === 'x' ? 0 : 2, fixed = W.axis === 'x' ? 2 : 0;
+        const at = W.axis === 'x' ? (W.z === 0 ? 0 : spec.width) : (W.x === 0 ? 0 : spec.length);
+        if (Math.abs((mn[fixed] + mx[fixed]) / 2 - at) > 10) continue;      // a different wall
+        const u = mn[axis] < o.off + ro.w - 0.1 && mx[axis] > o.off + 0.1;
+        const y = mn[1] < o.head - 0.1 && mx[1] > o.head - ro.h + 0.1;
+        if (u && y) {
+          across++;
+          if (across < 4) fail(`${sh.kind} on the ${o.wall} wall covers ${A.stockFor(o).label}`);
+        }
+      }
+    }
+    if (!across) log(`  ok  no sheet layer covers an opening (${sheets.length} pieces)`);
+  }
+
   /* Spec permutations must not throw or produce bad geometry. */
   permute({ studSize: '2x6', studSpacing: 24 });
   permute({ roofing: 'comp', siding: 'lap', interiorFinish: 'gyp' });

@@ -31,6 +31,59 @@ const PSF = {
   interior: { ply: 0.75, gyp: 2.2, osb: 1.4 },
 };
 
+/* The rectangles a sheet layer is left with once the openings are cut out
+   of it. Slab the wall into vertical bands at every opening edge, work out
+   which stretches of each band are blocked, and emit what is left — then
+   merge neighbouring bands that survived at the same heights, so a plain
+   wall stays one piece rather than a dozen.
+
+   Bands rather than a simple left-to-right split, because openings stack:
+   a window over a door leaves skin below the door, between the door head and
+   the window sill, and above the window, all in the same band. */
+function skinRects(wall, spec, openings, yBot, yTop) {
+  const run = wallRun(wall, spec);
+  const holes = openingsOn(wall, openings)
+    .map((o) => {
+      const ro = roughOf(o);
+      return { u0: o.off, u1: o.off + ro.w, y0: o.head - ro.h, y1: o.head };
+    })
+    .filter((o) => o.y1 > yBot + 0.05 && o.y0 < yTop - 0.05 && o.u1 > 0 && o.u0 < run);
+
+  const edges = new Set([0, run]);
+  for (const o of holes) {
+    edges.add(Math.max(0, o.u0));
+    edges.add(Math.min(run, o.u1));
+  }
+  const cuts = [...edges].sort((a, b) => a - b);
+
+  const out = [];
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const a = cuts[i], b = cuts[i + 1];
+    if (b - a < 0.05) continue;
+    const mid = (a + b) / 2;
+    const blocked = holes.filter((o) => o.u0 < mid && o.u1 > mid)
+      .map((o) => [Math.max(yBot, o.y0), Math.min(yTop, o.y1)])
+      .sort((p, q) => p[0] - q[0]);
+    let at = yBot;
+    for (const [p0, p1] of blocked) {
+      if (p0 > at + 0.05) out.push({ u0: a, u1: b, y0: at, y1: p0 });
+      at = Math.max(at, p1);
+    }
+    if (at < yTop - 0.05) out.push({ u0: a, u1: b, y0: at, y1: yTop });
+  }
+
+  // Merge bands that run together at the same heights
+  out.sort((p, q) => (p.y0 - q.y0) || (p.y1 - q.y1) || (p.u0 - q.u0));
+  const merged = [];
+  for (const r of out) {
+    const last = merged[merged.length - 1];
+    if (last && Math.abs(last.y0 - r.y0) < 0.01 && Math.abs(last.y1 - r.y1) < 0.01
+      && Math.abs(last.u1 - r.u0) < 0.01) last.u1 = r.u1;
+    else merged.push({ ...r });
+  }
+  return merged;
+}
+
 function buildModel(spec, openings) {
   const parts = [];
   let seq = 0;
@@ -296,13 +349,11 @@ function buildModel(spec, openings) {
     }
   } else {
     for (const wall of ['N', 'S', 'W', 'E']) {
-      const e = wallExtent(wall, spec);
-      const run = e.u1 - e.u0;
-      const holes = openingsOn(wall, openings)
-        .reduce((a, o) => a + roughOf(o).w * roughOf(o).h, 0);
-      add('dryin', 'sheathing', 'osb', '7/16" OSB sheathing',
-        wallBox(wall, spec, 0, y0, T, run, H - y0, 0.4375),
-        { area: Math.max(0, run * (H - y0) - holes) / 144, psf: PSF.osb });
+      for (const r of skinRects(wall, spec, openings, y0, H)) {
+        add('dryin', 'sheathing', 'osb', '7/16" OSB sheathing',
+          wallBox(wall, spec, r.u0, r.y0, T, r.u1 - r.u0, r.y1 - r.y0, 0.4375),
+          { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: PSF.osb });
+      }
     }
   }
   if (spec.roofDeck) {
@@ -333,13 +384,18 @@ function buildModel(spec, openings) {
   const sideKind = spec.siding === 'metal' ? 'Metal wall panel' : 'Lap siding';
   const skinT = spec.wallSkin === 'girts' ? LUMBER[spec.girtSize].d : 0.4375;
   for (const wall of ['N', 'S', 'W', 'E']) {
-    const e = wallExtent(wall, spec);
-    const run = e.u1 - e.u0;
-    const holes = openingsOn(wall, openings)
-      .reduce((a, o) => a + roughOf(o).w * roughOf(o).h, 0);
-    add('skin', 'siding', 'metal', sideKind,
-      wallBox(wall, spec, 0, y0, T + skinT, run, H - y0, 0.5),
-      { area: Math.max(0, run * (H - y0) - holes) / 144, psf: PSF.siding[spec.siding] });
+    for (const r of skinRects(wall, spec, openings, y0, H)) {
+      add('skin', 'siding', 'metal', sideKind,
+        wallBox(wall, spec, r.u0, r.y0, T + skinT, r.u1 - r.u0, r.y1 - r.y0, 0.5),
+        { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: PSF.siding[spec.siding] });
+    }
+    /* The gable triangle above the plate, which has no openings in it. */
+    if (WALLS[wall].gable) {
+      const gx = WALLS[wall].x === 0 ? -T - skinT - 0.5 : L + T + skinT;
+      add('skin', 'siding', 'metal', sideKind,
+        prismPart([[0, H], [W, H], [W / 2, H + spec.ridgeRise]], gx, gx + 0.5),
+        { area: W * spec.ridgeRise / 2 / 144, psf: PSF.siding[spec.siding] });
+    }
   }
 
   for (const o of openings) {
@@ -360,13 +416,11 @@ function buildModel(spec, openings) {
   /* ---------- 8. Insulation and interior ---------- */
   if (spec.wallInsulation === 'batt') {
     for (const wall of ['N', 'S', 'W', 'E']) {
-      const e = wallExtent(wall, spec);
-      const run = e.u1 - e.u0;
-      const holes = openingsOn(wall, openings)
-        .reduce((a, o) => a + roughOf(o).w * roughOf(o).h, 0);
-      add('finish', 'insulation', 'batt', `R-${spec.studSize === '2x6' ? 21 : 15} wall batt`,
-        wallBox(wall, spec, 0, y0, 0.5, run, H - y0, T - 1),
-        { area: Math.max(0, run * (H - y0) - holes) / 144, psf: PSF.wallBatt });
+      for (const r of skinRects(wall, spec, openings, y0, H)) {
+        add('finish', 'insulation', 'batt', `R-${spec.studSize === '2x6' ? 21 : 15} wall batt`,
+          wallBox(wall, spec, r.u0, r.y0, 0.5, r.u1 - r.u0, r.y1 - r.y0, T - 1),
+          { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: PSF.wallBatt });
+      }
     }
   }
   if (spec.ceilingInsulation) {
@@ -384,13 +438,11 @@ function buildModel(spec, openings) {
   const finishMat = spec.interiorFinish === 'gyp' ? 'drywall'
     : spec.interiorFinish === 'osb' ? 'osb' : 'plywood';
   for (const wall of ['N', 'S', 'W', 'E']) {
-    const e = wallExtent(wall, spec);
-    const run = e.u1 - e.u0;
-    const holes = openingsOn(wall, openings)
-      .reduce((a, o) => a + roughOf(o).w * roughOf(o).h, 0);
-    add('finish', 'drywall', finishMat, finishName,
-      wallBox(wall, spec, 0, y0, -0.5, run, H - y0, 0.5),
-      { area: Math.max(0, run * (H - y0) - holes) / 144, psf: PSF.interior[spec.interiorFinish] });
+    for (const r of skinRects(wall, spec, openings, y0, H)) {
+      add('finish', 'drywall', finishMat, finishName,
+        wallBox(wall, spec, r.u0, r.y0, -0.5, r.u1 - r.u0, r.y1 - r.y0, 0.5),
+        { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: PSF.interior[spec.interiorFinish] });
+    }
   }
 
   return { parts, rafter: rd, ridge: ridgeD, loft: loftDesign(spec), loads: roofLoads(spec) };
