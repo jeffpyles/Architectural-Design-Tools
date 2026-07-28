@@ -443,6 +443,12 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
 tbody tr:hover { background: var(--surface-2); }
 tfoot td { font-weight: 700; border-top: 1px solid var(--rule); border-bottom: 0; }
 
+.meter-row { margin: 0 0 9px; }
+.meter-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; }
+.meter-sub { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+.panel h4 {
+  margin: 14px 0 6px; font-size: 12px; font-weight: 700; color: var(--ink-2);
+}
 .meter { height: 5px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-top: 4px; }
 .meter i { display: block; height: 100%; background: var(--ok); }
 .meter.short i { background: var(--keel); }

@@ -140,6 +140,32 @@ And the wall height is not free either way — it is buying headroom:
 dropping the side walls, and it is the same constraint the stair to the main loft has to
 live inside.
 
+## Wind
+
+**Racking is comfortable, and sheathing the inside face is why.** The worst line is the
+east gable at **1.63×** — 4,519 lb of broadside wind carried by two twelve-foot walls.
+Everything else is better; the north wall runs at 11.5×. The shop's racking problem does
+not repeat here because there every full-height run had to reach 4'-0" under the
+prescriptive braced-wall tables, and here nothing is prescriptive: on a 135" wall the
+limit is the 3½-to-1 aspect ratio, so a pier counts from **38⅜"** up.
+
+**What is not comfortable is that nothing holds it down.** It sits on cribbing under its
+own weight, which is a question a building bolted to a slab never has to answer:
+
+| | Shell, 12,100 lb | Finished, ~23,000 lb |
+|---|---|---|
+| Sliding, friction ÷ wind | **0.91×** | 1.72× |
+| Overturning, 0.6D ÷ wind | 1.32× | 2.50× |
+
+Broadside wind is 4,671 lb against about 4,240 lb of friction on the blocks. **The
+unfinished shell can slide**, and it is the state the building will sit in longest.
+Ground anchors or a strap over the frame answer both rows.
+
+**And the roof lifts.** At 1.5/12 the wind never presses on it — 6.7 psf net in the field
+and 14.0 psf at the corners against a roof that weighs 6.8 psf. That is 80 lb on every
+rafter and 168 lb at the ends. Every rafter wants a tie to the plate and the walls want a
+continuous path down to the steel; toe-nails do not do this.
+
 ## The walls
 
 2×4 at 24" o.c., 135" from the top of the frame. After the subfloor and the plates that

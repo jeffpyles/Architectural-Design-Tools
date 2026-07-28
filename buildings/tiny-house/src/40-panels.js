@@ -211,6 +211,58 @@ function renderReview() {
   kvH.append(el('dt', null, 'In the loft'), el('dd', null, `${fmtIn(hr.atRidge)} at the ridge, ${fmtIn(hr.atWall)} at the wall`));
   p.append(kvH);
 
+  /* Racking, per wall line. The shop earns this panel because its layout can
+     fail it; this one earns it because nothing here said so either way until
+     it was checked. */
+  const tk = modelAndTakeoff(spec, state.openings).take;
+  p.append(el('h3', null, 'Racking'));
+  p.append(note('Each bar is capacity ÷ demand for one wall line, and 1.00 is the target. '
+    + `The whole interior face is sheathed, so every full-height run wider than `
+    + `${fmtIn((spec.wallHeight - spec.subfloor) / 3.5)} counts — that is the 3½-to-1 aspect limit on `
+    + 'a wall this tall, not a 4-foot minimum.'));
+  for (const d of lateralCheck(spec, state.openings)) {
+    p.append(el('h4', null, `${d.name} — ${fmtN(d.force, 0)} lb`));
+    for (const line of d.lines) {
+      const row = el('div', 'meter-row');
+      const top = el('div', 'meter-top');
+      const r = el('span', null, `${fmtN(line.ratio, 2)} ×`);
+      r.style.cssText = 'font-family:var(--f-mono);font-weight:700;font-variant-numeric:tabular-nums;'
+        + `color:${line.ratio < 1 ? 'var(--keel)' : line.ratio < 1.3 ? 'var(--warn)' : 'var(--ok)'}`;
+      top.append(el('span', null, `${WALLS[line.wall].label} wall`), r);
+      const m = el('div', 'meter' + (line.ratio < 1 ? ' short' : line.ratio < 1.3 ? ' tight' : ''));
+      const fill = el('i');
+      fill.style.width = `${Math.max(2, Math.min(100, line.ratio / 2 * 100))}%`;
+      m.append(fill);
+      const sub = el('div', 'meter-sub');
+      sub.textContent = `${fmtIn(line.braced)} of shear wall in ${line.piers.length} pier`
+        + `${line.piers.length === 1 ? '' : 's'} · ${fmtN(line.capacity, 0)} lb against `
+        + `${fmtN(line.demand, 0)} lb`
+        + (line.piers.length ? '' : ` · widest run is only ${fmtIn(line.widest)}`);
+      row.append(top, m, sub);
+      p.append(row);
+    }
+  }
+
+  /* The two failures a building on a slab never has, because it is bolted to
+     one and this is not. */
+  const stab = stabilityCheck(spec, tk.weight);
+  const stabF = stabilityCheck(spec, tk.weight, 1.9);
+  p.append(el('h3', null, 'Holding it down'));
+  p.append(note(`Broadside, the wind pushes ${fmtN(stab.force, 0)} lb against a house that is only held `
+    + 'in place by its own weight. Both of these get better as it gets heavier, so the shell on its '
+    + 'blocks is the worst it will ever be.'));
+  p.append(table(['', 'Shell', 'Finished'],
+    [['Sliding, friction ÷ wind', `${stab.slideRatio.toFixed(2)} ×`, `${stabF.slideRatio.toFixed(2)} ×`],
+      ['Overturning, 0.6D ÷ wind', `${stab.otRatio.toFixed(2)} ×`, `${stabF.otRatio.toFixed(2)} ×`]],
+    [false, true, true]));
+
+  const up = upliftCheck(spec);
+  p.append(el('h3', null, 'Uplift'));
+  p.append(note(`At ${roofPitch(spec).toFixed(1)}/12 the wind never presses on this roof, it pulls. `
+    + `${fmtN(up.netField, 1)} psf net in the field and ${fmtN(up.netCorner, 1)} psf at the corners, `
+    + `against a roof that weighs ${fmtN(up.dead, 1)} psf — which is `
+    + `${fmtN(up.perRafter, 0)} lb on every rafter and ${fmtN(up.perRafterCorner, 0)} lb at the ends.`));
+
   p.append(el('h3', null, 'Framing'));
   const rd = model.rafter, rg = model.ridge, lf = model.loft, L = model.loads;
   const st = studCheck(spec);

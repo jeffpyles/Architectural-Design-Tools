@@ -2,7 +2,8 @@
    that spans its twelve feet, and the weight sums that decide whether it can
    ever be moved. */
 
-export const api = ['rafterDesign', 'ridgeDesign', 'loftDesign', 'roofLoads', 'roofPitch',
+export const api = ['lateralCheck', 'stabilityCheck', 'upliftCheck', 'windPressure', 'OSB_ALLOW',
+  'rafterDesign', 'ridgeDesign', 'loftDesign', 'roofLoads', 'roofPitch',
   'roofY', 'axleCheck', 'axleSizing', 'joistRuns', 'wallRun', 'roughOf', 'WINDOW_STOCK',
   'DOOR_STOCK', 'STEEL', 'sizeHeader', 'heightCheck', 'headroom', 'frameSection',
   'frameCheck', 'studCheck', 'girtRuns', 'LUMBER'];
@@ -239,6 +240,45 @@ export function run({ A, spec, openings, model, take, fail, log, permute }) {
       }
     }
     if (!across) log(`  ok  no sheet layer covers an opening (${sheets.length} pieces)`);
+  }
+
+  /* Lateral. The numbers on screen have to reconcile with each other, and a
+     wall that loses its sheathing has to get worse. */
+  {
+    const dirs = A.lateralCheck(spec, openings);
+    for (const d of dirs) {
+      if (Math.abs(d.V - d.force / 2) > 0.5) fail(`${d.key}: half the wall load is not reaching the roof`);
+      if (Math.abs(d.perLine * d.lines.length - d.V) > 0.5) fail(`${d.key}: per-line demand does not sum to V`);
+      for (const l of d.lines) {
+        if (Math.abs(l.capacity - l.braced / 12 * A.OSB_ALLOW) > 0.5) fail(`${d.key}/${l.wall}: capacity is not braced length × allowable`);
+        const r = l.demand > 0 ? l.capacity / l.demand : 1;
+        if (Math.abs(r - l.ratio) > 0.001) fail(`${d.key}/${l.wall}: ratio is not capacity ÷ demand`);
+        for (const pr of l.piers) if (pr.w < l.minW - 0.01) fail(`${d.key}/${l.wall}: a pier narrower than the aspect limit was counted`);
+        if (l.widest + 0.01 < Math.max(0, ...l.piers.map((x) => x.w))) fail(`${d.key}/${l.wall}: widest run is under a counted pier`);
+      }
+    }
+    const worst = Math.min(...dirs.flatMap((d) => d.lines.map((l) => l.ratio)));
+    log(`  ok  racking reconciles, worst line ${worst.toFixed(2)}× at ${A.windPressure(spec).toFixed(1)} psf`);
+    if (worst < 1) fail(`the default layout does not clear racking (worst ${worst.toFixed(2)})`);
+
+    /* Widening every opening until nothing qualifies must drive it to zero —
+       otherwise the piers are not really being filtered. */
+    const fat = openings.map((o) => ({ ...o, off: 6 }));
+    const flat = Math.min(...A.lateralCheck(spec, fat).flatMap((d) => d.lines.map((l) => l.ratio)));
+    if (!(flat < worst)) fail('stacking every opening at one end did not reduce the racking ratio');
+  }
+
+  /* Stability. Heavier must always be safer, on both counts. */
+  {
+    const a = A.stabilityCheck(spec, take.weight);
+    const b = A.stabilityCheck(spec, take.weight, 1.9);
+    if (!(b.otRatio > a.otRatio && b.slideRatio > a.slideRatio)) fail('a heavier house should be more stable, not less');
+    if (Math.abs(a.slideRatio - 0.35 * a.W / a.force) > 0.001) fail('sliding is not friction ÷ wind');
+    log(`  ok  stability: sliding ${a.slideRatio.toFixed(2)}× shell / ${b.slideRatio.toFixed(2)}× finished, `
+      + `overturning ${a.otRatio.toFixed(2)}× / ${b.otRatio.toFixed(2)}×`);
+    const u = A.upliftCheck(spec);
+    if (!(u.corner > u.field)) fail('a roof corner should lift harder than the field');
+    log(`  ok  uplift ${u.netField.toFixed(1)} psf field, ${u.netCorner.toFixed(1)} psf corner`);
   }
 
   /* Spec permutations must not throw or produce bad geometry. */

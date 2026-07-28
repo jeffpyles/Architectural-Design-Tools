@@ -341,6 +341,52 @@ function auditBuilding(spec, openings) {
       + 'the frame the whole way rather than hanging it off two points.');
   }
 
+  /* Lateral. Racking first, then the two things a building bolted to a slab
+     never has to answer for. */
+  {
+    const model0 = buildModel(spec, openings);
+    const w0 = takeoff(model0, spec).weight;
+
+    const worst = lateralCheck(spec, openings)
+      .flatMap((d) => d.lines.map((l) => ({ ...l, dir: d.name })))
+      .sort((a, b) => a.ratio - b.ratio)[0];
+    if (worst.ratio < 1) {
+      add('crit', `${WALLS[worst.wall].label} wall is short on racking at ${worst.ratio.toFixed(2)}×`,
+        `${fmtN(worst.capacity, 0)} lb of capacity against ${fmtN(worst.demand, 0)} lb of demand. `
+        + (worst.piers.length
+          ? `It needs ${fmtIn(worst.required)} of full-height sheathing and has ${fmtIn(worst.braced)}.`
+          : `Nothing on it is wide enough to count — the widest unbroken run is ${fmtIn(worst.widest)} `
+            + `against the ${fmtIn(worst.minW)} a pier needs at this wall height. Only moving the `
+            + 'openings fixes that.'));
+    } else {
+      add('info', `Racking clears everywhere, worst line ${worst.ratio.toFixed(2)}×`,
+        `${WALLS[worst.wall].label} wall, ${worst.dir.toLowerCase()}. Sheathing the whole interior face `
+        + 'rather than just the corners is what buys this — every full-height run between the openings '
+        + 'is a shear pier.');
+    }
+
+    const st = stabilityCheck(spec, w0);
+    const stf = stabilityCheck(spec, w0, 1.9);
+    if (st.slideRatio < 1 || st.otRatio < 1.5) {
+      add('warn', `Nothing holds it down but its own weight`,
+        `Broadside, ${fmtN(st.force, 0)} lb of wind against ${fmtN(st.friction, 0)} lb of friction on the `
+        + `cribbing — ${st.slideRatio.toFixed(2)}× on sliding and ${st.otRatio.toFixed(2)}× on overturning, `
+        + `at shell weight. Finished those become ${stf.slideRatio.toFixed(2)}× and `
+        + `${stf.otRatio.toFixed(2)}×. The shell on its blocks is the worst this ever is, and it is the `
+        + 'state it will sit in longest. Ground anchors or a strap over the frame answer both.');
+    }
+
+    const up = upliftCheck(spec);
+    if (up.netField > 0) {
+      add('warn', `The roof lifts — ${fmtN(up.netCorner, 1)} psf net at the corners`,
+        `A ${roofPitch(spec).toFixed(1)}/12 roof never gets pressed on, only pulled. Against `
+        + `${fmtN(up.dead, 1)} psf of roof that leaves ${fmtN(up.netField, 1)} psf in the field and `
+        + `${fmtN(up.netCorner, 1)} at the corners — ${fmtN(up.perRafter, 0)} lb on a rafter and `
+        + `${fmtN(up.perRafterCorner, 0)} lb at the ends. Every rafter wants a tie to the plate, and the `
+        + 'walls want a continuous path down to the steel. Toe-nails do not do this.');
+    }
+  }
+
   /* Slender studs. */
   {
     const st = studCheck(spec);
@@ -569,5 +615,114 @@ function studCheck(spec) {
     ratio: (roof + loft + self) / cap,
     /* The IRC's prescriptive table stops at ten feet for a 2x4 bearing wall. */
     overPrescriptive: len > 120,
+  };
+}
+
+/* ---- lateral --------------------------------------------------------------
+   A house on a trailer resists wind differently from a building on a slab,
+   and the difference is not the racking. Racking here is easy: the interior
+   face is 7/16" OSB over every wall, so every full-height run between the
+   openings is a shear panel. What is not easy is that nothing holds the
+   building down. It sits on cribbing under its own weight. */
+
+/* ASCE 7 velocity pressure, then windward plus leeward, then ASD. */
+function windPressure(spec) {
+  const Kz = spec.exposure === 'B' ? 0.70 : spec.exposure === 'D' ? 1.03 : 0.85;
+  const qz = 0.00256 * spec.windSpeed * spec.windSpeed * Kz * 0.85;   // Kd 0.85, Kzt 1.0
+  return qz * 1.3 * 0.6;
+}
+
+/* 7/16" OSB, 8d at 6" on the edges — the same sheet doing the bracing and
+   the interior finish. Aspect ratio is the limit that matters on a wall this
+   tall: SDPWS allows 3.5 to 1 for a blocked wood structural panel, which on a
+   135" wall makes the narrowest useful pier about 39". The shop uses a flat
+   4'-0" minimum instead because it is leaning on the prescriptive braced-wall
+   tables; nothing about an 11'-3" wall is prescriptive. */
+const OSB_ALLOW = 240;          // plf
+const MAX_ASPECT = 3.5;
+
+function shearPiers(wall, spec, openings) {
+  const minW = (spec.wallHeight - spec.subfloor) / MAX_ASPECT;
+  return solidSegments(wall, spec, openings)
+    .map(([a, b]) => ({ a, w: b - a }))
+    .filter((p) => p.w >= minW);
+}
+
+function lateralCheck(spec, openings) {
+  const q = windPressure(spec);
+  const H = (spec.wallHeight - spec.subfloor) / 12;      // ft of wall
+  const gable = spec.width * spec.ridgeRise / 2 / 144;   // sf, one gable triangle
+
+  const dirs = [
+    /* Wind on the long walls is carried by the two gable ends, which are all
+       of twelve feet each. This is the direction that decides it. */
+    { key: 'ns', name: 'Across (wind on the long walls)',
+      lines: ['E', 'W'], area: spec.length / 12 * H },
+    { key: 'ew', name: 'Along (wind on the ends)',
+      lines: ['N', 'S'], area: spec.width / 12 * H + gable },
+  ];
+
+  return dirs.map((d) => {
+    const force = d.area * q;                            // lb on the wall
+    const V = force / 2;                                 // half goes to the roof line
+    const perLine = V / d.lines.length;
+    const minW = (spec.wallHeight - spec.subfloor) / MAX_ASPECT;
+    const lines = d.lines.map((wall) => {
+      const segs = solidSegments(wall, spec, openings).map(([a, b]) => ({ a, w: b - a }));
+      const piers = segs.filter((p) => p.w >= minW);
+      const braced = piers.reduce((a, p) => a + p.w, 0);
+      const capacity = braced / 12 * OSB_ALLOW;
+      const widest = Math.max(0, ...segs.map((s) => s.w));
+      return { wall, segs, piers, braced, capacity, widest, minW,
+        demand: perLine, ratio: perLine > 0 ? capacity / perLine : 1,
+        required: capacity > 0 ? perLine / OSB_ALLOW * 12 : Infinity };
+    });
+    return { ...d, q, force, V, perLine, minW, lines };
+  });
+}
+
+/* Nothing bolts this to the ground, so the two failures a slab-on-grade
+   building never has to think about are both live here: it can slide, and it
+   can tip. Both are checked broadside, which is the worst way to be caught. */
+function stabilityCheck(spec, weight, factor) {
+  const q = windPressure(spec);
+  const H = (spec.wallHeight - spec.subfloor) / 12;
+  const W = weight.total * (factor || 1);
+  const area = spec.length / 12 * H + spec.length / 12 * (spec.ridgeRise / 2 / 12);
+  const force = area * q;
+  /* The resultant sits at mid-wall, measured from the ground the cribbing
+     stands on rather than from the floor. */
+  const arm = spec.deckHeight / 12 + H / 2;
+  const overturning = force * arm;
+  const resisting = 0.6 * W * (spec.width / 12 / 2);     // 0.6 D against overturning
+  const mu = 0.35;                                        // steel on timber cribbing
+  const friction = mu * W;
+  return {
+    q, area, force, arm, overturning, resisting,
+    otRatio: resisting / overturning,
+    friction, slideRatio: friction / force,
+    holdEach: Math.max(0, (overturning - resisting) / (spec.width / 12) / 2),
+    W,
+  };
+}
+
+/* A roof this flat lifts. At 1.5 in 12 the wind does not press on it at all —
+   it pulls, and the dead load holding it down is a metal skin on 2x6 rafters. */
+function upliftCheck(spec) {
+  const Kz = spec.exposure === 'B' ? 0.70 : spec.exposure === 'D' ? 1.03 : 0.85;
+  const qz = 0.00256 * spec.windSpeed * spec.windSpeed * Kz * 0.85;
+  /* Components and cladding, low-slope roof: about -1.0 in the field and
+     -1.8 at the corners, against an internal pressure of +0.18. */
+  const field = qz * (1.0 + 0.18) * 0.6;
+  const corner = qz * (1.8 + 0.18) * 0.6;
+  const dead = roofLoads(spec).dead;
+  const trib = spec.studSpacing / 12 * (spec.width / 2 / 12);   // sf per rafter
+  return {
+    field, corner, dead,
+    netField: field - dead * 0.6,
+    netCorner: corner - dead * 0.6,
+    perRafter: (field - dead * 0.6) * trib,
+    perRafterCorner: (corner - dead * 0.6) * trib,
+    trib,
   };
 }
