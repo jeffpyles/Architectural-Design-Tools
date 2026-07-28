@@ -72,7 +72,12 @@ function buildOne(b) {
     css = css.replace(`{{${token}}}`, b64('core', 'assets', 'fonts', file));
   }
   const files = sourcesFor(b.id);
-  const js = [`/* ---- baked-in default layout ---- */\nconst BAKED_DEFAULT = ${JSON.stringify(defaultCode(b.id))};`]
+  /* Every building on the site, so a page can offer to switch to another
+     one. Baked at build time because the page has no server to ask. */
+  const siblings = listBuildings().map((o) => ({ id: o.id, name: o.name }));
+  const js = [`/* ---- the site's buildings, and this one's default layout ---- */\n`
+    + `const BUILDINGS = ${JSON.stringify(siblings)};\n`
+    + `const BAKED_DEFAULT = ${JSON.stringify(defaultCode(b.id))};`]
     .concat(files.map(([label, path]) => `/* ---- ${label} ---- */\n${readFileSync(path, 'utf8')}`))
     .join('\n\n');
 

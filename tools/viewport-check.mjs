@@ -5,7 +5,7 @@
    to the node-only checks, so they get their own pass here. */
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,6 +42,11 @@ const ZOOMS = [1, 1.25];
 let fails = 0;
 const fail = (m) => { console.log('  FAIL ' + m); fails++; };
 
+/* Served at /<id>/, which is the shape the switcher needs to resolve links,
+   so it must be present here whenever there is more than one building. */
+const SWITCH_EXPECTED = readdirSync(join(root, 'buildings'))
+  .filter((n) => existsSync(join(root, 'buildings', n, 'building.json'))).length;
+
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || undefined,
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
@@ -58,6 +63,9 @@ for (const [w, h] of SIZES) {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto(url);
     await page.waitForTimeout(700);
+    /* The tallest panel is the one that overflows first, and Review is it. */
+    await page.click('.tabs button[data-tab="review"]').catch(() => {});
+    await page.waitForTimeout(250);
 
     const r = await page.evaluate(() => {
       const vw = window.innerWidth, vh = window.innerHeight;
@@ -71,7 +79,18 @@ for (const [w, h] of SIZES) {
           && b.bottom <= vh + 1 && b.top >= -1;
       };
       const tabs = [...document.querySelectorAll('.tabs button')];
+      const panel = document.querySelector('.panel.on');
+      const pr = panel ? panel.getBoundingClientRect() : null;
       return {
+        /* One pixel of slack for fractional track sizing. Anything more than
+           that is the inspector hanging out of its row, which is what put a
+           panel over the stage rail. */
+        panelOverRail: pr ? pr.bottom > rail.top + 1 : false,
+        panelBelow: pr ? pr.bottom > vh + 1 : false,
+        panelStuck: panel ? panel.scrollHeight > panel.clientHeight + 2
+          && getComputedStyle(panel).overflowY === 'visible' : false,
+        panelHeight: pr ? pr.height : 0,
+        switcher: document.querySelectorAll('.tb-switch option').length,
         railBelow: rail.bottom > vh + 1,
         railHidden: rail.height === 0,
         reachable: compact ? dots : stages.filter(onScreen).length,
@@ -93,6 +112,16 @@ for (const [w, h] of SIZES) {
     if (r.canvas < 60) fail(`${tag}: the viewport collapsed to ${Math.round(r.canvas)}px`);
     if (r.titleHeight < 10) fail(`${tag}: the title block is gone`);
     if (r.factsHeight < 10) fail(`${tag}: the dimensions rail is gone`);
+    /* The inspector has to hold its content inside itself. Twice now a panel
+       has grown past its row and run over the stage rail instead of
+       scrolling — invisible to every other check here. */
+    if (r.panelOverRail) fail(`${tag}: the inspector panel runs over the stage rail`);
+    if (r.panelBelow) fail(`${tag}: the inspector panel runs off the bottom`);
+    if (r.panelStuck) fail(`${tag}: the inspector panel overflows without scrolling`);
+    if (r.panelHeight < 40) fail(`${tag}: the inspector panel collapsed to ${Math.round(r.panelHeight)}px`);
+    if (SWITCH_EXPECTED && r.switcher !== SWITCH_EXPECTED) {
+      fail(`${tag}: building switcher shows ${r.switcher} options, expected ${SWITCH_EXPECTED}`);
+    }
     if (r.factCells < 5) fail(`${tag}: only ${r.factCells} dimension cells rendered`);
     if (errors.length) fail(`${tag}: ${errors[0]}`);
     await page.close();

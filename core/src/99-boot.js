@@ -12,7 +12,7 @@ function boot() {
   state.openings = d.openings;
   state.stage = BUILDING.stages.length - 1;
   document.title = BUILDING.title || BUILDING.name;
-  document.querySelector('.tb-id h1').textContent = BUILDING.name;
+  buildHeading();
   buildTabs();
 
   const canvas = document.getElementById('cv');
@@ -53,6 +53,35 @@ function boot() {
   loadSharedLayouts();
   requestAnimationFrame(frame);
 }
+/* The heading, which doubles as a way to reach the other buildings.
+
+   Each building is its own page, so switching is navigation — and the links
+   only resolve where the site is laid out as ../<id>/. Served from a file or
+   from the Artifact host they would go nowhere, so the switcher does not
+   appear there and the heading stays a heading. */
+function buildHeading() {
+  const h1 = document.querySelector('.tb-id h1');
+  const here = /^https?:$/.test(location.protocol)
+    && new RegExp(`/${BUILDING.id}/?$`).test(location.pathname.replace(/index\.html$/, ''));
+  const others = typeof BUILDINGS !== 'undefined' ? BUILDINGS : [];
+  if (!here || others.length < 2) { h1.textContent = BUILDING.name; return; }
+
+  const sel = el('select', 'tb-switch');
+  sel.setAttribute('aria-label', 'Which building');
+  sel.title = 'Switch building';
+  for (const b of others) {
+    const o = el('option', null, b.name);
+    o.value = b.id;
+    o.selected = b.id === BUILDING.id;
+    sel.append(o);
+  }
+  sel.addEventListener('change', () => {
+    if (sel.value !== BUILDING.id) location.href = `../${sel.value}/`;
+  });
+  h1.textContent = '';
+  h1.append(sel);
+}
+
 function wireChrome() {
   for (const b of document.querySelectorAll('.tabs button')) {
     b.addEventListener('click', () => { state.tab = b.dataset.tab; renderPanels(); });
