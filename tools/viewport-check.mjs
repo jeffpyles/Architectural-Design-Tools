@@ -10,24 +10,24 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const repo = join(root, '..');
+const building = process.argv[2] || 'shop-building';
 
 /* Served over HTTP rather than opened as a file, so the shared-library fetch
    resolves the way it does in production instead of tripping CORS. */
 const server = createServer((req, res) => {
   const path = req.url.split('?')[0];
   let file = null;
-  if (path === '/shop-building/' || path === '/shop-building/index.html') {
-    file = join(root, 'dist', 'index.html');
+  if (path === `/${building}/` || path === `/${building}/index.html`) {
+    file = join(root, 'buildings', building, 'dist', 'index.html');
   } else if (path.startsWith('/layouts/')) {
-    file = join(repo, path.replace(/^\//, ''));
+    file = join(root, path.replace(/^\//, ''));
   }
   if (!file || !existsSync(file)) { res.writeHead(404); return res.end('not found'); }
   res.writeHead(200, { 'content-type': path.endsWith('.json') ? 'application/json' : 'text/html; charset=utf-8' });
   res.end(readFileSync(file));
 });
 await new Promise((r) => server.listen(0, r));
-const url = `http://127.0.0.1:${server.address().port}/shop-building/`;
+const url = `http://127.0.0.1:${server.address().port}/${building}/`;
 
 /* Real window shapes, each at 100% and at 125% zoom — 125% is common enough
    that it has to be part of the matrix, not an afterthought. */
@@ -103,5 +103,5 @@ await browser.close();
 server.close();
 console.log(fails
   ? `\n${fails} layout failure(s) across ${SIZES.length * ZOOMS.length} window shapes`
-  : `all ${SIZES.length * ZOOMS.length} window shapes pass`);
+  : `${building}: all ${SIZES.length * ZOOMS.length} window shapes pass`);
 process.exit(fails ? 1 : 0);

@@ -6,8 +6,18 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const files = readdirSync(join(root, 'src', 'js')).filter((f) => /^[0-6]/.test(f)).sort();
-const src = files.map((f) => readFileSync(join(root, 'src', 'js', f), 'utf8')).join('\n');
+const building = process.argv[2] || 'shop-building';
+
+/* The same concatenation the build uses, minus the boot and the shell — this
+   pass exercises the model and the engineering, not the DOM. */
+const coreDir = join(root, 'core', 'src');
+const bDir = join(root, 'buildings', building, 'src');
+const paths = [
+  ...readdirSync(coreDir).filter((f) => /^[0-8]/.test(f)).sort().map((f) => join(coreDir, f)),
+  ...readdirSync(bDir).filter((f) => f.endsWith('.js') && !/^40-panels/.test(f)).sort().map((f) => join(bDir, f)),
+];
+const src = paths.map((f) => readFileSync(f, 'utf8')).join('\n');
+console.log(`checking ${building}`);
 
 const ctx = vm.createContext({ Math, console, performance, Intl, Number, JSON,
   TextEncoder, TextDecoder, btoa, atob, Date });
@@ -268,7 +278,7 @@ for (const fx of FIXTURES) {
 /* The library's default-flagged layout is what the page opens with; the
    built-in spec is only the offline fallback. They should not drift far. */
 {
-  const dir = join(root, '..', 'layouts');
+  const dir = join(root, 'layouts', building);
   let flagged = null;
   for (const f of readdirSync(dir).filter((n) => n.endsWith('.json') && n !== 'index.json')) {
     const d = JSON.parse(readFileSync(join(dir, f), 'utf8'));

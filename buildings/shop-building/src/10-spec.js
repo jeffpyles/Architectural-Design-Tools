@@ -1,22 +1,7 @@
 /* ============================================================
-   00 — Units, spec, and the opening schedule
-   Everything internal is INCHES. Feet only appear at the glass.
+   The shop building: what it is made of and where the openings start.
    ============================================================ */
 
-const FT = 12;
-const D2R = Math.PI / 180;
-
-/* Nominal → actual dressed lumber, plus section properties used by
-   the header sizer. Sx/Ix are per ply, dry-service S4S. */
-const LUMBER = {
-  '2x4':  { t: 1.5, d: 3.5,   Sx: 3.06,  Ix: 5.36,   Cf: 1.5  },
-  '2x6':  { t: 1.5, d: 5.5,   Sx: 7.56,  Ix: 20.80,  Cf: 1.3  },
-  '2x8':  { t: 1.5, d: 7.25,  Sx: 13.14, Ix: 47.63,  Cf: 1.2  },
-  '2x10': { t: 1.5, d: 9.25,  Sx: 21.39, Ix: 98.93,  Cf: 1.1  },
-  '2x12': { t: 1.5, d: 11.25, Sx: 31.64, Ix: 177.98, Cf: 1.0  },
-  '4x6':  { t: 3.5, d: 5.5,   Sx: 17.65, Ix: 48.53,  Cf: 1.3  },
-  '6x6':  { t: 5.5, d: 5.5,   Sx: 27.73, Ix: 76.26,  Cf: 1.0  },
-};
 
 /* Windows already sitting in his shop. Sizes are ROUGH OPENINGS —
    the sketch says "(openings)" under the list, so these are holes,
@@ -29,7 +14,6 @@ const WINDOW_STOCK = [
   { id: 'W3', label: '28½" × 5\'-6"',    h: 28.5, w: 66, qty: 1,
     note: 'Listed as 28½" × 5.6 — read as 5\'-6" wide. Unassigned in the sketch.' },
 ];
-
 const DOOR_STOCK = [
   { id: 'D1', label: "3'-0\" × 6'-8\" man door", w: 38, h: 82.5, kind: 'man' },
   { id: 'D2', label: "10'-0\" × 10'-0\" overhead", w: 120, h: 120, kind: 'overhead' },
@@ -139,34 +123,6 @@ const STAGES = [
   { key: 'elec',    name: 'Electrical Rough-in', blurb: 'Sub-panel, circuits, boxes, lighting' },
   { key: 'finish',  name: 'Insulation & Drywall', blurb: 'Batts, blown lid, ½" walls, ⅝" ceiling' },
 ];
-
-/* Material palette for the viewport. These are the only warm colors in the
-   whole page — the chrome stays cool so the lumber reads. */
-const MATERIALS = {
-  gravel:   { c: [0.53, 0.51, 0.46], name: 'Compacted base' },
-  concrete: { c: [0.72, 0.71, 0.68], name: 'Concrete' },
-  fir:      { c: [0.85, 0.71, 0.51], name: 'DF framing lumber' },
-  firDark:  { c: [0.74, 0.59, 0.40], name: 'Framing (plate / header)' },
-  treated:  { c: [0.66, 0.72, 0.55], name: 'Pressure treated' },
-  lvl:      { c: [0.78, 0.62, 0.38], name: 'Engineered header' },
-  osb:      { c: [0.78, 0.61, 0.36], name: 'OSB sheathing' },
-  plywood:  { c: [0.84, 0.71, 0.50], name: 'Plywood gusset' },
-  wrap:     { c: [0.91, 0.92, 0.89], name: 'Housewrap' },
-  metal:    { c: [0.62, 0.67, 0.70], name: 'Metal panel' },
-  shingle:  { c: [0.30, 0.31, 0.32], name: 'Asphalt shingle' },
-  trim:     { c: [0.90, 0.90, 0.88], name: 'Trim' },
-  door:     { c: [0.47, 0.42, 0.37], name: 'Door' },
-  ohdoor:   { c: [0.80, 0.81, 0.80], name: 'Overhead door' },
-  glass:    { c: [0.55, 0.72, 0.80], name: 'Glazing' },
-  drywall:  { c: [0.90, 0.89, 0.86], name: 'Gypsum board' },
-  batt:     { c: [0.88, 0.72, 0.76], name: 'Fiberglass batt' },
-  blown:    { c: [0.80, 0.77, 0.70], name: 'Blown insulation' },
-  panel:    { c: [0.70, 0.73, 0.74], name: 'Panelboard' },
-  conduit:  { c: [0.74, 0.77, 0.78], name: 'Conduit / cable' },
-  box:      { c: [0.85, 0.65, 0.22], name: 'Device box' },
-  fixture:  { c: [0.94, 0.93, 0.83], name: 'Light fixture' },
-};
-
 const WALLS = {
   N: { axis: 'x', z: 0,            bearing: true,  label: 'North',  from: 'NW corner' },
   S: { axis: 'x', z: 'depth',      bearing: true,  label: 'South',  from: 'SW corner' },

@@ -3,15 +3,15 @@
 <div class="app">
   <header class="titleblock">
     <div class="tb-id">
-      <h1>Shop Building</h1>
-      <p>From the sketches, <span id="tbSub">24'-0" × 26'-0", ridge east–west</span></p>
+      <h1>Building</h1>
+      <p>From the sketches, <span id="tbSub"></span></p>
     </div>
     <dl class="tb-facts" id="tbFacts"></dl>
   </header>
 
   <main>
     <div class="viewport">
-      <canvas id="cv" aria-label="Three-dimensional model of the shop building"></canvas>
+      <canvas id="cv" aria-label="Three-dimensional model of the building"></canvas>
 
       <div class="vp-tools">
         <div class="chipset" role="group" aria-label="Camera">
@@ -58,30 +58,8 @@
 
     <aside class="inspector" id="inspector">
       <button class="collapse" id="btnCollapse" aria-label="Collapse the panel" title="Collapse the panel">›</button>
-      <div class="tabs" role="tablist">
-        <button role="tab" data-tab="openings" aria-selected="true">Openings</button>
-        <button role="tab" data-tab="structure" aria-selected="false">Structure</button>
-        <button role="tab" data-tab="review" aria-selected="false">Review</button>
-        <button role="tab" data-tab="truss" aria-selected="false">Truss</button>
-        <button role="tab" data-tab="takeoff" aria-selected="false">Takeoff</button>
-        <button role="tab" data-tab="layouts" aria-selected="false">Layouts</button>
-      </div>
-
-      <section class="panel on" id="panel-openings" role="tabpanel">
-        <p class="note">Drag an opening across its wall in the model, or type an offset.
-          Offsets are measured to the near edge of the rough opening, from the corner named on each card.</p>
-        <div id="opList"></div>
-        <h3>Windows on hand</h3>
-        <div class="stock" id="stockList"></div>
-        <h3>Add an opening</h3>
-        <div class="btn-row" id="addRow"></div>
-      </section>
-
-      <section class="panel" id="panel-structure" role="tabpanel"></section>
-      <section class="panel" id="panel-review" role="tabpanel"></section>
-      <section class="panel" id="panel-truss" role="tabpanel"></section>
-      <section class="panel" id="panel-takeoff" role="tabpanel"></section>
-      <section class="panel" id="panel-layouts" role="tabpanel"></section>
+      <div class="tabs" role="tablist"></div>
+      <div id="panelHost"></div>
     </aside>
   </main>
 

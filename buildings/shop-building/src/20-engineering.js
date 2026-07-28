@@ -1,36 +1,8 @@
 /* ============================================================
-   10 — Numbers. Loads, header sizing, truss layout, bracing check.
+   Loads, member sizing, truss layout, racking, ventilation and the audit.
    Preliminary sizing for an ag-exempt build, not a stamped design.
    ============================================================ */
 
-/* ---- formatting ---- */
-const SIXTEENTHS = ['', '¹⁄₁₆', '⅛', '³⁄₁₆', '¼', '⁵⁄₁₆', '⅜', '⁷⁄₁₆', '½',
-                    '⁹⁄₁₆', '⅝', '¹¹⁄₁₆', '¾', '¹³⁄₁₆', '⅞', '¹⁵⁄₁₆'];
-
-function fmtIn(inches) {
-  const neg = inches < 0;
-  let v = Math.abs(inches);
-  let whole = Math.floor(v);
-  let six = Math.round((v - whole) * 16);
-  if (six === 16) { whole += 1; six = 0; }
-  return (neg ? '-' : '') + whole + SIXTEENTHS[six] + '"';
-}
-
-function fmtFt(inches) {
-  const neg = inches < 0;
-  let v = Math.abs(inches);
-  let ft = Math.floor(v / 12);
-  let rem = v - ft * 12;
-  let whole = Math.floor(rem);
-  let six = Math.round((rem - whole) * 16);
-  if (six === 16) { whole += 1; six = 0; }
-  if (whole === 12) { ft += 1; whole = 0; }
-  return `${neg ? '-' : ''}${ft}'-${whole}${SIXTEENTHS[six]}"`;
-}
-
-const fmtN = (n, d = 0) => n.toLocaleString('en-US', {
-  minimumFractionDigits: d, maximumFractionDigits: d,
-});
 
 /* ---- loads ----
    ASCE-style flat roof snow, with a 20 psf minimum roof live load.
@@ -44,62 +16,6 @@ function roofLoads(spec) {
   const bcDead = spec.ceilingDrywall ? 10 : 3;
   return { live, pf, tcDead, bcDead, total: live + tcDead + bcDead };
 }
-
-/* ---- header sizing ----
-   Bending and deflection only; bearing and uplift get checked by eye at
-   the framing stage. CD = 1.15 for snow-duration loading. */
-const HEADER_LADDER = [
-  { size: '2x6',  plies: 2, kind: 'sawn' },
-  { size: '2x8',  plies: 2, kind: 'sawn' },
-  { size: '2x10', plies: 2, kind: 'sawn' },
-  { size: '2x12', plies: 2, kind: 'sawn' },
-  { size: '2x10', plies: 3, kind: 'sawn' },
-  { size: '2x12', plies: 3, kind: 'sawn' },
-  { size: '1.75x11.875', plies: 2, kind: 'lvl' },
-  { size: '1.75x11.875', plies: 3, kind: 'lvl' },
-  { size: '1.75x14', plies: 3, kind: 'lvl' },
-];
-
-const LVL = {
-  '1.75x11.875': { t: 1.75, d: 11.875, Sx: 41.13, Ix: 244.2 },
-  '1.75x14':     { t: 1.75, d: 14.0,   Sx: 57.17, Ix: 400.2 },
-};
-
-/* Shallowest member from a ladder that carries wPlf over clearSpan inches.
-   Cr applies to repetitive members — rafters and joists at 24" o.c. or
-   tighter, and built-up beams of three plies or more. */
-function pickMember(clearSpan, wPlf, ladder, defDiv, repetitive) {
-  const L = clearSpan;
-  const win = wPlf / 12;
-  const M = win * L * L / 8;
-  const defLimit = L / defDiv;
-  for (const opt of ladder) {
-    const isLvl = opt.kind === 'lvl';
-    const sec = isLvl ? LVL[opt.size] : LUMBER[opt.size];
-    if (!sec) continue;
-    const Sx = sec.Sx * opt.plies;
-    const Ix = sec.Ix * opt.plies;
-    const Cr = repetitive || opt.plies >= 3 ? 1.15 : 1.0;
-    const Fb = isLvl ? 2600 * 1.15 : 900 * 1.15 * sec.Cf * Cr;
-    const E = isLvl ? 2.0e6 : 1.6e6;
-    const capM = Fb * Sx;
-    const defl = 5 * win * Math.pow(L, 4) / (384 * E * Ix);
-    if (capM >= M && defl <= defLimit) {
-      return { size: opt.size, plies: opt.plies, kind: opt.kind || 'sawn',
-        depth: sec.d, thickness: opt.plies * sec.t, M, capM, defl, defLimit,
-        w: wPlf, ratio: M / capM,
-        label: isLvl
-          ? `(${opt.plies}) 1¾×${opt.size.endsWith('14') ? '14' : '11⅞'} LVL`
-          : (opt.plies === 1 ? opt.size : `(${opt.plies}) ${opt.size}`) };
-    }
-  }
-  return null;
-}
-
-const RAFTER_LADDER = [
-  { size: '2x6', plies: 1 }, { size: '2x8', plies: 1 },
-  { size: '2x10', plies: 1 }, { size: '2x12', plies: 1 },
-];
 
 /* ---- lean-to ----
    Reach is set by headroom, not by the pitch. Drop the ledger height by the
@@ -121,7 +37,6 @@ function leanToDrift(spec) {
   const hd = Math.max(0, 0.43 * Math.cbrt(lu) * Math.pow(pg + 10, 0.25) - 1.5);
   return { gamma, hd, pd: hd * gamma, width: 4 * hd };
 }
-
 function leanToDesign(spec) {
   if (!spec.leanTo) return null;
   const wall = spec.leanToWall;
@@ -190,7 +105,6 @@ function leanToDesign(spec) {
     angle, slope,
   };
 }
-
 function sizeHeader(clearSpan, wall, spec) {
   const loads = roofLoads(spec);
   const bearing = WALLS[wall].bearing;
@@ -285,11 +199,9 @@ function stockFor(op) {
     label: resized ? `${fmtFt(w)} × ${fmtFt(h)}` : base.label,
   };
 }
-
 function wallRun(wall, spec) {
   return WALLS[wall].axis === 'x' ? spec.width : spec.depth;
 }
-
 function openingsOn(wall, openings) {
   return openings.filter((o) => o.wall === wall).sort((a, b) => a.off - b.off);
 }
@@ -371,7 +283,6 @@ const SHEAR_ALLOW = {
    cannot be added to the panel capacity — you take the larger, not the sum. */
 const GYPSUM_ALLOW = 75;      // ½" board, unblocked, nails at 7" o.c., wind only
 const GYPSUM_ASPECT = 2.0;
-
 const MIN_PANEL = 48;      // 4'-0", the narrowest run worth calling a panel
 const MAX_ASPECT = 3.5;    // height : width
 
@@ -396,7 +307,6 @@ function bracedPanels(wall, openings, spec) {
   }
   return out.filter((p) => p.w >= MIN_PANEL && spec.wallHeight / p.w <= MAX_ASPECT);
 }
-
 function bracingCheck(spec, openings) {
   const q = windPressure(spec);
   const seis = seismicShear(spec);

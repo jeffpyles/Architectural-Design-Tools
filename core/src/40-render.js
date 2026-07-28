@@ -1,4 +1,9 @@
 /* ============================================================
+   A small WebGL renderer. No dependencies: the artifact CSP blocks every
+   external script, and axis-aligned framing does not need an engine.
+   ============================================================ */
+
+/* ============================================================
    30 — A small WebGL renderer. No dependencies: the artifact CSP blocks
    every external script, and axis-aligned framing lumber does not need
    a general-purpose engine.
@@ -71,80 +76,6 @@ const M4 = {
     ];
   },
 };
-
-/* ---- geometry → triangles + edges ---- */
-const CUBE_FACES = [
-  { n: [ 1, 0, 0], v: [[1,-1,-1],[1,1,-1],[1,1,1],[1,-1,1]] },
-  { n: [-1, 0, 0], v: [[-1,-1,1],[-1,1,1],[-1,1,-1],[-1,-1,-1]] },
-  { n: [ 0, 1, 0], v: [[-1,1,-1],[-1,1,1],[1,1,1],[1,1,-1]] },
-  { n: [ 0,-1, 0], v: [[-1,-1,1],[-1,-1,-1],[1,-1,-1],[1,-1,1]] },
-  { n: [ 0, 0, 1], v: [[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]] },
-  { n: [ 0, 0,-1], v: [[1,-1,-1],[-1,-1,-1],[-1,1,-1],[1,1,-1]] },
-];
-const CUBE_EDGES = [
-  [0,1],[1,2],[2,3],[3,0], [4,5],[5,6],[6,7],[7,4], [0,4],[1,5],[2,6],[3,7],
-];
-const CUBE_CORNERS = [
-  [-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1],
-  [-1,1,-1],[1,1,-1],[1,1,1],[-1,1,1],
-];
-
-function rotX(p, s, c) { return [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c]; }
-
-/* One place that knows how a box's local space maps to the world, whether it
-   carries a plain X rotation or a full basis. */
-function boxXform(g) {
-  if (g.b) {
-    const [X, Y, Z] = g.b;
-    const dir = (v) => [
-      X[0] * v[0] + Y[0] * v[1] + Z[0] * v[2],
-      X[1] * v[0] + Y[1] * v[1] + Z[1] * v[2],
-      X[2] * v[0] + Y[2] * v[1] + Z[2] * v[2],
-    ];
-    return { dir, pt: (v) => { const d = dir(v); return [d[0] + g.p[0], d[1] + g.p[1], d[2] + g.p[2]]; } };
-  }
-  const s = Math.sin(g.rx), c = Math.cos(g.rx);
-  const dir = (v) => rotX(v, s, c);
-  return { dir, pt: (v) => { const d = rotX(v, s, c); return [d[0] + g.p[0], d[1] + g.p[1], d[2] + g.p[2]]; } };
-}
-
-class MeshBuilder {
-  constructor() { this.v = []; this.l = []; }
-  box(g, col) {
-    const xf = boxXform(g);
-    const [hx, hy, hz] = [g.s[0] / 2, g.s[1] / 2, g.s[2] / 2];
-    for (const f of CUBE_FACES) {
-      const n = xf.dir(f.n);
-      const q = f.v.map((k) => xf.pt([k[0] * hx, k[1] * hy, k[2] * hz]));
-      this.tri(q[0], q[1], q[2], n, col); this.tri(q[0], q[2], q[3], n, col);
-    }
-    const cs = CUBE_CORNERS.map((k) => xf.pt([k[0] * hx, k[1] * hy, k[2] * hz]));
-    for (const [a, b] of CUBE_EDGES) this.l.push(...cs[a], ...cs[b]);
-  }
-  prism(g, col) {
-    const pts = g.pts, N = pts.length;
-    const at = (i, x) => [x, pts[i][1], pts[i][0]];
-    for (const [x, nx] of [[g.x0, [-1, 0, 0]], [g.x1, [1, 0, 0]]]) {
-      for (let i = 1; i < N - 1; i++) {
-        if (nx[0] > 0) this.tri(at(0, x), at(i, x), at(i + 1, x), nx, col);
-        else this.tri(at(0, x), at(i + 1, x), at(i, x), nx, col);
-      }
-    }
-    for (let i = 0; i < N; i++) {
-      const j = (i + 1) % N;
-      const a = at(i, g.x0), b = at(j, g.x0), c2 = at(j, g.x1), d = at(i, g.x1);
-      const e1 = [0, b[1] - a[1], b[2] - a[2]];
-      let n = [0, e1[2], -e1[1]];
-      const ln = Math.hypot(n[1], n[2]) || 1; n = [0, n[1] / ln, n[2] / ln];
-      this.tri(a, b, c2, n, col); this.tri(a, c2, d, n, col);
-      this.l.push(...a, ...b); this.l.push(...d, ...c2); this.l.push(...a, ...d);
-    }
-  }
-  tri(a, b, c, n, col) {
-    for (const p of [a, b, c]) this.v.push(p[0], p[1], p[2], n[0], n[1], n[2], col[0], col[1], col[2]);
-  }
-}
-
 const VERT_SRC = `
 attribute vec3 aPos; attribute vec3 aNorm; attribute vec3 aCol;
 uniform mat4 uProj, uView;
@@ -153,7 +84,6 @@ void main() {
   vNorm = aNorm; vCol = aCol; vWorld = aPos;
   gl_Position = uProj * uView * vec4(aPos, 1.0);
 }`;
-
 const FRAG_SRC = `
 precision mediump float;
 varying vec3 vNorm; varying vec3 vCol; varying vec3 vWorld;
@@ -173,15 +103,12 @@ void main() {
   c = mix(c, uFog, clamp(depth * uFogK, 0.0, 0.55));
   gl_FragColor = vec4(c, 1.0);
 }`;
-
 const LINE_VERT = `
 attribute vec3 aPos; uniform mat4 uProj, uView;
 void main() { gl_Position = uProj * uView * vec4(aPos, 1.0); }`;
-
 const LINE_FRAG = `
 precision mediump float; uniform vec4 uColor;
 void main() { gl_FragColor = uColor; }`;
-
 function compile(gl, vs, fs) {
   const p = gl.createProgram();
   for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
@@ -194,7 +121,6 @@ function compile(gl, vs, fs) {
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
   return p;
 }
-
 class Viewport {
   constructor(canvas) {
     this.canvas = canvas;

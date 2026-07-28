@@ -10,7 +10,6 @@ permissions:
   pages: write
   id-token: write
 
-# Let a run finish rather than cancelling it mid-deploy
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -25,34 +24,45 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Check the shop building model
-        working-directory: shop-building
-        run: node tools/check.mjs
+      - name: List the buildings
+        id: list
+        run: |
+          node -e "import('./tools/build.mjs').then(m=>console.log(m.listBuildings().map(b=>b.id).join(' ')))" > /tmp/ids
+          echo "ids=$(cat /tmp/ids)" >> "$GITHUB_OUTPUT"
+          cat /tmp/ids
 
-      - name: Build the shop building page
-        working-directory: shop-building
-        run: node build.mjs
+      - name: Check every building's model
+        run: |
+          for id in ${{ steps.list.outputs.ids }}; do node tools/check.mjs "$id"; done
+
+      - name: Build the pages
+        run: node tools/build.mjs
 
       - name: Collect the shared layouts
         run: node tools/build-layout-index.mjs
 
+      - name: Write the landing page
+        run: node tools/build-landing.mjs
+
       # The stage rail has slipped out of reach twice in ways the node checks
       # cannot see, so the layout gets asserted in a real browser.
       - name: Check the page layout in a browser
-        working-directory: shop-building
         run: |
           npm install --no-save playwright@1.61.1
           npx playwright install --with-deps chromium
-          node tools/viewport-check.mjs
+          for id in ${{ steps.list.outputs.ids }}; do node tools/viewport-check.mjs "$id"; done
 
       - name: Assemble the site
         run: |
-          mkdir -p _site/shop-building _site/layouts
+          mkdir -p _site/layouts
           cp index.html _site/index.html
-          cp shop-building/dist/index.html _site/shop-building/index.html
-          cp layouts/*.json _site/layouts/
+          cp -r layouts/. _site/layouts/
+          for id in ${{ steps.list.outputs.ids }}; do
+            mkdir -p "_site/$id"
+            cp "buildings/$id/dist/index.html" "_site/$id/index.html"
+          done
           touch _site/.nojekyll
-          ls -R _site
+          find _site -type f | sort
 
       - uses: actions/upload-pages-artifact@v3
         with:

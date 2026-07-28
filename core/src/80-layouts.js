@@ -1,12 +1,17 @@
 /* ============================================================
+   Saving, sharing and comparing layouts: a short code, the browser store,
+   and the library published alongside the site.
+   ============================================================ */
+
+/* ============================================================
    60 — Saving, sharing and comparing layouts.
    A layout is the spec's differences from the default plus the openings.
    That encodes to a short code you can paste into an email, and it also
    saves to this browser under a name.
    ============================================================ */
 
-const STORE_KEY = 'shop-layouts-v1';
-const CODE_PREFIX = 'SHOP1-';
+const STORE_KEY = () => `layouts-v1-${BUILDING.id}`;
+const CODE_PREFIX = () => BUILDING.codePrefix;
 
 /* Where the shared library lives. The page reads it over plain HTTP from
    whatever host it is served from. Writing goes through GitHub itself: a
@@ -16,10 +21,8 @@ const SITE = {
   repo: 'architectural-design-tools',
   branch: 'main',
   dir: 'layouts',
-  tool: 'shop-building',
   index: '../layouts/index.json',
 };
-
 let sharedLayouts = null;   // null = loading, false = unavailable, [] = none published
 
 /* The library is a flat list generated at deploy time from layouts/*.json,
@@ -30,7 +33,7 @@ async function loadSharedLayouts() {
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
     const rows = Array.isArray(data) ? data : (data.layouts || []);
-    sharedLayouts = rows.filter((r) => r && r.code && (!r.tool || r.tool === SITE.tool));
+    sharedLayouts = rows.filter((r) => r && r.code && (!r.tool || r.tool === BUILDING.id));
   } catch (e) {
     sharedLayouts = false;    // opened from a file, or from the artifact host
   }
@@ -45,7 +48,6 @@ async function loadSharedLayouts() {
   }
   renderLayouts();
 }
-
 let openedFromLink = false;
 let touched = false;
 
@@ -55,14 +57,13 @@ let touched = false;
 function repoSaveURL(name, note, code) {
   const slug = (name || 'layout').toLowerCase().replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '').slice(0, 48) || 'layout';
-  const body = JSON.stringify({ tool: SITE.tool, name: name || 'Untitled', note: note || '', code }, null, 2);
+  const body = JSON.stringify({ tool: BUILDING.id, name: name || 'Untitled', note: note || '', code }, null, 2);
   return `https://github.com/${SITE.owner}/${SITE.repo}/new/${SITE.branch}`
-    + `?filename=${encodeURIComponent(`${SITE.dir}/${slug}.json`)}`
+    + `?filename=${encodeURIComponent(`${SITE.dir}/${BUILDING.id}/${slug}.json`)}`
     + `&value=${encodeURIComponent(body)}`;
 }
-
 function downloadLayout(name, note, code) {
-  const body = JSON.stringify({ tool: SITE.tool, name: name || 'Untitled', note: note || '', code }, null, 2);
+  const body = JSON.stringify({ tool: BUILDING.id, name: name || 'Untitled', note: note || '', code }, null, 2);
   const slug = (name || 'layout').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'layout';
   const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
   const a = document.createElement('a');
@@ -74,7 +75,7 @@ function downloadLayout(name, note, code) {
 /* A link that opens this exact building, for pasting into a message. */
 function shareURL(code) {
   if (!/^https?:$/.test(location.protocol)) return null;
-  return `${location.origin}${location.pathname}?c=${code.replace(CODE_PREFIX, '')}`;
+  return `${location.origin}${location.pathname}?c=${code.replace(CODE_PREFIX(), '')}`;
 }
 
 /* ---- encoding ---- */
@@ -84,36 +85,34 @@ function b64urlEncode(str) {
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-
 function b64urlDecode(str) {
   const pad = str.replace(/-/g, '+').replace(/_/g, '/');
   const bin = atob(pad + '='.repeat((4 - pad.length % 4) % 4));
   const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
-
 function encodeLayout(spec, openings) {
+  const base = BUILDING.defaults().spec;
   const diff = {};
-  for (const k of Object.keys(DEFAULT_SPEC)) {
-    if (spec[k] !== DEFAULT_SPEC[k]) diff[k] = spec[k];
+  for (const k of Object.keys(base)) {
+    if (spec[k] !== base[k]) diff[k] = spec[k];
   }
   const ops = openings.map((o) => [o.wall, o.stock, o.kind, o.off, o.head,
     o.w == null ? 0 : o.w, o.h == null ? 0 : o.h]);
-  return CODE_PREFIX + b64urlEncode(JSON.stringify({ v: 1, s: diff, o: ops }));
+  return CODE_PREFIX() + b64urlEncode(JSON.stringify({ v: 1, s: diff, o: ops }));
 }
-
 function decodeLayout(code) {
   const raw = String(code).trim().replace(/\s+/g, '');
   if (!raw) throw new Error('Nothing pasted.');
-  const body = raw.startsWith(CODE_PREFIX) ? raw.slice(CODE_PREFIX.length) : raw;
+  const body = raw.startsWith(CODE_PREFIX()) ? raw.slice(CODE_PREFIX().length) : raw;
   let data;
   try { data = JSON.parse(b64urlDecode(body)); } catch (e) {
-    throw new Error('That does not look like a layout code. Copy the whole thing, starting with SHOP1-.');
+    throw new Error('That does not look like a layout code. Copy the whole thing, starting with ${CODE_PREFIX()}.');
   }
   if (!data || data.v !== 1 || !Array.isArray(data.o)) {
     throw new Error('That code is from a different version of this page.');
   }
-  const spec = { ...DEFAULT_SPEC, ...(data.s || {}) };
+  const spec = { ...BUILDING.defaults().spec, ...(data.s || {}) };
   const openings = data.o.map((a, i) => ({
     id: `l${i}`, wall: a[0], stock: a[1], kind: a[2], off: a[3], head: a[4],
     ...(a[5] ? { w: a[5] } : {}), ...(a[6] ? { h: a[6] } : {}),
@@ -126,28 +125,20 @@ function storageOK() {
   try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return true; }
   catch (e) { return false; }
 }
-
 function loadSaved() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); }
+  try { return JSON.parse(localStorage.getItem(STORE_KEY()) || '[]'); }
   catch (e) { return []; }
 }
-
 function writeSaved(list) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); return true; }
+  try { localStorage.setItem(STORE_KEY(), JSON.stringify(list)); return true; }
   catch (e) { return false; }
 }
 
 /* ---- a plain-language description, for pasting into an email ---- */
 function layoutSummary(spec, openings) {
-  const tr = trussGeometry(spec);
   const L = [];
-  L.push(`SHOP — ${fmtFt(spec.width)} east-west x ${fmtFt(spec.depth)} north-south`);
-  L.push(`${fmtFt(spec.wallHeight)} walls, ${spec.pitch}/12 roof, ridge east-west`);
-  L.push(`${tr.count} trusses at ${fmtIn(spec.trussSpacing)} o.c. spanning ${fmtFt(tr.span)}`);
-  L.push(`${spec.roofing === 'metal' ? 'Metal roof' : 'Shingle roof'} on `
-    + `${spec.roofDeck === 'purlins' ? `${spec.purlinSize} purlins` : 'OSB deck'}, `
-    + `${spec.siding === 'metal' ? 'metal siding' : 'lap siding'} on `
-    + `${spec.wallSkin === 'girts' ? `${spec.girtSize} girts` : 'OSB sheathing'}`);
+  L.push(BUILDING.name.toUpperCase());
+  for (const [k, v] of BUILDING.titleFacts(spec, null)) L.push(`${k}: ${v}`);
   L.push('');
   L.push('OPENINGS');
   for (const w of ['N', 'E', 'S', 'W']) {
@@ -169,7 +160,7 @@ function layoutSummary(spec, openings) {
         + (l.braced === 0 ? `  (widest run only ${fmtFt(l.widest)})` : ''));
     }
   }
-  const notes = auditBuilding(spec, openings).filter((n) => n.level !== 'info');
+  const notes = BUILDING.audit(spec, openings).filter((n) => n.level !== 'info');
   if (notes.length) {
     L.push('');
     L.push('THINGS TO SORT OUT');
@@ -206,7 +197,6 @@ function applyLayout(spec, openings) {
   document.getElementById('readout').classList.remove('on');
   scheduleRebuild();
 }
-
 function renderLayouts() {
   const p = $('#panel-layouts');
   if (!p) return;
@@ -283,7 +273,7 @@ function renderLayouts() {
   const inp = document.createElement('textarea');
   inp.className = 'code-box';
   inp.rows = 2;
-  inp.placeholder = 'Paste a SHOP1- code here';
+  inp.placeholder = `Paste a ${CODE_PREFIX()} code here`;
   inp.setAttribute('aria-label', 'Paste a layout code');
   inWrap.append(inp);
   p.append(inWrap);
@@ -405,5 +395,5 @@ function layoutFromHash() {
   const src = (location.search || '') + (location.hash || '');
   const m = src.match(/[?#&]c=([A-Za-z0-9\-_]+)/);
   if (!m) return null;
-  try { return decodeLayout(CODE_PREFIX + m[1]); } catch (e) { return null; }
+  try { return decodeLayout(CODE_PREFIX() + m[1]); } catch (e) { return null; }
 }

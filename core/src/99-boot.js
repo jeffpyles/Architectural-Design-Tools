@@ -1,8 +1,20 @@
 /* ============================================================
+   Boot.
+   ============================================================ */
+
+/* ============================================================
    99 — Boot
    ============================================================ */
 
 function boot() {
+  const d = BUILDING.defaults();
+  state.spec = d.spec;
+  state.openings = d.openings;
+  state.stage = BUILDING.stages.length - 1;
+  document.title = BUILDING.title || BUILDING.name;
+  document.querySelector('.tb-id h1').textContent = BUILDING.name;
+  buildTabs();
+
   const canvas = document.getElementById('cv');
   try {
     vp = new Viewport(canvas);
@@ -12,9 +24,9 @@ function boot() {
         + 'The Openings, Truss and Takeoff tabs still work.',
       style: 'padding:24px;color:var(--ink-2);font-size:13px',
     }));
-    model = buildModel(state.spec, state.openings);
+    model = BUILDING.build(state.spec, state.openings);
     take = takeoff(model, state.spec);
-    findings = auditBuilding(state.spec, state.openings);
+    findings = BUILDING.audit(state.spec, state.openings);
     renderPanels();
     wireChrome();
     return;
@@ -32,7 +44,6 @@ function boot() {
   loadSharedLayouts();
   requestAnimationFrame(frame);
 }
-
 function wireChrome() {
   for (const b of document.querySelectorAll('.tabs button')) {
     b.addEventListener('click', () => { state.tab = b.dataset.tab; renderPanels(); });

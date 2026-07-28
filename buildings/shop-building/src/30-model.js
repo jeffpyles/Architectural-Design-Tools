@@ -1,46 +1,6 @@
 /* ============================================================
-   20 — Build the whole building out of parts.
-   Every part is a box (optionally rotated about X, which is the axis the
-   roof slopes around) or a prism extruded along X for the gable triangles.
+   Turn the spec into every individual part of the building.
    ============================================================ */
-
-function boxPart(p, s, rx) { return { t: 'box', p, s, rx: rx || 0 }; }
-function prismPart(pts, x0, x1) { return { t: 'prism', pts, x0, x1 }; }
-
-/* A box on an arbitrary basis: b holds the world vectors of the local X, Y
-   and Z axes. Used for members that run diagonally in more than one plane. */
-function orientedBox(p, s, b) { return { t: 'box', p, s, rx: 0, b }; }
-
-/* A member running from A to B in space, `depth` deep on the up side.
-   Local Z follows the member, local Y is world-up squared off against it. */
-function memberBox3(A, B, thick, depth) {
-  const d = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
-  const len = Math.hypot(d[0], d[1], d[2]) || 1;
-  const z = [d[0] / len, d[1] / len, d[2] / len];
-  let up = [0, 1, 0];
-  if (Math.abs(z[1]) > 0.98) up = [1, 0, 0];
-  // x = up × z, then y = z × x, giving a right-handed frame
-  let x = [up[1] * z[2] - up[2] * z[1], up[2] * z[0] - up[0] * z[2], up[0] * z[1] - up[1] * z[0]];
-  const lx = Math.hypot(x[0], x[1], x[2]) || 1;
-  x = [x[0] / lx, x[1] / lx, x[2] / lx];
-  const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
-  const c = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2, (A[2] + B[2]) / 2];
-  return orientedBox(c, [thick, depth, len], [x, y, z]);
-}
-
-/* A framing member laid out from two points on a reference edge in the Z–Y
-   plane. `align` says which side of that edge the material sits on. */
-function memberBox(a, b, x, thick, depth, align) {
-  const dz = b[0] - a[0], dy = b[1] - a[1];
-  const len = Math.hypot(dz, dy);
-  const dirZ = dz / len, dirY = dy / len;
-  const perpZ = -dirY, perpY = dirZ;            // rotate +90° in (z, y)
-  const side = align === 'above' ? 0.5 : align === 'below' ? -0.5 : 0;
-  const cz = (a[0] + b[0]) / 2 + perpZ * depth * side;
-  const cy = (a[1] + b[1]) / 2 + perpY * depth * side;
-  const rx = -Math.atan2(dirY, dirZ);
-  return boxPart([x, cy, cz], [thick, depth, len], rx);
-}
 
 function wallExtent(wall, spec) {
   const t = LUMBER[spec.studSize].d;

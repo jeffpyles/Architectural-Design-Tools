@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Subset the faces used by the shop model into inline-able woff2.
+"""Subset the faces the pages use into inline-able woff2.
 
-Output is committed to assets/fonts/*.woff2 so CI can build the page without
+Output is committed to core/assets/fonts/*.woff2 so CI can build the page without
 the subsetting toolchain; build.mjs base64s them into the page.
 Keeping this a separate step means the font payload only changes when the
 character set does.
@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 SRC = pathlib.Path("/mnt/skills/examples/canvas-design/canvas-fonts")
-OUT = pathlib.Path(__file__).resolve().parent.parent / "assets" / "fonts"
+OUT = pathlib.Path(__file__).resolve().parent.parent / "core" / "assets" / "fonts"
 
 # ASCII plus the marks a framing drawing actually uses: feet/inch primes,
 # vulgar fractions down to sixteenths, arrows, and a warning glyph.

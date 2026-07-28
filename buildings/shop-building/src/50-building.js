@@ -1,0 +1,124 @@
+/* ============================================================
+   The building's declaration: what it is, what it can be adjusted by, and
+   which panels the shell should show. No DOM here — the headless checks
+   read this file, so panel renderers are referenced lazily.
+   ============================================================ */
+
+const CONTROLS = [
+  { g: 'Skin', k: 'wallSkin', label: 'Wall system', type: 'sel',
+    opts: [['girts', 'Girts, no sheathing'], ['sheathing', 'Full OSB sheathing']] },
+  { g: 'Skin', k: 'roofDeck', label: 'Roof substrate', type: 'sel',
+    opts: [['purlins', 'Purlins, no deck'], ['osb', 'OSB deck']] },
+  { g: 'Skin', k: 'roofing', label: 'Roofing', type: 'sel',
+    opts: [['metal', 'Metal panel'], ['comp', 'Asphalt shingle']] },
+  { g: 'Skin', k: 'siding', label: 'Siding', type: 'sel',
+    opts: [['metal', 'Metal panel'], ['lap', 'Lap siding']] },
+  { g: 'Skin', k: 'purlinSpacing', label: 'Purlin spacing', type: 'sel',
+    opts: [[24, '24" o.c.'], [48, '48" o.c.']], num: true },
+  { g: 'Skin', k: 'girtSpacing', label: 'Girt spacing', type: 'sel',
+    opts: [[24, '24" o.c.'], [30, '30" o.c.']], num: true },
+
+  { g: 'Structure', k: 'trussSpacing', label: 'Truss spacing', type: 'sel',
+    opts: [[16, '16" o.c.'], [24, '24" o.c.'], [48, '48" o.c.']], num: true },
+  { g: 'Structure', k: 'trussChord', label: 'Truss chords', type: 'sel',
+    opts: [['2x6', '2x6'], ['2x8', '2x8']] },
+  { g: 'Structure', k: 'studSpacing', label: 'Stud spacing', type: 'sel',
+    opts: [[16, '16" o.c.'], [24, '24" o.c.']], num: true },
+  { g: 'Structure', k: 'studSize', label: 'Studs', type: 'sel',
+    opts: [['2x6', '2x6'], ['2x4', '2x4']] },
+  { g: 'Structure', k: 'bracing', label: 'Racking resistance', type: 'sel',
+    opts: [['corners', 'OSB at the corners only'], ['full', 'OSB at every full-height run'],
+      ['diaphragm', 'Steel skin as diaphragm'], ['strap', 'Steel strap X-brace'],
+      ['none', 'Nothing']] },
+  { g: 'Structure', k: 'bracedPanelWidth', label: 'Corner panel width', type: 'len' },
+  { g: 'Structure', k: 'wallHeight', label: 'Wall height', type: 'len' },
+  { g: 'Structure', k: 'pitch', label: 'Roof pitch', type: 'sel',
+    opts: [[3, '3/12'], [4, '4/12'], [5, '5/12']], num: true },
+  { g: 'Structure', k: 'heelHeight', label: 'Raised heel', type: 'len' },
+  { g: 'Structure', k: 'eaveOverhang', label: 'Eave overhang', type: 'len' },
+  { g: 'Structure', k: 'rakeOverhang', label: 'Rake overhang', type: 'len' },
+
+  { g: 'Lean-to', k: 'leanTo', label: 'Add a lean-to', type: 'bool' },
+  { g: 'Lean-to', k: 'leanToWall', label: 'On which wall', type: 'sel',
+    opts: [['W', 'West'], ['N', 'North'], ['E', 'East'], ['S', 'South']] },
+  { g: 'Lean-to', k: 'leanToProjection', label: 'Projection (0 = as far as it goes)', type: 'len' },
+  { g: 'Lean-to', k: 'leanToClear', label: 'Clear height under the beam', type: 'len' },
+  { g: 'Lean-to', k: 'leanToPosts', label: 'Posts', type: 'sel',
+    opts: [[2, '2 — ends only'], [3, '3 — ends and middle'], [4, '4'], [5, '5']], num: true },
+  { g: 'Lean-to', k: 'leanToSpacing', label: 'Rafter spacing', type: 'sel',
+    opts: [[16, '16" o.c.'], [24, '24" o.c.']], num: true },
+  { g: 'Lean-to', k: 'leanToDrift', label: 'Count drifted snow', type: 'bool' },
+
+  { g: 'Site & loads', k: 'groundSnow', label: 'Ground snow (psf)', type: 'num' },
+  { g: 'Site & loads', k: 'windSpeed', label: 'Basic wind speed (mph)', type: 'num' },
+  { g: 'Site & loads', k: 'exposure', label: 'Wind exposure', type: 'sel',
+    opts: [['B', 'B — wooded or built up'], ['C', 'C — open country'], ['D', 'D — unobstructed']] },
+  { g: 'Site & loads', k: 'seismicSDS', label: 'Seismic S_DS (g)', type: 'num' },
+  { g: 'Site & loads', k: 'venting', label: 'Attic ventilation', type: 'sel',
+    opts: [['ridge-gable', 'Ridge vent + gable louvres'], ['ridge-soffit', 'Ridge + soffit'],
+      ['gable', 'Gable louvres only'], ['none', 'Unvented']] },
+
+  { g: 'Loads & finish', k: 'service', label: 'Sub-panel (amps)', type: 'num' },
+  { g: 'Loads & finish', k: 'heated', label: 'Heated building', type: 'bool' },
+  { g: 'Loads & finish', k: 'roofPlaneBracing', label: 'Roof-plane bracing', type: 'bool' },
+  { g: 'Loads & finish', k: 'dripStop', label: 'Anti-condensation panel', type: 'bool' },
+  { g: 'Loads & finish', k: 'insulation', label: 'Insulation', type: 'bool' },
+  { g: 'Loads & finish', k: 'wallDrywall', label: 'Wall drywall', type: 'bool' },
+  { g: 'Loads & finish', k: 'ceilingDrywall', label: 'Ceiling drywall', type: 'bool' },
+];
+
+/* ============================================================
+   What the shell needs to know about this building.
+   ============================================================ */
+const BUILDING = {
+  id: 'shop-building',
+  name: 'Shop Building',
+  title: "Shop Building — 24' × 26'",
+  codePrefix: 'SHOP1-',
+
+  defaults: () => ({
+    spec: { ...DEFAULT_SPEC },
+    openings: DEFAULT_OPENINGS.map((o) => ({ ...o })),
+  }),
+
+  stages: STAGES,
+  build: buildModel,
+  audit: auditBuilding,
+
+  controls: CONTROLS,
+  controlsNote: 'The sketch left the roof covering and truss spacing open. '
+    + 'Everything here rebuilds the model, the takeoff and the review notes.',
+  resetLabel: 'Back to the sketch',
+
+  subtitle: (spec) => `${fmtFt(spec.width)} × ${fmtFt(spec.depth)}, ridge east–west, `
+    + 'gable ends facing the house',
+
+  titleFacts: (spec) => {
+    const tr = trussGeometry(spec);
+    const lt = leanToDesign(spec);
+    const facts = [
+      ['Footprint', `${fmtFt(spec.width)} × ${fmtFt(spec.depth)}`],
+      ['Floor', `${fmtN(spec.width * spec.depth / 144)} sf`],
+      ['Walls', fmtFt(spec.wallHeight)],
+      ['Pitch', `${spec.pitch}/12`],
+      ['Ridge', `${fmtFt(tr.overallHeight)} above slab`],
+      ['Trusses', `${tr.count} @ ${fmtIn(spec.trussSpacing)} o.c.`],
+      ['Span', fmtFt(tr.span)],
+      ['Roof', spec.roofing === 'metal'
+        ? `Metal / ${spec.roofDeck === 'purlins' ? 'purlins' : 'OSB deck'}`
+        : 'Shingle / OSB deck'],
+      ['Walls skin', spec.wallSkin === 'girts' ? `Metal / ${spec.girtSize} girts` : 'Metal / OSB'],
+    ];
+    if (lt && !lt.impossible) facts.push(['Lean-to', `${fmtFt(lt.projection)} west`]);
+    return facts;
+  },
+
+  panels: [
+    { id: 'openings', label: 'Openings', render: () => renderOpenings() },
+    { id: 'structure', label: 'Structure', render: () => renderControlsPanel() },
+    { id: 'review', label: 'Review', render: () => renderReview() },
+    { id: 'truss', label: 'Truss', render: () => renderTruss() },
+    { id: 'takeoff', label: 'Takeoff', render: () => renderTakeoff() },
+    { id: 'layouts', label: 'Layouts', render: () => renderLayouts() },
+  ],
+};

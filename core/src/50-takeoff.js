@@ -1,35 +1,7 @@
 /* ============================================================
-   40 — Material takeoff and cut list, derived from the parts list so it
-   can never drift from what the model is showing.
+   Material takeoff and cut list, counted off the parts list so it cannot
+   drift from what the model is showing.
    ============================================================ */
-
-const STOCK_LENGTHS = [96, 120, 144, 168, 192, 240];   // 8' through 20'
-
-function bestStock(len) {
-  let best = null;
-  for (const S of STOCK_LENGTHS) {
-    if (S < len - 0.02) continue;
-    const per = Math.floor((S + 0.02) / len);
-    const waste = S / per - len;
-    if (!best || waste < best.waste - 0.02) best = { S, per, waste };
-  }
-  if (!best) {
-    const per = 1, S = Math.ceil(len / 24) * 24;
-    best = { S, per, waste: S - len, oversize: true };
-  }
-  return best;
-}
-
-const SHEET_SF = 32;                                    // 4' × 8'
-const MAX_STOCK = STOCK_LENGTHS[STOCK_LENGTHS.length - 1];
-
-/* Plates, girts and purlins run longer than any stick you can buy, so they
-   get lapped. Split them into equal pieces that land at 16' or under. */
-function splitRun(len) {
-  if (len <= MAX_STOCK + 0.02) return [len];
-  const n = Math.ceil(len / 192);
-  return Array.from({ length: n }, () => len / n);
-}
 
 function takeoff(model, spec) {
   const lumber = new Map();

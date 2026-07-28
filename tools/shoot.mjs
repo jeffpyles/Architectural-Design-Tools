@@ -1,16 +1,22 @@
-/* Load dist/shop.html in the same wrapper an Artifact uses, report every
-   console error, and take screenshots so the model can be eyeballed. */
+/* Load a building's dist/page.html in the same wrapper an Artifact uses,
+   report every console error, and take screenshots so the model can be
+   eyeballed.  usage: node tools/shoot.mjs '[{"name":"iso","stage":7}]' [id] */
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const body = readFileSync('dist/shop.html', 'utf8');
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const shots = JSON.parse(process.argv[2] || '[]');
+const building = process.argv[3] || 'shop-building';
+
+const body = readFileSync(join(root, 'buildings', building, 'dist', 'page.html'), 'utf8');
 const wrapped = `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shop Building</title></head><body>${body}</body></html>`;
-mkdirSync('build', { recursive: true });
-writeFileSync('build/preview.html', wrapped);
-
-const shots = JSON.parse(process.argv[2] || '[]');
+<title>${building}</title></head><body>${body}</body></html>`;
+mkdirSync(join(root, 'build'), { recursive: true });
+const preview = join(root, 'build', `shoot-${building}.html`);
+writeFileSync(preview, wrapped);
 
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
@@ -24,7 +30,7 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
 page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}\n${(e.stack || '').split('\n').slice(1, 4).join('\n')}`));
 
-await page.goto('file://' + process.cwd() + '/build/preview.html');
+await page.goto('file://' + preview);
 await page.waitForTimeout(1200);
 
 // Sanity probes from inside the page
