@@ -97,8 +97,17 @@ void main() {
   vec3 base = vCol;
   float g = dot(base, vec3(0.299, 0.587, 0.114));
   base = mix(base, vec3(g), uDesat);
-  vec3 c = base * (amb * 0.62 + d * 0.62);
+  /* A shadow floor, because the unlit faces used to crush to near black and
+     take the framing detail with them — which is most of what there is to
+     look at here. The floor lifts them; the shoulder keeps the sunlit faces
+     from clipping now that everything sits higher.
+
+     0.36 is where this stops. Past about 0.42 the near studs stop separating
+     from the sheathing behind them and the whole model goes flat — brighter,
+     and harder to read, which is the opposite of the point. */
+  vec3 c = base * (0.36 + amb * 0.66 + d * 0.70);
   c *= uDim;
+  c = c / (1.0 + max(c - 0.95, 0.0) * 0.9);
   float depth = gl_FragCoord.z / gl_FragCoord.w;
   c = mix(c, uFog, clamp(depth * uFogK, 0.0, 0.55));
   gl_FragColor = vec4(c, 1.0);

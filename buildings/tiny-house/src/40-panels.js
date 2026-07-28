@@ -170,8 +170,14 @@ function renderReview() {
     if (!list.length) continue;
     p.append(el('h3', null, title));
     for (const f of list) {
+      /* The severity stripe is the grid's first column; the title and body
+         both belong in the second, stacked. Putting the title straight into
+         the finding lands it in the 3px stripe, where it spills sideways
+         across the body text. */
       const d = el('div', 'finding ' + f.level);
-      d.append(el('b', null, f.title), el('p', null, f.body));
+      const body = el('div', 'body');
+      body.append(el('h5', null, f.title), el('p', null, f.body));
+      d.append(el('i'), body);
       p.append(d);
     }
   }
