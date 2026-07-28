@@ -78,10 +78,11 @@ Served from GitHub Pages, the tab additionally reads the shared library at
 own new-file page. Opened from a file or from the Artifact host that fetch just fails
 and the section hides itself.
 
-Three presets ship inside the page regardless: the sketch as drawn, the sketch with
-10' walls and a 9' door, and a version with the openings ganged that clears every wall
-line. `tools/check.mjs` asserts all three round-trip through the code and that the
-ganged one really does pass.
+Three presets ship inside the page regardless, as the offline fallback and as reference
+points: the sketch as drawn, the sketch with 10' walls and a 9' door, and a version with
+the openings ganged that clears every wall line. A preset already published to the shared
+library is listed once, not twice. `tools/check.mjs` asserts all three round-trip through
+the code and that the ganged one really does pass.
 
 ## What it is not
 

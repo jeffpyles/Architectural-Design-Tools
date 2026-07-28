@@ -501,18 +501,27 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--rule); border-bottom: 0
    stage rail stays on screen; a fixed min-height on .app used to push it
    below the fold instead, where nothing suggested it was there. */
 @media (max-height: 700px) {
-  .tb-id { padding: 6px 14px; }
-  .tb-id h1 { font-size: 19px; }
+  /* One compact row instead of a wrapped block: the title truncates and the
+     facts scroll, so both the dimensions and the stage rail stay on screen. */
+  .titleblock { flex-wrap: nowrap; }
+  .tb-id { padding: 5px 12px; flex: 0 1 auto; min-width: 0; }
+  .tb-id h1 { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tb-id p { display: none; }
-  .tb-facts > div { padding: 5px 12px; }
+  .tb-facts > div { padding: 3px 11px; }
+  .tb-facts dt { font-size: 10px; }
+  .tb-facts dd { font-size: 12px; }
   .tabs button { padding: 6px 10px 5px; font-size: 12.5px; }
   .stage { padding: 5px 10px; }
   .stage .nm { font-size: 13px; }
   .rail-compact { padding: 5px 12px; }
   .vp-tools { top: 8px; left: 8px; gap: 6px; }
 }
-@media (max-height: 560px) {
-  .tb-facts { display: none; }
+@media (max-height: 580px) {
+  /* Shrink the title further rather than dropping the facts — the dimensions
+     are the part worth keeping. */
+  .tb-id { padding: 3px 10px; }
+  .tb-id h1 { font-size: 14px; }
+  .tb-facts > div { padding: 2px 9px; }
   .stage .num { display: none; }
 }
 

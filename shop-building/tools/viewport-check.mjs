@@ -34,6 +34,7 @@ const url = `http://127.0.0.1:${server.address().port}/shop-building/`;
 const SIZES = [
   [1512, 982], [1440, 900], [1366, 768], [1280, 720],
   [1280, 600], [1024, 640], [1440, 560], [1200, 500],
+  [1366, 678], [1366, 648], [1280, 700],   // Chromebook panels less browser chrome
   [834, 1112], [430, 932], [390, 844],
 ];
 const ZOOMS = [1, 1.25];
@@ -77,6 +78,9 @@ for (const [w, h] of SIZES) {
         tabsHidden: tabs.filter((t) => !onScreen(t)).length,
         overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
         canvas: document.getElementById('cv').getBoundingClientRect().height,
+        factsHeight: document.querySelector('.tb-facts').getBoundingClientRect().height,
+        factCells: document.querySelectorAll('.tb-facts > div').length,
+        titleHeight: document.querySelector('.titleblock').getBoundingClientRect().height,
       };
     });
 
@@ -87,6 +91,9 @@ for (const [w, h] of SIZES) {
     if (r.tabsHidden) fail(`${tag}: ${r.tabsHidden} inspector tab(s) off screen`);
     if (r.overflowX) fail(`${tag}: the page scrolls sideways`);
     if (r.canvas < 60) fail(`${tag}: the viewport collapsed to ${Math.round(r.canvas)}px`);
+    if (r.titleHeight < 10) fail(`${tag}: the title block is gone`);
+    if (r.factsHeight < 10) fail(`${tag}: the dimensions rail is gone`);
+    if (r.factCells < 5) fail(`${tag}: only ${r.factCells} dimension cells rendered`);
     if (errors.length) fail(`${tag}: ${errors[0]}`);
     await page.close();
   }
