@@ -117,7 +117,7 @@ export function run({ A, spec, openings, model, take, fail, log, permute }) {
   /* A shell this size has a weight per square foot that lands in a believable
      band. Both ends of it have been wrong once already. */
   const psf = w.total / (spec.length * spec.width / 144);
-  if (psf < 25 || psf > 75) fail(`${psf.toFixed(1)} psf of floor is not a credible shell weight`);
+  if (psf < 22 || psf > 45) fail(`${psf.toFixed(1)} psf of floor is not a credible shell weight`);
   log(`  ok  ${psf.toFixed(1)} lb per square foot of floor`);
 
   /* The salvaged schedule: every window is either in a wall or on the shelf,
@@ -176,9 +176,11 @@ export function run({ A, spec, openings, model, take, fail, log, permute }) {
     log(`  ok  frame ${A.fmtN(fr.capacityKipFt, 1)} kip-ft capacity, `
       + `${A.fmtN(fr.over, 1)} ft overhang: ${A.fmtN(fr.bare, 1)} bare, `
       + `${A.fmtN(fr.M, 1)} with the tie (${fr.ratio.toFixed(1)}×), blocks at ${A.fmtN(fr.maxCribbing, 1)} ft`);
-    log(`  ok  tie at ${(fr.strut.angle * 180 / Math.PI).toFixed(1)}° delivers `
-      + `${A.fmtN(fr.strut.canProp, 2)} of ${A.fmtN(fr.strut.ideal, 2)} kip; `
-      + `wants ${A.fmtIn(fr.strut.wantRise)} of rise or ${A.fmtN(fr.strut.wantArea, 2)} in²`);
+    log(`  ok  tie at ${(fr.strut.angle * 180 / Math.PI).toFixed(1)}° gives `
+      + `${A.fmtN(fr.strut.R, 2)} kip of the ${A.fmtN(fr.strut.ideal, 2)} a rigid prop would take`
+      + `${fr.strut.limited ? '' : ' — fully propped'}, `
+      + `thrusting ${A.fmtN(fr.strut.thrust, 1)} kip into the rails `
+      + `(${(fr.strut.railRatio * 100).toFixed(0)}% axial)`);
   }
 
   /* Studs. Bracing the weak axis is what makes an eleven-foot 2x4 work, so

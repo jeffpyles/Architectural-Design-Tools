@@ -80,7 +80,9 @@ function buildModel(spec, openings) {
     add('trailer', 'steel', 'steelDk', 'Wheel well box',
       boxPart([wellX0 + wellL / 2, wellR / 2 - D / 2, z0 + wellW / 2],
         [wellL, wellR + D, wellW]),
-      { len: wellL, note: `${fmtFt(wellL)} × ${fmtIn(wellW)}, ${fmtIn(wellR)} above the deck` });
+      /* Sheet steel around a hole, not a billet — the box it is drawn as is
+         all air, so it carries its own weight rather than a density. */
+      { lb: 70, note: `${fmtFt(wellL)} × ${fmtIn(wellW)}, ${fmtIn(wellR)} above the deck` });
     // A pair of tyres under each well, so the wheel line reads in the model
     for (const dx of [-wellL / 4, wellL / 4]) {
       add('trailer', 'wheel', 'rubber', 'Tyre, 15"',
@@ -95,7 +97,7 @@ function buildModel(spec, openings) {
     const st = STEEL[spec.strutSection];
     const xArch = L - spec.rearAxleToEnd;
     const xLand = L - spec.strutFrom;
-    const yArch = spec.wheelWellRise - D / 2;
+    const yArch = spec.wheelWellRise;
     const yLand = -D / 2;
     for (const z of [rail.w / 2, W - rail.w / 2]) {
       add('trailer', 'steel', 'steel', `${st.label}, overhang tie`,

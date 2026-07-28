@@ -22,7 +22,7 @@ below matters, but three things are now settled and two of them change the desig
 - a 1½×4×.100 diagonal each side, from the top of the wheel-well arch out to the rail 4'
   from the east end — not on the drawing, but on the trailer, and structurally the most
   important member in the overhang
-- rear axle 12'-0" from the east end
+- rear axle 12'-0" from the east end; wheel-well arch 17" above the deck
 - no axles bought, and none expected for years
 
 Section weights are computed from the geometry rather than looked up, so an odd size
@@ -40,47 +40,43 @@ overhang wants 5.2 kip-ft. They were sized for exactly that and nothing more.
 **Adding the 2×6 tube more than doubled it.** Two rails at 46 ksi give 12.2 kip-ft on
 their own, so the frame now holds about **18.3 kip-ft — three times the beams alone.**
 
-**Towed, with the overhang tie counted, the shell passes and a finished house does not.**
+**Towed, with the overhang tie counted, it carries it.**
 
-| | No tie | As built | Against 18.3 |
+| | No tie | With the tie | Against 18.3 |
 |---|---|---|---|
-| Shell, 20,200 lb | 42.9 kip-ft | 16.2 kip-ft | 0.9× |
-| Finished, ~38,000 lb | 81.2 kip-ft | 54.6 kip-ft | 3.0× |
+| Shell, 12,100 lb | 25.7 kip-ft | 4.3 kip-ft | 0.23× |
+| Finished, ~23,000 lb | 48.8 kip-ft | 8.1 kip-ft | 0.45× |
+| Heavy finish, ~30,000 lb | 64.2 kip-ft | 16.5 kip-ft | 0.90× |
 
-The 12 feet of overhang past the rear axle is what drives this, and it goes as the
-square — which is why the tie matters so much.
+**All of it static.** Trailer frames are normally checked against one and a half to three
+times the static load for what the road does. At the expected finished weight a 2× road
+factor puts it at 0.90 — at the line, not past it. At 30,000 lb it goes over.
 
 ### The overhang tie
 
 The 1½×4×.100 diagonal from the wheel-well arch to the rail four feet from the end is
-doing most of the work. It props the cantilever partway out, turning 12 feet of overhang
-into an 8-foot propped span with a 4-foot tip. A rigid prop there would drop the moment
-by six times.
+what makes those columns different. It props the cantilever partway out, turning 12 feet
+of overhang into an 8-foot propped span with a 4-foot tip, and drops the moment about
+sixfold.
 
-It is not rigid, because the triangle is shallow. Eleven inches of rise over eight feet
-is **6.5°**, and at that angle **every pound of lift costs about nine pounds of tension
-in the tie**. The tie holds 29 kip; that buys 3.3 kip of prop force out of the 5.1 a
-rigid prop would take at shell weight, and 9.6 finished.
+The arch stands **17" above the deck**, which over the 8-foot run is **11.8°**. That is
+shallow — every pound of lift still costs about five pounds of tension in the tie — but
+it is enough: the tie develops the full prop force at shell weight and at a normal
+finished weight, and only starts to limit above about 30,000 lb.
 
-Two ways to close it, both worth knowing:
+That angle is the whole game. At 8" of arch it would be 6.5°, the tie would top out at
+3.3 kip of prop force, and the finished house would be 3× short. Nine inches of arch
+height is the difference between towable and not.
 
-- **Land it higher.** 13⅞" above the deck instead of 8" props the shell fully; about 30"
-  props it finished. That is a post at the wheel well, which has to live inside a wall or
-  a cabinet — but it is the cheap fix, because it buys force out of geometry rather than
-  steel.
-- **Or a heavier tie.** 1.61 in² closes the shell case at the current angle, 3.05 in²
-  the finished one. Against the 1.06 in² that is there. But then the connection has to
-  carry 30–45 kip, and that much thrust down the rail starts asking whether the rail
-  buckles.
-
-**Everything above is static.** Trailer frames are normally checked against one and a
-half to three times the static load to cover what the road does. None of that is in these
-numbers, so read the shell's 0.9× as "arguable" rather than "fine".
+If the finished weight climbs, the fix is the tie and only the tie: **2×4×.125 tube in
+place of the 1½×4×.100** takes 30,000 lb from 0.90× to 0.55×. Its thrust into the rails
+is 38 kip, which is 38% of allowable axial shared between them — not free, but not close
+to governing either.
 
 **Parked, none of it applies.** Blocked, the frame only spans between its cribbing, so
-the demand is a choice: **crib it every 8 feet and it is comfortable at any weight this
-house reaches.** Same reason a flatbed move works when a tow does not — the deck carries
-the frame the whole way instead of hanging it off two points.
+the demand is a choice: **crib it every 10 feet and it is comfortable at any weight this
+house reaches.** Same reason a flatbed move works — the deck carries the frame the whole
+way instead of hanging it off two points.
 
 ## What is guessed
 
@@ -161,9 +157,12 @@ surface, and it keeps the wall 3½" thick — one layer doing three jobs.
 
 ## Weight
 
-Roughly **21,000 lb** for the shell — steel, framing, sheathing, skin, glazing,
-insulation and interior lining. No cabinets, no appliances, no water, nobody in it. A
-finished tiny house usually lands near double its shell weight.
+About **12,100 lb** for the shell, or 29.7 lb per square foot of floor — steel, framing,
+sheathing, skin, glazing, insulation and interior lining. No cabinets, no appliances, no
+water, nobody in it. A finished tiny house usually lands near double its shell weight.
+
+Tongue weight comes out at **14.1%** with the axles where they are, which is inside the
+10–15% window a trailer tows straight in.
 
 The Weight tab carries the centre of gravity, the tongue weight the axles would see where
 the sketch puts them, and where they would have to move for 12½%. None of it constrains a

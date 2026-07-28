@@ -49,6 +49,17 @@ function partWeight(p) {
   return d ? partVolume(p.geom) * d : 0;
 }
 
+/* How a part got weighed, so the heaviest few can be listed with their
+   method. Reading that list is what catches a hollow thing weighed solid —
+   it has happened twice now, and both times the number was enormous and
+   nothing flagged it. */
+function weighedBy(p) {
+  if (p.lb) return 'stated';
+  if (p.lbft && p.len) return 'section';
+  if (p.psf && p.area) return 'per sf';
+  return DENSITY[p.mat] ? 'volume × density' : 'not weighed';
+}
+
 function takeoff(model, spec) {
   const lumber = new Map();
   const sheets = new Map();
@@ -72,6 +83,11 @@ function takeoff(model, spec) {
     total: wTot,
     cg: wTot ? [mx / wTot, my / wTot, mz / wTot] : [0, 0, 0],
     byMat: [...byMat.entries()].map(([mat, lb]) => ({ mat, lb })).sort((a, b) => b.lb - a.lb),
+    heaviest: model.parts
+      .map((p) => ({ kind: p.kind, lb: partWeight(p), how: weighedBy(p) }))
+      .filter((r) => r.lb > 0)
+      .sort((a, b) => b.lb - a.lb)
+      .slice(0, 10),
   };
 
   for (const p of model.parts) {

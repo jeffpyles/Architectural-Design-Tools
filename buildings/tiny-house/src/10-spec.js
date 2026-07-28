@@ -61,7 +61,7 @@ const DEFAULT_SPEC = {
   wheelWellStart: 131,          // from the east end, to the near face
   wheelWellLength: 80,          // 6'-8" on the sketch
   wheelWellWidth: 13,
-  wheelWellRise: 8,             // how far the fender box stands above the deck
+  wheelWellRise: 17,            // measured: the arch top stands this far above the deck
 
   /* Measured on the built frame rather than scaled off the sketch: the rear
      axle of the tandem sits twelve feet from the east end, and a diagonal

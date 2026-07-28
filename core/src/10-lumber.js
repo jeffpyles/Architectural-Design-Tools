@@ -126,6 +126,8 @@ function ibeamSection(flange, depth, t) {
 const STEEL = {
   'tube2x6x120':  { ...tubeSection(2, 6, 0.120), label: '2×6×.120 tube', Fy: 46 },
   'tube1.5x4x100': { ...tubeSection(1.5, 4, 0.100), label: '1½×4×.100 tube', Fy: 46 },
+  'tube2x4x125':  { ...tubeSection(2, 4, 0.125), label: '2×4×.125 tube', Fy: 46 },
+  'tube2x4x188':  { ...tubeSection(2, 4, 0.188), label: '2×4×³⁄₁₆ tube', Fy: 46 },
   /* Salvage off a travel trailer frame: a formed section rather than a rolled
      one, and of a grade nobody can now look up. 36 ksi is the honest floor. */
   'i1.5x6x120':   { ...ibeamSection(1.5, 6, 0.120), label: '1½×6×.120 I-beam', Fy: 36 },

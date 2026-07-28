@@ -313,12 +313,21 @@ function auditBuilding(spec, openings) {
     }
 
     if (fin.ratio > 1) {
-      add('crit', `Finished, the frame is ${fin.ratio.toFixed(1)}× short to tow`,
+      /* Is there a tie on the shelf that closes it? */
+      let fix = null;
+      for (const k of Object.keys(STEEL)) {
+        if (k === spec.strutSection || !/^tube/.test(k)) continue;
+        const t = frameCheck({ ...spec, strutSection: k }, w0, 1.9);
+        if (t.ratio <= 1 && (!fix || STEEL[k].area < STEEL[fix].area)) fix = k;
+      }
+      add('crit', `Finished, the frame is ${fin.ratio.toFixed(2)}× short to tow`,
         `${fmtN(fin.M, 1)} kip-ft over the rear axle against ${fmtN(fin.capacityKipFt, 1)} available, at an `
         + `estimated ${fmtN(Math.round(fin.W / 100) * 100, 0)} lb finished. `
         + `Static only — road loads are normally taken at one and a half to three times static, which this `
-        + `does not include. Shell weight alone comes out at ${fin.ratio > shell.ratio ? '' : ''}`
-        + `${shell.ratio.toFixed(1)}×.`);
+        + `does not include. Shell weight alone comes out at ${shell.ratio.toFixed(2)}×.`
+        + (fix ? ` Swapping the overhang tie to ${STEEL[fix].label} brings it to `
+          + `${frameCheck({ ...spec, strutSection: fix }, w0, 1.9).ratio.toFixed(2)}× — two pieces of tube, `
+          + 'and the only member that has to change.' : ''));
     } else if (shell.ratio <= 1) {
       add('info', `The frame carries the towed overhang as built`,
         `${fmtN(shell.M, 1)} kip-ft against ${fmtN(shell.capacityKipFt, 1)}. Static only.`);
@@ -388,6 +397,12 @@ function auditBuilding(spec, openings) {
     add('warn', 'Past what a tandem pair will carry',
       `${fmtN(Math.round(sz.per))} lb an axle on the shell alone. This wants three axles, or a flatbed.`);
   }
+
+  add('info', `The wheel wells stand ${fmtIn(spec.wheelWellRise)} above the floor`,
+    `${fmtFt(spec.wheelWellLength)} long and ${fmtIn(spec.wheelWellWidth)} wide against each side wall, `
+    + `${fmtFt(spec.rearAxleToEnd)} to ${fmtFt(spec.rearAxleToEnd + spec.wheelWellLength)} from the east end. `
+    + 'That is bench height, so they are furniture whether or not anyone plans them that way — and the '
+    + 'tie that saves the overhang is bolted to the top of them, so they are not movable.');
 
   add('info', `${fmtFt(spec.width)} wide is an oversize move`,
     'Eight foot six is the widest that travels without a permit. At twelve feet this is a permitted, '
@@ -506,10 +521,18 @@ function frameCheck(spec, weight, factor) {
   const wantRise = run * Math.tan(Math.asin(needSin)) - spec.frameDepth / 2;
   const wantArea = ideal / Math.sin(angle) / (0.6 * st.Fy);
 
+  /* A tie that shallow is mostly horizontal, and all of that goes into the
+     rail as compression between the arch and the landing point. Which is the
+     next thing to bind, and the reason a bigger tie is not free. */
+  const tension = R / Math.sin(angle);
+  const thrust = tension * Math.cos(angle);
+  const railStress = thrust / (2 * sec.rail.area);      // shared by both rails
+  const railAllow = 0.6 * sec.rail.Fy;
+
   Object.assign(out, {
-    strut: { a, Lp, angle, rise, run, allowT, canProp, ideal, R,
-      tension: R / Math.sin(angle), section: st,
-      limited: canProp < ideal - 1e-6, wantRise, wantArea },
+    strut: { a, Lp, angle, rise, run, allowT, canProp, ideal, R, tension, section: st,
+      limited: canProp < ideal - 1e-6, wantRise, wantArea,
+      thrust, railStress, railAllow, railRatio: railStress / railAllow },
     propped, M, ratio: M / (sec.capacity / 1000),
   });
   return out;

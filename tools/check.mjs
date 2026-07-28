@@ -119,6 +119,13 @@ if (t.weight.total > 0) {
   const sum = t.weight.byMat.reduce((a, r) => a + r.lb, 0);
   if (Math.abs(sum - t.weight.total) > 1) fail('weight by material does not sum to the total');
   console.log(`  ok  weight sums, CG at ${A.fmtFt(cx)} along and ${A.fmtFt(cy)} up`);
+  /* Printed, not asserted. A slab legitimately dominates a building's weight
+     and a fender box legitimately does not, and nothing here can tell them
+     apart — but a person reading the list can, at a glance. */
+  console.log('  heaviest parts:');
+  for (const r of t.weight.heaviest) {
+    console.log(`    ${String(Math.round(r.lb)).padStart(7)} lb  ${r.how.padEnd(16)} ${r.kind}`);
+  }
 }
 
 /* 6. The audit runs clean of exceptions. */

@@ -287,8 +287,11 @@ function renderWeight() {
       ['Tie', `${fr.strut.section.label}, ${fmtN(fr.strut.allowT, 1)} kip allowable in tension`],
       ['Prop force it can deliver', `${fmtN(fr.strut.canProp, 2)} kip`],
       ['What a rigid prop would take', `${fmtN(fr.strut.ideal, 2)} kip shell · ${fmtN(fin.strut.ideal, 2)} kip finished`],
-      ['To prop it fully', `land it ${fmtIn(fr.strut.wantRise)} above the deck, or go to `
-        + `${fmtN(fr.strut.wantArea, 2)} in² of tie`],
+      ['Tension in it', `${fmtN(fr.strut.tension, 1)} kip shell · ${fmtN(fin.strut.tension, 1)} kip finished`],
+      ['Thrust into the rails', `${fmtN(fin.strut.thrust, 1)} kip — ${fmtN(fin.strut.railStress, 1)} ksi `
+        + `against ${fmtN(fin.strut.railAllow, 1)} allowable, ${(fin.strut.railRatio * 100).toFixed(0)}% on axial alone`],
+      ['To prop it fully', `land it ${fmtIn(fin.strut.wantRise)} above the deck, or go to `
+        + `${fmtN(fin.strut.wantArea, 2)} in² of tie`],
     ]) kvS.append(el('dt', null, k), el('dd', null, v));
     p.append(kvS);
   }
