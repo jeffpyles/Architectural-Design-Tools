@@ -256,26 +256,53 @@ function renderWeight() {
       `${(r.lb / w.total * 100).toFixed(0)}%`,
     ]), [false, true, true]));
 
-  /* The frame, which is the part of this that is genuinely load-bearing and
-     genuinely salvage. */
+  /* The frame: the part of this that is genuinely load-bearing and genuinely
+     salvage, and where the overhang tie earns its keep. */
   const fr = frameCheck(spec, w);
-  const finished = frameCheck(spec, { ...w, total: w.total * 1.9 });
+  const fin = frameCheck(spec, w, 1.9);
   p.append(el('h3', null, 'The frame'));
   const kvF = el('dl', 'kv');
   for (const [k, v] of [
     ['Section', `2 × ${fr.rail.label} + 2 × ${fr.beam.label}`],
     ['Section modulus', `${fmtN(fr.Sx, 2)} in³ about the strong axis`],
-    ['Bending capacity', `${fmtN(fr.capacity / 1000, 1)} kip-ft at 0.6 Fy`],
-    ['Towed, shell only', `${fmtN(fr.towed / 1000, 1)} kip-ft — ${fr.towedRatio.toFixed(1)}× capacity`],
-    ['Towed, finished', `${fmtN(finished.towed / 1000, 1)} kip-ft — ${finished.towedRatio.toFixed(1)}× capacity`],
+    ['Bending capacity', `${fmtN(fr.capacityKipFt, 1)} kip-ft at 0.6 Fy`],
+    ['Rear overhang', `${fmtN(fr.over, 1)} ft past the rear axle`],
   ]) kvF.append(el('dt', null, k), el('dd', null, v));
   p.append(kvF);
-  p.append(note('Towed, the frame is a beam between the hitch and the axles with everything past '
-    + `the axles hanging off the end — ${fmtN(fr.overhang, 1)} feet of it. Parked, it only spans between `
-    + 'whatever it is blocked on, which is a choice rather than a problem.'));
+
+  p.append(table(['Towed', 'No tie', 'As built', 'Against'],
+    [['Shell', `${fmtN(fr.bare, 1)}`, `${fmtN(fr.M, 1)} kip-ft`, `${fr.ratio.toFixed(1)}×`],
+      ['Finished', `${fmtN(fin.bare, 1)}`, `${fmtN(fin.M, 1)} kip-ft`, `${fin.ratio.toFixed(1)}×`]],
+    [false, true, true, true]));
+
+  if (fr.strut) {
+    p.append(note(`The tie off the wheel-well arch is what makes those two columns different. `
+      + `It props the overhang ${fmtFt(spec.strutFrom)} from the end, turning ${fmtN(fr.over, 1)} ft of `
+      + `cantilever into ${fmtN(fr.strut.Lp, 1)} ft of propped span with a ${fmtN(fr.strut.a, 1)} ft tip. `
+      + `But it is only ${fmtIn(fr.strut.rise)} deep over ${fmtFt(fr.strut.run)} — `
+      + `${(fr.strut.angle * 180 / Math.PI).toFixed(1)}° — so every pound of lift costs about `
+      + `${(1 / Math.sin(fr.strut.angle)).toFixed(0)} lb of tension in the tie.`));
+    const kvS = el('dl', 'kv');
+    for (const [k, v] of [
+      ['Tie', `${fr.strut.section.label}, ${fmtN(fr.strut.allowT, 1)} kip allowable in tension`],
+      ['Prop force it can deliver', `${fmtN(fr.strut.canProp, 2)} kip`],
+      ['What a rigid prop would take', `${fmtN(fr.strut.ideal, 2)} kip shell · ${fmtN(fin.strut.ideal, 2)} kip finished`],
+      ['To prop it fully', `land it ${fmtIn(fr.strut.wantRise)} above the deck, or go to `
+        + `${fmtN(fr.strut.wantArea, 2)} in² of tie`],
+    ]) kvS.append(el('dt', null, k), el('dd', null, v));
+    p.append(kvS);
+  }
+
+  p.append(note('All of it static. Trailer frames are normally checked against one and a half to '
+    + 'three times the static load to cover what the road does, and none of that is in these numbers.'));
+
+  p.append(el('h3', null, 'Parked'));
+  p.append(note('Blocked, the frame only spans between its cribbing, so the demand is a choice rather '
+    + 'than a problem. A flatbed move works for the same reason — the deck carries the frame the '
+    + 'whole way instead of hanging it off two points.'));
   p.append(table(['Cribbing', 'Moment', 'Shell', 'Finished'],
-    fr.cribbing.map((c, i) => [`every ${c.ft} ft`, `${fmtN(c.M / 1000, 1)} kip-ft`,
-      c.ok ? 'ok' : 'over', finished.cribbing[i].ok ? 'ok' : 'over']),
+    fr.cribbing.map((c, i) => [`every ${c.ft} ft`, `${fmtN(c.M, 1)} kip-ft`,
+      c.ok ? 'ok' : 'over', fin.cribbing[i].ok ? 'ok' : 'over']),
     [false, true, true, true]));
 
   p.append(el('h3', null, 'If it ever moves'));
@@ -285,7 +312,7 @@ function renderWeight() {
   const kv2 = el('dl', 'kv');
   for (const [k, v] of [
     ['Tongue', `${ax.end} end, hitch ${fmtFt(spec.tongueOverhang)} beyond it`],
-    ['Axles where the sketch puts them', `${fmtFt(ax.fromTongue(ax.sketchAxle))} from the ${ax.end} end`],
+    ['Axle group, as built', `${fmtFt(ax.fromTongue(ax.axleGroup))} from the ${ax.end} end`],
     ['Tongue weight there', `${fmtN(Math.round(ax.tongueAtSketch))} lb — ${(ax.fracAtSketch * 100).toFixed(0)}%`],
     ['For 12½% tongue', `axle group ${fmtFt(ax.fromTongue(ax.wanted))} from the ${ax.end} end`],
     ['Carried on the axles', `${fmtN(Math.round(ax.onAxles))} lb`],

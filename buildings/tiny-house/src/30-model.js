@@ -89,6 +89,22 @@ function buildModel(spec, openings) {
     }
   }
 
+  /* The diagonal off each wheel-well arch. Not on the drawing, but on the
+     trailer — and the reason the overhang is anywhere near towable. */
+  if (spec.strut) {
+    const st = STEEL[spec.strutSection];
+    const xArch = L - spec.rearAxleToEnd;
+    const xLand = L - spec.strutFrom;
+    const yArch = spec.wheelWellRise - D / 2;
+    const yLand = -D / 2;
+    for (const z of [rail.w / 2, W - rail.w / 2]) {
+      add('trailer', 'steel', 'steel', `${st.label}, overhang tie`,
+        memberBox3([xArch, yArch, z], [xLand, yLand, z], st.w, st.d),
+        { len: Math.hypot(xLand - xArch, yArch - yLand), lbft: st.lbft, steel: spec.strutSection,
+          note: `Arch top to the rail, ${fmtFt(spec.strutFrom)} from the east end` });
+    }
+  }
+
   /* ---------- 2. Floor ---------- */
   add('floor', 'insulation', 'foam', 'Rigid foam, floor',
     boxPart([L / 2, -joist.d / 2, W / 2], [L - rail.w * 2, joist.d, W - rail.w * 2]),

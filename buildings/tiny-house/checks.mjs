@@ -149,23 +149,36 @@ export function run({ A, spec, openings, model, take, fail, log, permute }) {
     log(`  ok  ${A.fmtIn(hr.under)} under the loft, ${A.fmtIn(hr.atRidge)} in it at the ridge`);
   }
 
-  /* The frame. Its capacity has to follow from the sections, and the cribbing
-     spacing it reports has to be the one that exactly uses that capacity. */
+  /* The frame. Capacity has to follow from the sections, the cribbing spacing
+     it reports has to be the one that exactly uses that capacity, and the tie
+     has to be doing something — losing it must make the frame worse. */
   {
     const fr = A.frameCheck(spec, take.weight);
     const bySection = 2 * fr.rail.Sx * 0.6 * fr.rail.Fy + 2 * fr.beam.Sx * 0.6 * fr.beam.Fy;
     if (Math.abs(fr.capacity - bySection * 1000 / 12) > 1) fail('frame capacity does not follow from the sections');
-    const M = fr.plf * fr.maxCribbing ** 2 / 8;
-    if (Math.abs(M - fr.capacity) > 1) fail('the reported cribbing spacing does not use exactly the capacity');
+    const M = fr.plf / 1000 * fr.maxCribbing ** 2 / 8;
+    if (Math.abs(M - fr.capacityKipFt) > 0.01) fail('the reported cribbing spacing does not use exactly the capacity');
     for (const c of fr.cribbing) {
-      if (c.ok !== (c.M <= fr.capacity)) fail(`cribbing at ${c.ft} ft is flagged wrong`);
+      if (c.ok !== (c.M <= fr.capacityKipFt + 1e-9)) fail(`cribbing at ${c.ft} ft is flagged wrong`);
     }
-    /* This frame came off a travel trailer, so it should be nowhere near
-       able to tow a house. If that ever stops being true, something changed. */
-    if (fr.towedRatio < 1.5) fail(`towed ratio is ${fr.towedRatio.toFixed(2)} — check the section, that seems too good`);
-    log(`  ok  frame ${A.fmtN(fr.capacity / 1000, 1)} kip-ft capacity, `
-      + `${A.fmtN(fr.towed / 1000, 1)} towed (${fr.towedRatio.toFixed(1)}×), `
-      + `blocks at ${A.fmtN(fr.maxCribbing, 1)} ft`);
+    /* The bare cantilever has to follow wL²/2, and the tie has to reduce it. */
+    const bare = fr.plf / 1000 * fr.over ** 2 / 2;
+    if (Math.abs(bare - fr.bare) > 0.01) fail('the bare overhang moment is not wL²/2');
+    const noTie = A.frameCheck({ ...spec, strut: false }, take.weight);
+    if (!(fr.M < noTie.M)) fail('the overhang tie does not reduce the moment');
+    if (Math.abs(noTie.M - noTie.bare) > 1e-9) fail('with no tie the moment should be the bare cantilever');
+    /* A prop can never do better than a rigid one, and never worse than none. */
+    if (fr.M < fr.propped - 1e-9) fail('the tie is being credited with more than a rigid prop would give');
+    if (fr.M > fr.bare + 1e-9) fail('the tie made the frame worse');
+    /* Deepening the triangle must help; shallowing it must not. */
+    const deep = A.frameCheck({ ...spec, wheelWellRise: spec.wheelWellRise + 12 }, take.weight);
+    if (!(deep.M <= fr.M)) fail('a deeper tie triangle should not make the moment worse');
+    log(`  ok  frame ${A.fmtN(fr.capacityKipFt, 1)} kip-ft capacity, `
+      + `${A.fmtN(fr.over, 1)} ft overhang: ${A.fmtN(fr.bare, 1)} bare, `
+      + `${A.fmtN(fr.M, 1)} with the tie (${fr.ratio.toFixed(1)}×), blocks at ${A.fmtN(fr.maxCribbing, 1)} ft`);
+    log(`  ok  tie at ${(fr.strut.angle * 180 / Math.PI).toFixed(1)}° delivers `
+      + `${A.fmtN(fr.strut.canProp, 2)} of ${A.fmtN(fr.strut.ideal, 2)} kip; `
+      + `wants ${A.fmtIn(fr.strut.wantRise)} of rise or ${A.fmtN(fr.strut.wantArea, 2)} in²`);
   }
 
   /* Studs. Bracing the weak axis is what makes an eleven-foot 2x4 work, so

@@ -63,6 +63,17 @@ const DEFAULT_SPEC = {
   wheelWellWidth: 13,
   wheelWellRise: 8,             // how far the fender box stands above the deck
 
+  /* Measured on the built frame rather than scaled off the sketch: the rear
+     axle of the tandem sits twelve feet from the east end, and a diagonal
+     runs from the top of the wheel-well arch out to the side rail four feet
+     from that end. The diagonal is not on the drawing but it is on the
+     trailer, and it turns out to matter more than anything else here. */
+  rearAxleToEnd: 144,
+  tandemSpacing: 35,
+  strut: true,
+  strutFrom: 48,                // where it lands, in from the east end
+  strutSection: 'tube1.5x4x100',
+
   /* The sketch does not say which end the tongue is on, but the statics do:
      the wheel wells sit east of the middle, and a trailer only tows with the
      hitch on the far side of its own centre of gravity from the axles. Put
@@ -104,7 +115,7 @@ const DEFAULT_SPEC = {
   /* Site and loads. Nothing here is confirmed — see the README. */
   groundSnow: 25,
   windSpeed: 100,
-  exposure: 'C',
+  exposure: 'B',
   seismicSDS: 0.75,
   interiorFinish: 'osb',
 };

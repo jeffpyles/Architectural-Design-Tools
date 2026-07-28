@@ -162,7 +162,9 @@ function axleCheck(spec, weight, target) {
   const xh = west ? -spec.tongueOverhang : spec.length + spec.tongueOverhang;
   const xc = weight.cg[0];
   const xa = (xc - frac * xh) / (1 - frac);
-  const sketchAxle = spec.length - spec.wheelWellStart - spec.wheelWellLength / 2;
+  /* The tandem's equalizer pivot is what the frame actually bears on, and it
+     sits half the tandem spacing ahead of the rear axle. */
+  const axleGroup = spec.length - spec.rearAxleToEnd - spec.tandemSpacing / 2;
   const tongueAt = (x) => weight.total * (xc - x) / (xh - x);
   const fromTongue = (x) => (west ? x : spec.length - x);
   return {
@@ -170,11 +172,11 @@ function axleCheck(spec, weight, target) {
     hitch: xh,
     cg: xc,
     wanted: xa,                                       // where the axles want to be
-    sketchAxle,                                       // where the sketch puts them
-    tongueAtSketch: tongueAt(sketchAxle),
-    fracAtSketch: tongueAt(sketchAxle) / weight.total,
+    axleGroup,                                        // where they are on the built frame
+    tongueAtSketch: tongueAt(axleGroup),
+    fracAtSketch: tongueAt(axleGroup) / weight.total,
     target: frac,
-    onAxles: weight.total - tongueAt(sketchAxle),
+    onAxles: weight.total - tongueAt(axleGroup),
     fromTongue,
     end: west ? 'west' : 'east',
     farEnd: west ? 'east' : 'west',
@@ -295,20 +297,39 @@ function auditBuilding(spec, openings) {
   {
     const model0 = buildModel(spec, openings);
     const w0 = takeoff(model0, spec).weight;
-    const fr = frameCheck(spec, w0);
-    if (fr.towedRatio > 1) {
-      add('crit', `The frame is ${fr.towedRatio.toFixed(1)}× short in bending to tow this`,
-        `Two ${fr.rail.label} rails and two ${fr.beam.label} beams give about `
-        + `${fmtN(fr.capacity / 1000, 1)} kip-ft. Towed, with ${fmtN(fr.overhang, 1)} ft hanging past the `
-        + `axles, the shell alone wants ${fmtN(fr.towed / 1000, 1)} kip-ft, and a finished house `
-        + `close to double. Those beams came off a travel trailer and are sized for one.`);
-      add('info', `Standing still it is fine — block it every ${fmtN(Math.floor(fr.maxCribbing), 0)} ft or closer`,
-        `Parked, the frame only spans between whatever it is cribbed on, so the demand is a choice. `
-        + `At ${fmtN(fr.plf, 0)} lb a foot the frame runs out at ${fmtN(fr.maxCribbing, 1)} ft between `
-        + `supports on the shell weight, and roughly ${fmtN(fr.maxCribbing / Math.sqrt(1.9), 1)} ft finished. `
-        + 'Blocking it well is the whole answer, and it is the cheap answer. A flatbed move works for '
-        + 'the same reason — the deck supports the frame the whole way.');
+    const shell = frameCheck(spec, w0);
+    const fin = frameCheck(spec, w0, 1.9);
+
+    if (shell.strut && shell.strut.limited) {
+      add('info', `The overhang tie is doing most of the work, and is the thing to make bigger`,
+        `Without it, ${fmtN(shell.over, 0)} ft of overhang puts ${fmtN(shell.bare, 1)} kip-ft into a frame `
+        + `that holds ${fmtN(shell.capacityKipFt, 1)}. The tie props it at `
+        + `${fmtFt(spec.strutFrom)} from the end and brings that to ${fmtN(shell.M, 1)}. `
+        + `But at ${(shell.strut.angle * 180 / Math.PI).toFixed(1)}° it can only deliver `
+        + `${fmtN(shell.strut.canProp, 1)} kip of the ${fmtN(shell.strut.ideal, 1)} a rigid prop would take — `
+        + `a triangle that shallow costs about ${(1 / Math.sin(shell.strut.angle)).toFixed(0)} lb of tension `
+        + `for every pound of lift. Landing it ${fmtIn(shell.strut.wantRise)} above the deck instead of `
+        + `${fmtIn(spec.wheelWellRise)}, or going to ${fmtN(shell.strut.wantArea, 2)} in² of tie, props it fully.`);
     }
+
+    if (fin.ratio > 1) {
+      add('crit', `Finished, the frame is ${fin.ratio.toFixed(1)}× short to tow`,
+        `${fmtN(fin.M, 1)} kip-ft over the rear axle against ${fmtN(fin.capacityKipFt, 1)} available, at an `
+        + `estimated ${fmtN(Math.round(fin.W / 100) * 100, 0)} lb finished. `
+        + `Static only — road loads are normally taken at one and a half to three times static, which this `
+        + `does not include. Shell weight alone comes out at ${fin.ratio > shell.ratio ? '' : ''}`
+        + `${shell.ratio.toFixed(1)}×.`);
+    } else if (shell.ratio <= 1) {
+      add('info', `The frame carries the towed overhang as built`,
+        `${fmtN(shell.M, 1)} kip-ft against ${fmtN(shell.capacityKipFt, 1)}. Static only.`);
+    }
+
+    add('info', `Standing still it is fine — block it every ${fmtN(Math.floor(shell.maxCribbing), 0)} ft or closer`,
+      `Parked, the frame only spans between whatever it is cribbed on, so the demand is a choice. `
+      + `At ${fmtN(shell.plf, 0)} lb a foot it runs out at ${fmtN(shell.maxCribbing, 1)} ft between supports `
+      + `on the shell weight and ${fmtN(fin.maxCribbing, 1)} ft finished. Blocking it well is the whole `
+      + 'answer, and it is the cheap answer. A flatbed move works for the same reason — the deck supports '
+      + 'the frame the whole way rather than hanging it off two points.');
   }
 
   /* Slender studs. */
@@ -358,7 +379,7 @@ function auditBuilding(spec, openings) {
     + `and ${fmtIn(Math.abs(w.cg[2] - spec.width / 2))} ${w.cg[2] < spec.width / 2 ? 'north' : 'south'} of centreline.`);
 
   if (ax.fracAtSketch < 0.08 || ax.fracAtSketch > 0.18) {
-    add('warn', `Tongue weight would be ${(ax.fracAtSketch * 100).toFixed(0)}% where the sketch puts the axles`,
+    add('warn', `Tongue weight comes out at ${(ax.fracAtSketch * 100).toFixed(0)}% with the axles where they are`,
       `Ten to fifteen per cent is the window a trailer tows straight in. Moving the axle group to `
       + `${fmtFt(ax.fromTongue(ax.wanted))} from the ${ax.end} end would put it at ${(ax.target * 100).toFixed(0)}%. `
       + 'None of this binds anything today — the axles are not bought and the house is not moving.');
@@ -428,30 +449,70 @@ function frameSection(spec) {
 
 /* Two conditions, and they are nothing like each other.
 
-   Towed, the frame is a beam between the hitch and the axle group, with
-   everything past the axles hanging off the end — and that overhang is
-   where the moment lives.
+   Towed, the frame is a beam between the hitch and the tandem, with
+   everything past the rear axle hanging off the end. That overhang is where
+   the moment lives, and it goes as the square of its length.
 
-   Parked, it is a beam over whatever it is blocked on, so the demand is set
-   by how far apart the cribbing is. That is a choice, which makes it the
-   answer rather than the problem. */
-function frameCheck(spec, weight) {
+   The diagonal off the wheel-well arch changes that completely. It props the
+   overhang partway out, turning one long cantilever into a short propped span
+   with a short tip — but it can only prop as hard as its own geometry lets
+   it. A tie eight feet long and eleven inches deep is a very shallow triangle,
+   and every pound of upward prop force costs about nine pounds of tension in
+   the tie.
+
+   Parked, none of this applies: the frame only spans between whatever it is
+   blocked on, so the demand is a choice rather than a problem. */
+function frameCheck(spec, weight, factor) {
   const sec = frameSection(spec);
-  const w = weight.total / (spec.length / 12);          // plf, spread over the deck
-  const ax = axleCheck(spec, weight);
-  const axleFt = ax.fromTongue(ax.sketchAxle) / 12;
-  const overhang = spec.length / 12 - axleFt;
-  const towed = w * overhang * overhang / 2;
-  const spacingFor = (M) => Math.sqrt(8 * M / w);       // simple span, wL²/8
-  return {
-    ...sec,
-    plf: w,
-    towed,
-    towedRatio: towed / sec.capacity,
-    overhang,
-    maxCribbing: spacingFor(sec.capacity),
-    cribbing: [4, 6, 8, 10, 12].map((ft) => ({ ft, M: w * ft * ft / 8, ok: w * ft * ft / 8 <= sec.capacity })),
+  const W = weight.total * (factor || 1);
+  const Lft = spec.length / 12;
+  const w = W / Lft / 1000;                            // kip per foot
+  const over = spec.rearAxleToEnd / 12;                // rear axle to the free end
+  const bare = w * over * over / 2;                    // kip-ft, no prop
+
+  const out = {
+    ...sec, W, plf: w * 1000, over, bare,
+    bareRatio: bare / (sec.capacity / 1000),
+    capacityKipFt: sec.capacity / 1000,
+    maxCribbing: Math.sqrt(8 * (sec.capacity / 1000) / w),
+    cribbing: [4, 6, 8, 10, 12].map((ft) => {
+      const M = w * ft * ft / 8;
+      return { ft, M, ok: M <= sec.capacity / 1000 };
+    }),
   };
+
+  if (!spec.strut) { out.M = bare; out.ratio = out.bareRatio; return out; }
+
+  /* Propped cantilever of span Lp with a free tip of length a beyond it. */
+  const a = spec.strutFrom / 12;
+  const Lp = over - a;
+  const tipM = w * a * a / 2;
+  const ideal = 3 * w * Lp / 8 + w * a + 3 * tipM / (2 * Lp);   // prop force a rigid prop takes
+  const propped = w * Lp * Lp / 8 + tipM / 2;                   // moment at the axle if it were rigid
+
+  /* What the tie can actually deliver. The rise is the arch top above the
+     rail's own centre, and the run is the axle to the landing point. */
+  const st = STEEL[spec.strutSection];
+  const rise = spec.wheelWellRise + spec.frameDepth / 2;
+  const run = Lp * 12;
+  const angle = Math.atan2(rise, run);
+  const allowT = 0.6 * st.Fy * st.area;                         // kip
+  const canProp = allowT * Math.sin(angle);
+  const R = Math.min(canProp, ideal);
+  const M = Math.max(propped, bare - R * Lp);
+
+  /* And what it would take to prop it properly, two ways. */
+  const needSin = Math.min(1, ideal / allowT);
+  const wantRise = run * Math.tan(Math.asin(needSin)) - spec.frameDepth / 2;
+  const wantArea = ideal / Math.sin(angle) / (0.6 * st.Fy);
+
+  Object.assign(out, {
+    strut: { a, Lp, angle, rise, run, allowT, canProp, ideal, R,
+      tension: R / Math.sin(angle), section: st,
+      limited: canProp < ideal - 1e-6, wantRise, wantArea },
+    propped, M, ratio: M / (sec.capacity / 1000),
+  });
+  return out;
 }
 
 /* ---- the studs ----------------------------------------------------------- */

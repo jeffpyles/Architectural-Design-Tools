@@ -19,6 +19,10 @@ below matters, but three things are now settled and two of them change the desig
 - two 1½×6×.120 I-beams running the length at the third points
 - 1½×4×.100 cross joists
 - one wheel well a side, each covering a tandem pair
+- a 1½×4×.100 diagonal each side, from the top of the wheel-well arch out to the rail 4'
+  from the east end — not on the drawing, but on the trailer, and structurally the most
+  important member in the overhang
+- rear axle 12'-0" from the east end
 - no axles bought, and none expected for years
 
 Section weights are computed from the geometry rather than looked up, so an odd size
@@ -29,37 +33,68 @@ The I-beams are **repurposed from a travel trailer frame** — formed sections, 
 
 ### What that frame will and will not do
 
-Two rails and two beams give about **8.7 in³** of section modulus about the strong axis,
-and roughly **18 kip-ft** of bending capacity (the tube at 46 ksi, the salvaged beams
-taken at 36 because nobody can now look up what they were).
+**The beams alone:** two of them give 3.3 in³ and about **6.0 kip-ft**. That reconciles
+with what they came off — a 28-foot travel trailer at 6,000 lb with a 7-foot rear
+overhang wants 5.2 kip-ft. They were sized for exactly that and nothing more.
 
-**Towed, that is not close.** The frame is a beam between the hitch and the axle group
-with 14 feet hanging off past the axles, and that overhang is where the moment lives:
-the shell alone wants 60 kip-ft, a finished house closer to 115. Three to six times what
-the frame has. This is not a surprise — a travel trailer is 6,000 lb, and 6,000 lb over
-this frame comes out at 17.9 kip-ft, right at capacity. The beams are doing exactly what
-they were sized for; the house is four times the load.
+**Adding the 2×6 tube more than doubled it.** Two rails at 46 ksi give 12.2 kip-ft on
+their own, so the frame now holds about **18.3 kip-ft — three times the beams alone.**
 
-**Parked, it is a non-issue.** Blocked, the frame only spans between whatever it is
-cribbed on, so the demand is a choice: **crib it every 8 feet or closer and it is
-comfortable at any weight this house will reach.** The Weight tab has the table.
+**Towed, with the overhang tie counted, the shell passes and a finished house does not.**
 
-The same logic is why a flatbed move works when a tow does not — the flatbed deck
-supports the frame the whole way rather than hanging it off two points.
+| | No tie | As built | Against 18.3 |
+|---|---|---|---|
+| Shell, 20,200 lb | 42.9 kip-ft | 16.2 kip-ft | 0.9× |
+| Finished, ~38,000 lb | 81.2 kip-ft | 54.6 kip-ft | 3.0× |
+
+The 12 feet of overhang past the rear axle is what drives this, and it goes as the
+square — which is why the tie matters so much.
+
+### The overhang tie
+
+The 1½×4×.100 diagonal from the wheel-well arch to the rail four feet from the end is
+doing most of the work. It props the cantilever partway out, turning 12 feet of overhang
+into an 8-foot propped span with a 4-foot tip. A rigid prop there would drop the moment
+by six times.
+
+It is not rigid, because the triangle is shallow. Eleven inches of rise over eight feet
+is **6.5°**, and at that angle **every pound of lift costs about nine pounds of tension
+in the tie**. The tie holds 29 kip; that buys 3.3 kip of prop force out of the 5.1 a
+rigid prop would take at shell weight, and 9.6 finished.
+
+Two ways to close it, both worth knowing:
+
+- **Land it higher.** 13⅞" above the deck instead of 8" props the shell fully; about 30"
+  props it finished. That is a post at the wheel well, which has to live inside a wall or
+  a cabinet — but it is the cheap fix, because it buys force out of geometry rather than
+  steel.
+- **Or a heavier tie.** 1.61 in² closes the shell case at the current angle, 3.05 in²
+  the finished one. Against the 1.06 in² that is there. But then the connection has to
+  carry 30–45 kip, and that much thrust down the rail starts asking whether the rail
+  buckles.
+
+**Everything above is static.** Trailer frames are normally checked against one and a
+half to three times the static load to cover what the road does. None of that is in these
+numbers, so read the shell's 0.9× as "arguable" rather than "fine".
+
+**Parked, none of it applies.** Blocked, the frame only spans between its cribbing, so
+the demand is a choice: **crib it every 8 feet and it is comfortable at any weight this
+house reaches.** Same reason a flatbed move works when a tow does not — the deck carries
+the frame the whole way instead of hanging it off two points.
 
 ## What is guessed
 
 | | |
 |---|---|
 | **Which end the tongue is on** | The sketch does not say. The statics do: the wheel wells sit east of the middle, and a trailer only tows with the hitch on the far side of its own centre of gravity from the axles. Hitch at the east end gives a *negative* tongue weight; at the west it comes out near 7%. So the model puts the tongue west. |
-| **Wheel well position** | 17'-7" from the east end to its far face, 6'-8" long, read off the dimension string on the north elevation. Scaling the same marks off the photograph gives 10'-0" and 7'-2". Both are in the tool as controls. |
+| **Wheel well position** | 17'-7" from the east end to its far face, 6'-8" long, read off the dimension string on the north elevation; scaling the same marks off the photograph gives 10'-0" and 7'-2". The **rear axle at 12'-0" from the east end** is measured, and is what the frame and tongue-weight sums use. |
 | **#1, #2, #3 and #14** | Not in the spreadsheet at all. Sizes are scaled off the sketch and flagged **not measured** everywhere they appear. |
 | **Which dimension is which** | The spreadsheet gives most windows as two numbers without saying which is width. The sketch settles it: #4 and #9/#10 are drawn wide, so they are landscape; the rest read as written. #12 and #13 say H and W explicitly. |
 | **Rough openings** | Unit size plus ½" a side. Fine for a new window, optimistic for salvage — measure the frames. |
 | ~~Wall build-up~~ | **Settled:** 2×4 at 24" o.c., metal siding on 2×4 girts, no exterior sheathing, batt between the studs, 7/16" OSB on the inside doing the bracing *and* the interior surface. |
 | **Roof covering** | Standing seam, because nothing else works at this pitch — see below. |
 | **Loft extents** | East 10'-4", west 5'-7", from the partition lines on the sketch. The heights come from the two horizontal lines on the gable elevations, which do not quite agree with each other; the model uses one number for both. |
-| ~~Snow, wind, seismic~~ | **Settled:** near Drain, same as the shop. 25 psf ground snow, 100 mph basic wind, S_DS 0.75. Exposure is still set to C, which is the conservative read; drop it to B if the site is as wooded as the shop's. |
+| ~~Snow, wind, seismic~~ | **Settled:** near Drain, same as the shop. 25 psf ground snow, 100 mph basic wind at exposure B, S_DS 0.75. |
 | **Where #12 goes** | Nowhere. It is on the schedule and not on any elevation, so it sits on the shelf. |
 
 ## The roof
@@ -91,15 +126,11 @@ ridge cap counts against it. As drawn:
 | **Road to ridge cap** | **168⁷⁄₁₆"** |
 | Against | 168" |
 
-**Seven sixteenths of an inch over.** The tallest side wall that fits, everything else
-unchanged, is **134⁹⁄₁₆"**. Trivially fixable — but the reason to care is what happens
+**Seven sixteenths of an inch over.** The 135" is to the top of the wall plate with the
+roof sitting on it, which is what puts the rafter into the stack. The tallest side wall
+that fits, everything else unchanged, is **134⁹⁄₁₆"**. Trivially fixable — but the reason to care is what happens
 next: the rafter depth is 5½" of that stack, so any change that makes the rafter deeper
 comes straight out of the wall. Snow load, span, spacing and roof pitch all cash out here.
-
-Worth confirming: **is the 9" measured to the top of the wall plate, or to the roof
-surface?** The model reads it as plate-to-plate and stacks the rafter above, which is
-what puts it over. If the 9" was always to the finished roof, there is about six inches
-of slack that does not exist in the table above.
 
 And the wall height is not free either way — it is buying headroom:
 
