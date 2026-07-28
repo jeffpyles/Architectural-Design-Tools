@@ -113,6 +113,18 @@ const BUILDING = {
     return facts;
   },
 
+  readout: (o, spec) => {
+    const st = stockFor(o);
+    const e = wallExtent(o.wall, spec);
+    const hdr = sizeHeader(st.w, o.wall, spec);
+    return {
+      title: `${WALLS[o.wall].label} wall — ${st.label}`,
+      body: `${fmtFt(o.off)} from ${WALLS[o.wall].from}  ·  `
+        + `${fmtFt(e.u1 - (o.off + st.w))} to the far end  ·  head ${fmtFt(o.head)}  ·  `
+        + `sill ${fmtFt(o.head - st.h)}  ·  header ${hdr.label}`,
+    };
+  },
+
   panels: [
     { id: 'openings', label: 'Openings', render: () => renderOpenings() },
     { id: 'structure', label: 'Structure', render: () => renderControlsPanel() },

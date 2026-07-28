@@ -275,15 +275,28 @@ function moveOpening(o, off) {
   showReadout(o);
   scheduleRebuild();
 }
+/* The floating readout over the viewport. What it says about an opening is
+   the building's business — the shop wants its header and its girts, a house
+   on a trailer wants the unit against the hole it has to fit. The shell only
+   knows where to put it.
+
+   This used to call sizeHeader() with the shop's argument list from inside
+   the shared code, which threw on every pick and drag in any building whose
+   sizeHeader took anything else. */
 function showReadout(o) {
   const st = stockFor(o);
   const e = wallExtent(o.wall, state.spec);
   $('#readout').classList.add('on');
-  $('#roTitle').textContent = `${WALLS[o.wall].label} wall — ${st.label}`;
-  const hdr = sizeHeader(st.w, o.wall, state.spec);
-  $('#roBody').textContent =
-    `${fmtFt(o.off)} from ${WALLS[o.wall].from}  ·  ${fmtFt(e.u1 - (o.off + st.w))} to the far end  ·  `
-    + `head ${fmtFt(o.head)}  ·  sill ${fmtFt(o.head - st.h)}  ·  header ${hdr.label}`;
+  const r = BUILDING.readout
+    ? BUILDING.readout(o, state.spec)
+    : {
+      title: `${WALLS[o.wall].label} wall — ${st.label}`,
+      body: `${fmtFt(o.off)} from ${WALLS[o.wall].from}  ·  `
+        + `${fmtFt(e.u1 - (o.off + st.w))} to the far end  ·  `
+        + `head ${fmtFt(o.head)}  ·  sill ${fmtFt(o.head - st.h)}`,
+    };
+  $('#roTitle').textContent = r.title;
+  $('#roBody').textContent = r.body;
 }
 
 /* ============================================================

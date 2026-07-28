@@ -103,6 +103,20 @@ const BUILDING = {
     return facts;
   },
 
+  readout: (o, spec) => {
+    const st = stockFor(o);
+    const ro = roughOf(o);
+    const e = wallExtent(o.wall, spec);
+    const hdr = sizeHeader(o, spec);
+    return {
+      title: `${WALLS[o.wall].label} wall — ${st.label}`,
+      body: `${fmtFt(o.off)} from the ${WALLS[o.wall].from}  ·  `
+        + `${fmtFt(e.u1 - (o.off + ro.w))} to the far corner  ·  `
+        + `unit ${fmtIn(st.w)} × ${fmtIn(st.h)}, RO ${fmtIn(ro.w)} × ${fmtIn(ro.h)}  ·  `
+        + `sill ${fmtIn(o.head - ro.h)}  ·  header ${hdr.label}`,
+    };
+  },
+
   panels: [
     { id: 'openings', label: 'Openings', render: () => renderOpenings() },
     { id: 'structure', label: 'Structure', render: () => renderControlsPanel() },

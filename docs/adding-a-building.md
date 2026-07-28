@@ -55,6 +55,7 @@ Declared in `src/50-building.js`. Everything the shell asks of a building:
 | `titleFacts(spec)` | `[[term, value]]` for the dimensions rail |
 | `panels` | `[{ id, label, render }]` — the inspector tabs, in order |
 | `footprint(spec)` | `[x, z]` in inches. Optional; defaults to `[spec.width, spec.depth]`. The shell uses it to aim the camera and to sort the cutaway, and nothing else. |
+| `readout(o, spec)` | `{ title, body }` for the floating panel over the viewport when an opening is picked. Optional; the default states the offset, the head and the sill. |
 
 `50-building.js` must not touch the DOM at load time. `tools/check.mjs` runs the
 model and the engineering in a bare VM with no `document`, so panel renderers are
@@ -152,9 +153,15 @@ purchase table.
 node tools/build.mjs <id>            # → buildings/<id>/dist/
 node tools/check.mjs <id>            # headless model + engineering assertions
 node tools/viewport-check.mjs <id>   # browser layout, 28 window shapes
+node tools/interact-check.mjs <id>   # picking, dragging, every tab
 node tools/weigh.mjs <id>            # every part, and how the takeoff weighed it
 node tools/serve.mjs                 # assemble _site/ as CI does, serve on :8099
 ```
+
+`tools/check.mjs` runs without a DOM, which means **it never loads `40-panels.js`**. A
+panel that throws — a duplicate `const`, a call with the wrong argument list — is
+invisible to it. `viewport-check` and `interact-check` are the only things standing under
+that file, so when you touch a panel, run them.
 
 `tools/check.mjs` asserts what is true of **every** building: finite geometry inside a
 believable envelope, every stage producing parts, openings that reference real stock and

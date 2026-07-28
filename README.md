@@ -66,6 +66,7 @@ node tools/build.mjs                 # every building → buildings/<id>/dist/
 node tools/build.mjs shop-building   # just the one
 node tools/check.mjs shop-building   # headless model + engineering assertions
 node tools/viewport-check.mjs shop-building   # browser layout, 28 window shapes
+node tools/interact-check.mjs shop-building  # picking, dragging, every tab
 node tools/weigh.mjs tiny-house      # every part, and how the takeoff weighed it
 
 node tools/serve.mjs                 # assemble _site/ as CI does, serve on :8099

@@ -52,6 +52,12 @@ jobs:
           npx playwright install --with-deps chromium
           for id in ${{ steps.list.outputs.ids }}; do node tools/viewport-check.mjs "$id"; done
 
+      # The panel files never run under tools/check.mjs — it has no DOM — so
+      # picking and dragging an opening had no test at all until one broke.
+      - name: Check picking and dragging in a browser
+        run: |
+          for id in ${{ steps.list.outputs.ids }}; do node tools/interact-check.mjs "$id"; done
+
       - name: Assemble the site
         run: |
           mkdir -p _site/layouts
