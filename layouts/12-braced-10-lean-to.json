@@ -2,5 +2,6 @@
   "tool": "shop-building",
   "name": "12', braced, 10' lean-to",
   "note": "",
+  "default": true,
   "code": "SHOP1-eyJ2IjoxLCJzIjp7InN0dWRTcGFjaW5nIjoyNCwidHJ1c3NTcGFjaW5nIjo0OCwiYnJhY2luZyI6ImZ1bGwiLCJsZWFuVG8iOnRydWUsImxlYW5Ub1Byb2plY3Rpb24iOjEyMH0sIm8iOltbIlciLCJXMSIsIndpbmRvdyIsNDIsOTYsMCwwXSxbIk4iLCJXMiIsIndpbmRvdyIsMTE0LDk2LDAsMF0sWyJXIiwiVzEiLCJ3aW5kb3ciLDIxMCw5NiwwLDBdLFsiUyIsIkQyIiwib3ZlcmhlYWQiLDI0LjUsMTA4LDAsMTA4XSxbIlMiLCJXMiIsIndpbmRvdyIsMTYzLjUsOTYsMCwwXSxbIkUiLCJEMSIsIm1hbiIsMjQxLjUsODIuNSwwLDBdLFsiRSIsIkQxIiwibWFuIiwzNiw4Mi41LDAsMF1dfQ"
 }

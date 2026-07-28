@@ -16,7 +16,7 @@ for (const f of readdirSync(dir).filter((n) => n.endsWith('.json') && n !== 'ind
   catch (e) { console.error(`skipped ${f}: not valid JSON`); continue; }
   if (!data.code || typeof data.code !== 'string') { console.error(`skipped ${f}: no code`); continue; }
   rows.push({ file: f, tool: data.tool || 'shop-building', name: data.name || f.replace(/\.json$/, ''),
-    note: data.note || '', code: data.code });
+    note: data.note || '', code: data.code, ...(data.default ? { default: true } : {}) });
 }
 writeFileSync(join(dir, 'index.json'), JSON.stringify(rows, null, 2) + '\n');
 console.log(`layouts/index.json — ${rows.length} layout(s)`);

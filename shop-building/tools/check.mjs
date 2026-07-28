@@ -265,6 +265,31 @@ for (const fx of FIXTURES) {
   if (fx.expectPass && worst < 1) fail(`fixture "${fx.name}" should clear every wall line, worst ${worst.toFixed(2)}`);
   if (!fx.expectPass && worst >= 1) fail(`fixture "${fx.name}" was expected to fall short somewhere`);
 }
+/* The library's default-flagged layout is what the page opens with; the
+   built-in spec is only the offline fallback. They should not drift far. */
+{
+  const dir = join(root, '..', 'layouts');
+  let flagged = null;
+  for (const f of readdirSync(dir).filter((n) => n.endsWith('.json') && n !== 'index.json')) {
+    const d = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    if (d.default) flagged = flagged ? 'MULTIPLE' : d;
+  }
+  if (flagged === 'MULTIPLE') fail('more than one layout is flagged default');
+  else if (!flagged) console.log('  --  no layout flagged default; the page opens with the built-in spec');
+  else {
+    const d = A.decodeLayout(flagged.code);
+    const worst = Math.min(...A.bracingCheck(d.spec, d.openings).flatMap((x) => x.lines.map((l) => l.ratio)));
+    const crit = A.auditBuilding(d.spec, d.openings).filter((n) => n.level === 'crit');
+    console.log(`  default layout "${flagged.name}": worst bracing ${worst.toFixed(2)}, `
+      + `${crit.length ? crit.length + ' critical' : 'no critical notes'}`);
+    if (worst < 1) fail(`the default layout does not clear every wall line (worst ${worst.toFixed(2)})`);
+    if (crit.length) fail(`the default layout carries a critical note: ${crit[0].title}`);
+    if (d.spec.exposure !== spec.exposure) {
+      fail(`default layout exposure ${d.spec.exposure} does not match the built-in ${spec.exposure}`);
+    }
+  }
+}
+
 const badCode = (() => { try { A.decodeLayout('not-a-code'); return false; } catch (e) { return true; } })();
 if (!badCode) fail('a bad layout code should be rejected');
 console.log('  ok  bad codes are rejected');

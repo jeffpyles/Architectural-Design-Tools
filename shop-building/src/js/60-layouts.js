@@ -34,8 +34,20 @@ async function loadSharedLayouts() {
   } catch (e) {
     sharedLayouts = false;    // opened from a file, or from the artifact host
   }
+  /* One library entry can mark itself the starting point. A code in the address
+     bar always wins, and so does anything already touched on this visit. */
+  if (openedFromLink === false && !touched && Array.isArray(sharedLayouts)) {
+    const def = sharedLayouts.find((r) => r.default);
+    if (def) {
+      try { const d = decodeLayout(def.code); applyLayout(d.spec, d.openings); }
+      catch (e) { /* fall back to the built-in defaults */ }
+    }
+  }
   renderLayouts();
 }
+
+let openedFromLink = false;
+let touched = false;
 
 /* GitHub's own new-file page, pre-filled. Anyone signed in can commit it if
    they have write access, and everyone else is walked into a fork and pull
@@ -187,6 +199,7 @@ async function copyText(text, sourceEl) {
 
 /* ---- panel ---- */
 function applyLayout(spec, openings) {
+  touched = true;
   state.spec = { ...spec };
   state.openings = openings.map((o, i) => ({ ...o, id: o.id || `k${i}` }));
   state.selected = null;

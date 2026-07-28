@@ -21,7 +21,7 @@ function boot() {
   }
 
   const shared = layoutFromHash();
-  if (shared) { state.spec = shared.spec; state.openings = shared.openings; }
+  if (shared) { state.spec = shared.spec; state.openings = shared.openings; openedFromLink = true; }
 
   applyTheme();
   setView('iso');

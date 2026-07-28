@@ -103,7 +103,7 @@ const DEFAULT_SPEC = {
   site: 'Drain, Oregon',
   groundSnow: 25,         // psf
   windSpeed: 100,         // mph, 3-second gust, Risk Category II
-  exposure: 'C',          // 'B' wooded/obstructed | 'C' open | 'D' unobstructed
+  exposure: 'B',          // wooded foothills; 'C' open | 'D' unobstructed
   seismicSDS: 0.75,       // g, design short-period acceleration
   heated: false,
 
