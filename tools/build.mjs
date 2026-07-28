@@ -45,6 +45,21 @@ export function sourcesFor(id) {
   ];
 }
 
+/* The layout flagged `"default": true` in layouts/<id>/, carried into the page
+   so it also opens that way where the library cannot be fetched — the Artifact
+   host and anyone who opens the file directly. */
+function defaultCode(id) {
+  const dir = join(root, 'layouts', id);
+  if (!existsSync(dir)) return null;
+  for (const f of readdirSync(dir).filter((n) => n.endsWith('.json')).sort()) {
+    try {
+      const d = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+      if (d.default && d.code) return d.code;
+    } catch (e) { /* build-layout-index.mjs is where bad JSON gets reported */ }
+  }
+  return null;
+}
+
 const FAVICON = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
   + '<rect width="32" height="32" rx="4" fill="%230f5187"/>'
@@ -57,7 +72,9 @@ function buildOne(b) {
     css = css.replace(`{{${token}}}`, b64('core', 'assets', 'fonts', file));
   }
   const files = sourcesFor(b.id);
-  const js = files.map(([label, path]) => `/* ---- ${label} ---- */\n${readFileSync(path, 'utf8')}`).join('\n\n');
+  const js = [`/* ---- baked-in default layout ---- */\nconst BAKED_DEFAULT = ${JSON.stringify(defaultCode(b.id))};`]
+    .concat(files.map(([label, path]) => `/* ---- ${label} ---- */\n${readFileSync(path, 'utf8')}`))
+    .join('\n\n');
 
   const body = read('core', 'page.html')
     .replace('{{CSS}}', () => css)

@@ -32,8 +32,17 @@ function boot() {
     return;
   }
 
+  /* Precedence for what opens: a code in the address bar, then the library's
+     flagged default, then the copy of that default baked in at build time —
+     which is what the artifact host and a bare file get, since neither can
+     reach the library. */
   const shared = layoutFromHash();
-  if (shared) { state.spec = shared.spec; state.openings = shared.openings; openedFromLink = true; }
+  if (shared) {
+    state.spec = shared.spec; state.openings = shared.openings; openedFromLink = true;
+  } else if (typeof BAKED_DEFAULT === 'string' && BAKED_DEFAULT) {
+    try { const d = decodeLayout(BAKED_DEFAULT); state.spec = d.spec; state.openings = d.openings; }
+    catch (e) { /* keep BUILDING.defaults() */ }
+  }
 
   applyTheme();
   setView('iso');

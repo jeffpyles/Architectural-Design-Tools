@@ -42,8 +42,8 @@ async function loadSharedLayouts() {
   if (openedFromLink === false && !touched && Array.isArray(sharedLayouts)) {
     const def = sharedLayouts.find((r) => r.default);
     if (def) {
-      try { const d = decodeLayout(def.code); applyLayout(d.spec, d.openings); }
-      catch (e) { /* fall back to the built-in defaults */ }
+      try { const d = decodeLayout(def.code); applyLayout(d.spec, d.openings, true); }
+      catch (e) { /* fall back to whatever was baked in */ }
     }
   }
   renderLayouts();
@@ -189,8 +189,10 @@ async function copyText(text, sourceEl) {
 }
 
 /* ---- panel ---- */
-function applyLayout(spec, openings) {
-  touched = true;
+/* `quiet` applies a layout as a starting point rather than a choice, so a
+   later-arriving library default can still replace it. */
+function applyLayout(spec, openings, quiet) {
+  if (!quiet) touched = true;
   state.spec = { ...spec };
   state.openings = openings.map((o, i) => ({ ...o, id: o.id || `k${i}` }));
   state.selected = null;
