@@ -38,16 +38,25 @@ function note(txt) { return el('p', 'note', txt); }
 const SKIN_SYS = new Set(['siding', 'sheathing', 'drywall', 'insulation',
   'trim', 'window', 'door', 'roofing', 'deck']);
 const OCC_KEYS = ['core', 'N', 'S', 'E', 'W', 'roofN', 'roofS'];
-function occKey(p, spec) {
+/* fp is the footprint the building reports, [x, z] in inches. The cutaway
+   sorts skin by which side of the middle it sits on, so it needs the middle
+   and nothing else about the building. */
+function occKey(p, fp) {
   if (!SKIN_SYS.has(p.sys)) return 'core';
   const b = aabb(p.geom);
   if (p.sys === 'roofing' || p.sys === 'deck') {
-    return b.c[2] < spec.depth / 2 ? 'roofN' : 'roofS';
+    return b.c[2] < fp[1] / 2 ? 'roofN' : 'roofS';
   }
   const sx = b.mx[0] - b.mn[0], sz = b.mx[2] - b.mn[2];
   if (Math.min(sx, sz) > 60) return 'core';         // lids and slabs, not wall skin
-  if (sz < sx) return b.c[2] < spec.depth / 2 ? 'N' : 'S';
-  return b.c[0] < spec.width / 2 ? 'W' : 'E';
+  if (sz < sx) return b.c[2] < fp[1] / 2 ? 'N' : 'S';
+  return b.c[0] < fp[0] / 2 ? 'W' : 'E';
+}
+
+/* Every building reports its own footprint, so nothing in the shell has to
+   guess which spec key holds which dimension. */
+function footprint(spec) {
+  return BUILDING.footprint ? BUILDING.footprint(spec) : [spec.width, spec.depth];
 }
 
 /* ---- rebuild ---- */
@@ -56,10 +65,11 @@ function rebuild() {
   take = takeoff(model, state.spec);
   findings = BUILDING.audit(state.spec, state.openings);
 
+  const fp = footprint(state.spec);
   const groups = new Map();
   for (const s of BUILDING.stages) for (const o of OCC_KEYS) groups.set(`${s.key}|${o}`, []);
   for (const p of model.parts) {
-    const k = `${p.stage}|${occKey(p, state.spec)}`;
+    const k = `${p.stage}|${occKey(p, fp)}`;
     (groups.get(k) || groups.set(k, []).get(k)).push(p);
   }
   vp.load(groups);
@@ -143,18 +153,19 @@ const VIEWS = {
 function setView(k) {
   const v = VIEWS[k];
   vp.cam.az = v.az; vp.cam.el = v.el; vp.cam.dist = v.dist;
-  vp.cam.target = [state.spec.width / 2, 70, state.spec.depth / 2];
+  const fp = footprint(state.spec);
+  vp.cam.target = [fp[0] / 2, state.spec.wallHeight * 0.55, fp[1] / 2];
   dirty = true;
 }
 
 /* ---- picking ---- */
 function wallPlanes() {
-  const s = state.spec;
+  const fp = footprint(state.spec);
   return [
     { wall: 'W', axis: 0, val: 0, n: [-1, 0, 0] },
-    { wall: 'E', axis: 0, val: s.width, n: [1, 0, 0] },
+    { wall: 'E', axis: 0, val: fp[0], n: [1, 0, 0] },
     { wall: 'N', axis: 2, val: 0, n: [0, 0, -1] },
-    { wall: 'S', axis: 2, val: s.depth, n: [0, 0, 1] },
+    { wall: 'S', axis: 2, val: fp[1], n: [0, 0, 1] },
   ];
 }
 function pickOpening(px, py) {
@@ -395,36 +406,52 @@ function renderTakeoff() {
   p.append(note('Counted straight off the model. Lumber is rolled into the stock length that wastes least; '
     + 'add your own margin for crooked sticks.'));
 
-  p.append(el('h3', null, 'Lumber to buy'));
-  const t1 = table(['Size', 'Length', 'Qty', 'Total lf'],
-    take.buyRows.map((r) => [r.size, fmtFt(r.stock), String(r.qty), fmtN(r.lf)]),
-    [false, true, true, true]);
-  p.append(t1);
+  /* Every section below appears only if the model actually contains the
+     stuff — a building on a steel frame has no concrete to order, and one
+     on a slab has no steel. */
+  if (take.steelRows.length) {
+    p.append(el('h3', null, 'Steel'));
+    p.append(table(['Section', 'Pieces', 'Length', 'Weight'],
+      take.steelRows.map((r) => [r.label, String(r.qty), `${fmtN(r.lf)} lf`, `${fmtN(r.lb)} lb`]),
+      [false, true, true, true]));
+  }
 
-  p.append(el('h3', null, 'Sheet goods'));
+  if (take.buyRows.length) {
+    p.append(el('h3', null, 'Lumber to buy'));
+    p.append(table(['Size', 'Length', 'Qty', 'Total lf'],
+      take.buyRows.map((r) => [r.size, fmtFt(r.stock), String(r.qty), fmtN(r.lf)]),
+      [false, true, true, true]));
+  }
+
   const sheets = [];
   for (const s of take.sheetRows) sheets.push([s.kind, `${fmtN(s.sf)} sf`, String(s.sheets)]);
   if (take.gussets) sheets.push(['¾" CDX for gussets', `${take.gussets} pieces`, String(take.gussetSheets)]);
   if (take.drywallSheets) sheets.push(['Gypsum board', `${fmtN(take.dwSf)} sf`, String(take.drywallSheets)]);
-  p.append(table(['Item', 'Area', 'Sheets'], sheets, [false, true, true]));
+  if (sheets.length) {
+    p.append(el('h3', null, 'Sheet goods'));
+    p.append(table(['Item', 'Area', 'Sheets'], sheets, [false, true, true]));
+  }
 
-  p.append(el('h3', null, 'Skin'));
-  const skin = [
-    [state.spec.roofing === 'metal' ? 'Metal roof panel' : 'Architectural shingle',
-      `${fmtN(take.roofSf)} sf`, `${fmtN(take.roofSquares, 1)} sq`],
-    [state.spec.siding === 'metal' ? 'Metal wall panel' : 'Lap siding',
-      `${fmtN(take.sideSf)} sf`, `${fmtN(take.sideSquares, 1)} sq`],
-  ];
-  p.append(table(['Item', 'Area', 'Squares'], skin, [false, true, true]));
+  /* The names come off the parts themselves, so a building that roofs in
+     something nobody has thought of yet still labels its own takeoff. */
+  const skin = [];
+  if (take.roofSf) skin.push([take.roofKind || 'Roofing', `${fmtN(take.roofSf)} sf`, `${fmtN(take.roofSquares, 1)} sq`]);
+  if (take.sideSf) skin.push([take.sideKind || 'Siding', `${fmtN(take.sideSf)} sf`, `${fmtN(take.sideSquares, 1)} sq`]);
+  if (skin.length) {
+    p.append(el('h3', null, 'Skin'));
+    p.append(table(['Item', 'Area', 'Squares'], skin, [false, true, true]));
+  }
 
-  p.append(el('h3', null, 'Concrete'));
-  const kv = el('dl', 'kv');
-  for (const [k, v] of [
-    ['Slab and turndown', `${fmtN(take.concrete.cuYd, 2)} cu yd`],
-    ['Order with waste', `${fmtN(take.concrete.order, 1)} cu yd`],
-    ['Slab area', `${fmtN(state.spec.width * state.spec.depth / 144)} sf`],
-  ]) kv.append(el('dt', null, k), el('dd', null, v));
-  p.append(kv);
+  if (take.concrete.cuYd > 0.005) {
+    p.append(el('h3', null, 'Concrete'));
+    const kv = el('dl', 'kv');
+    for (const [k, v] of [
+      ['Slab and turndown', `${fmtN(take.concrete.cuYd, 2)} cu yd`],
+      ['Order with waste', `${fmtN(take.concrete.order, 1)} cu yd`],
+      ['Slab area', `${fmtN(footprint(state.spec)[0] * footprint(state.spec)[1] / 144)} sf`],
+    ]) kv.append(el('dt', null, k), el('dd', null, v));
+    p.append(kv);
+  }
 
   if (take.battSf || take.blownSf) {
     p.append(el('h3', null, 'Insulation'));

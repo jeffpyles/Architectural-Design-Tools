@@ -99,3 +99,28 @@ function splitRun(len) {
   const n = Math.ceil(len / 192);
   return Array.from({ length: n }, () => len / n);
 }
+
+/* ---- structural steel ----------------------------------------------------
+   Trailer frames are built from rectangular tube and light I sections. Weight
+   is computed from the section rather than looked up, so a size nobody stocks
+   still reports honestly: mild steel is 0.2836 lb/in³, and a rectangular tube
+   of wall t measuring a × b outside has an area of 2t(a + b − 2t), ignoring
+   the corner radii, which makes it read about 1% heavy. */
+const STEEL_DENSITY = 0.2836;                 // lb per cubic inch
+
+function tubeSection(a, b, t) {
+  return { d: Math.max(a, b), w: Math.min(a, b), t, area: 2 * t * (a + b - 2 * t) };
+}
+
+/* A fabricated I: two flanges and a web, all of the same material. Trailer
+   builders call these by the same a × b × t shorthand as the tube. */
+function ibeamSection(flange, depth, t) {
+  return { d: depth, w: flange, t, area: 2 * flange * t + (depth - 2 * t) * t };
+}
+
+const STEEL = {
+  'tube2x6x120':  { ...tubeSection(2, 6, 0.120), label: '2×6×.120 tube' },
+  'tube1.5x4x100': { ...tubeSection(1.5, 4, 0.100), label: '1½×4×.100 tube' },
+  'i1.5x6x120':   { ...ibeamSection(1.5, 6, 0.120), label: '1½×6×.120 I-beam' },
+};
+for (const s of Object.values(STEEL)) s.lbft = s.area * STEEL_DENSITY * 12;

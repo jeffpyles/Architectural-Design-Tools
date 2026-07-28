@@ -3,14 +3,84 @@
    drift from what the model is showing.
    ============================================================ */
 
+/* Weight per cubic inch, for the buildings where what a thing weighs is a
+   design driver rather than a curiosity. A part carrying an explicit `lbft`
+   — hollow steel, mostly — is weighed off its length instead, because its
+   bounding box is mostly air. */
+const DENSITY = {
+  concrete: 0.0868, gravel: 0.0637,
+  fir: 0.0185, firDark: 0.0185, treated: 0.0197, lvl: 0.0260, plywood: 0.0206,
+  osb: 0.0226,
+  steel: 0.2836, steelDk: 0.2836, rubber: 0.0400, metal: 0.2836,
+  shingle: 0.0400, trim: 0.0185, door: 0.0180, ohdoor: 0.0150,
+  glass: 0.0900, drywall: 0.0272, batt: 0.00055, blown: 0.00075, foam: 0.00115,
+  wrap: 0.0002, panel: 0.0500, conduit: 0.0300, box: 0.0300, fixture: 0.0100,
+};
+
+function partVolume(g) {
+  if (!g) return 0;
+  if (g.t === 'box') return g.s[0] * g.s[1] * g.s[2];
+  if (g.t === 'prism') {
+    let a = 0;
+    for (let i = 0, n = g.pts.length; i < n; i++) {
+      const [z0, y0] = g.pts[i], [z1, y1] = g.pts[(i + 1) % n];
+      a += z0 * y1 - z1 * y0;
+    }
+    return Math.abs(a / 2) * Math.abs(g.x1 - g.x0);
+  }
+  return 0;
+}
+
+/* Three ways to weigh a part, in the order they are trusted:
+
+   `lb`   — somebody knows what it weighs. A tyre, an appliance.
+   `lbft` — a section weight. Hollow steel, whose bounding box is mostly air.
+   `psf`  — a sheet good. Skin, glazing and membranes are drawn at a
+            thickness you can see rather than the thickness they are, so
+            their volume is fiction and their area is not.
+
+   Anything with none of those falls back to volume times density, which is
+   right for solid timber and concrete and wrong for almost nothing else. */
+function partWeight(p) {
+  if (p.lb) return p.lb;
+  if (p.lbft && p.len) return p.lbft * p.len / 12;
+  if (p.psf && p.area) return p.psf * p.area;
+  const d = DENSITY[p.mat];
+  return d ? partVolume(p.geom) * d : 0;
+}
+
 function takeoff(model, spec) {
   const lumber = new Map();
   const sheets = new Map();
   let concreteCuIn = 0;
   const areas = new Map();
   let gussets = 0;
+  const steel = new Map();
+
+  /* Weight and where it sits, counted over every part before the
+     material-specific branching below starts skipping things. */
+  const byMat = new Map();
+  let wTot = 0, mx = 0, my = 0, mz = 0;
+  for (const p of model.parts) {
+    const w = partWeight(p);
+    if (!w) continue;
+    byMat.set(p.mat, (byMat.get(p.mat) || 0) + w);
+    const c = aabb(p.geom).c;
+    wTot += w; mx += w * c[0]; my += w * c[1]; mz += w * c[2];
+  }
+  const weight = {
+    total: wTot,
+    cg: wTot ? [mx / wTot, my / wTot, mz / wTot] : [0, 0, 0],
+    byMat: [...byMat.entries()].map(([mat, lb]) => ({ mat, lb })).sort((a, b) => b.lb - a.lb),
+  };
 
   for (const p of model.parts) {
+    if (p.steel && p.len) {
+      const e = steel.get(p.steel) || { key: p.steel, lf: 0, lb: 0, qty: 0 };
+      e.lf += p.len / 12; e.lb += partWeight(p); e.qty++;
+      steel.set(p.steel, e);
+      continue;
+    }
     if (p.mat === 'concrete') {
       const g = p.geom;
       if (g.t === 'box') concreteCuIn += g.s[0] * g.s[1] * g.s[2];
@@ -63,19 +133,26 @@ function takeoff(model, spec) {
   const ceilSf = areas.get('⅝" ceiling board') || 0;
   const wallSf = areas.get('½" wall board') || 0;
 
-  const roofSf = [...areas.entries()].filter(([k]) => /roof panel|shingle/i.test(k))
-    .reduce((a, [, v]) => a + v, 0);
-  const sideSf = [...areas.entries()].filter(([k]) => /wall panel|lap siding/i.test(k))
-    .reduce((a, [, v]) => a + v, 0);
+  const pick = (re) => [...areas.entries()].filter(([k]) => re.test(k));
+  const roofing = pick(/roof panel|shingle|standing seam|membrane/i);
+  const siding = pick(/wall panel|siding|shiplap|board.and.batten/i);
+  const roofSf = roofing.reduce((a, [, v]) => a + v, 0);
+  const sideSf = siding.reduce((a, [, v]) => a + v, 0);
+  const biggest = (rows) => (rows.sort((a, b) => b[1] - a[1])[0] || [])[0];
   const battSf = [...areas.entries()].filter(([k]) => /batt/i.test(k)).reduce((a, [, v]) => a + v, 0);
   const blownSf = [...areas.entries()].filter(([k]) => /blown/i.test(k)).reduce((a, [, v]) => a + v, 0);
 
   const cuYd = concreteCuIn / 46656;
 
+  const steelRows = [...steel.values()]
+    .map((e) => ({ ...e, label: (STEEL[e.key] || {}).label || e.key }))
+    .sort((a, b) => b.lb - a.lb);
+
   return {
-    cuts, buyRows, sheetRows, gussets,
+    cuts, buyRows, sheetRows, gussets, weight, steelRows,
     concrete: { cuYd, order: Math.ceil(cuYd * 1.1 * 2) / 2 },
     roofSf, sideSf, ceilSf, wallSf, dwSf, battSf, blownSf,
+    roofKind: biggest(roofing), sideKind: biggest(siding),
     gussetSheets: Math.ceil(gussets * (13 * 15 / 144) / SHEET_SF * 1.15),
     drywallSheets: Math.ceil((ceilSf / 48 + wallSf / 32) * 1.08),
     roofSquares: roofSf / 100,

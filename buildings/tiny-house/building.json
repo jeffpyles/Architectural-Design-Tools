@@ -1,0 +1,8 @@
+{
+  "name": "Tiny House",
+  "title": "Tiny House on Wheels — 12' × 34'",
+  "blurb": "A 12' × 34' house on a steel trailer frame, framed stud by stud from a set of salvaged windows and a wall-by-wall placement sketch. Move the openings, size the framing, and watch the weight and the centre of gravity follow.",
+  "facts": ["3D model", "salvaged window schedule", "weight and CG", "loft layout", "material takeoff"],
+  "status": "early — shell only",
+  "codePrefix": "THOW1-"
+}
