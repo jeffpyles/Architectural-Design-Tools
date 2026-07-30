@@ -239,6 +239,18 @@ function leanToPostPlan(spec) {
   return out;
 }
 
+/* A detail mark: which detail, and which sheet it is drawn on. */
+function detailMark(s, x, y, mark, sheet) {
+  const r = 8.4;
+  const cx = x + 22, cy = y - 22;
+  s.line(x, y, cx - r * 0.7, cy + r * 0.7, LW.thin, { stroke: 'var(--ink-2)' });
+  s.circle(x, y, 1.1, 0, { fill: 'var(--ink-2)' });
+  s.circle(cx, cy, r, LW.medium, { fill: 'var(--surface)' });
+  s.line(cx - r, cy, cx + r, cy, LW.thin, { stroke: 'var(--ink-3)' });
+  s.text(cx, cy - 1.6, mark, { size: 6.5, weight: 700 });
+  s.text(cx, cy + 6.4, sheet, { size: 5.2, fill: 'var(--ink-2)' });
+}
+
 /* A section cut mark: the circle with the sheet it is drawn on, and the arrow
    that says which way you are looking. */
 function sectionMark(s, x, y, mark, sheet, dir) {
@@ -579,6 +591,19 @@ function drawFramingPlan(s) {
     for (const o of openingsOn(wall, ops)) { stops.push(o.off, o.off + stockFor(o).w); }
     stops.push(D);
     if (stops.length > 2) s.dimChainV(stops, wall === 'W' ? -off * 1.15 : W + off * 1.15, e.c0);
+  }
+
+  /* Point at the jamb detail, which is the one that is a plan cut and so the
+     one this sheet can carry a mark for. */
+  {
+    const typ = ops.filter((o) => o.kind === 'window')
+      .sort((a, b) => stockFor(b).w - stockFor(a).w)[0];
+    if (typ) {
+      const e = wallExtent(typ.wall, spec);
+      const at = e.axis === 'x'
+        ? { x: typ.off, z: e.c0 + T / 2 } : { x: e.c0 + T / 2, z: typ.off };
+      detailMark(s, X(at.x), Y(at.z), '2', 'A6.0');
+    }
   }
 
   /* The schedule is the point of this sheet. */
@@ -975,6 +1000,229 @@ function trussCutRows(tr) {
   }
   return rows;
 }
+
+/* ================================================================
+   A6.0 — Door and window schedule, with the three details
+
+   The schedule is what gets ordered from and the details are what gets built
+   from, and they belong on one sheet because the head detail is only true if
+   the header in the schedule is the header that gets cut.
+
+   Every dimension here comes off the same spec the model uses, so changing the
+   wall system in the Structure tab redraws the details rather than leaving a
+   drawing of the old assembly on the sheet.
+   ================================================================ */
+
+/* The build-up outside and inside the studs, as a set of thicknesses. This is
+   the thing the three details are all really about. */
+function wallLayers(spec) {
+  const T = LUMBER[spec.studSize].d;
+  const sheathing = spec.wallSkin === 'sheathing' ? 0.4375 : 0;
+  const girt = spec.wallSkin === 'girts' ? LUMBER[spec.girtSize].t : 0;
+  const siding = spec.siding === 'metal' ? 0.5 : 0.75;
+  const inner = spec.wallDrywall ? 0.5 : 0;
+  const trim = 0.75;
+  return { T, sheathing, girt, siding, inner, trim,
+    /* Face of the framing out to whatever stands proudest — a 1x trim board
+       stands out past a metal panel, and the detail has to hold it. */
+    out: sheathing + girt + Math.max(siding, trim) };
+}
+
+function drawOpeningSchedule(s) {
+  const spec = state.spec, ops = state.openings;
+  const area = sheetArea(s, { notes: false });
+  const L = wallLayers(spec);
+
+  /* ---- the schedule, across the top ---- */
+  const rows = ops.map((o) => {
+    const st = stockFor(o);
+    const h = sizeHeader(st.w, o.wall, spec);
+    return [
+      openingTag(o, ops),
+      o.kind === 'window' ? 'Window' : o.kind === 'man' ? 'Man door' : 'Overhead',
+      WALLS[o.wall].label,
+      `${fmtIn(st.w)} × ${fmtIn(st.h)}`,
+      fmtFt(o.head),
+      fmtFt(o.head - st.h),
+      h.over ? 'ENGINEERED' : h.label,
+      st.resized ? 'Resized from stock' : (st.note ? 'From the sketch' : 'Stock unit'),
+    ];
+  });
+  const schedH = schedule(s, area.x, area.y + 8, area.w, 'Door and window schedule',
+    [{ h: 'Tag', w: 8 }, { h: 'Type', w: 14 }, { h: 'Wall', w: 12 },
+      { h: 'Rough opening', w: 20, mono: true }, { h: 'Head', w: 12, mono: true },
+      { h: 'Sill', w: 12, mono: true }, { h: 'Header', w: 20 }, { h: 'Notes', w: 22 }],
+    rows) - area.y;
+
+  s.text(area.x, area.y + schedH + 14,
+    'Rough openings are holes, not units. Confirm every one against the unit in hand before '
+    + 'the header is cut — the sketch listed these as openings and nothing has re-measured them.',
+    { size: 5.9, anchor: 'start', fill: 'var(--ink-2)' });
+
+  /* ---- the three details, across the bottom ---- */
+  /* Detailed at the widest window, because that is the one with the deepest
+     header; the schedule gives the header for each. */
+  const typ = ops.filter((o) => o.kind === 'window')
+    .sort((a, b) => stockFor(b).w - stockFor(a).w)[0] || ops[0];
+  const tSt = typ ? stockFor(typ) : { w: 60, h: 36 };
+  const hdr = typ ? sizeHeader(tSt.w, typ.wall, spec) : null;
+  const hd = hdr && hdr.depth ? hdr.depth : 9.25;
+
+  const dTop = area.y + schedH + 32;
+  const dH = area.bottom - 22 - dTop;
+  const colW = area.w / 3;
+  const uLo = -(L.out + 4), uHi = L.T + L.inner + 5;
+  const vRange = Math.max(hd + 16, 26);
+  const key = s.pickScale(uHi - uLo, vRange, colW - 52, dH - 24, '3');
+  const f = SCALES.find((z) => z.k === key).f * PT;
+  /* However much wall the column has room for, so the skin runs off the top
+     and bottom of each detail rather than stopping in mid-air. */
+  const vSpan = (dH - 24) / f;
+
+  const views = [
+    { mark: '1', name: 'Head', which: 'head', focus: hd / 2 },
+    { mark: '2', name: 'Jamb — plan cut', which: 'jamb', focus: 3 },
+    { mark: '3', name: 'Sill', which: 'sill', focus: 0 },
+  ];
+  /* Everything is called out to the right, into a gutter wide enough to wrap
+     into — a leader reaching left runs into the detail next door. */
+  const gutter = colW - ((uHi - uLo) * f) - 30;
+  views.forEach((v, i) => {
+    const x = area.x + colW * i + 12;
+    /* Each detail is a window on the same wall, so it gets clipped like one —
+       otherwise the bands run into the title line under them. */
+    s.clipTo(x - 6, dTop, colW - 12, dH - 20);
+    const { X, Y } = sectionFrame(s, x, dTop, key, uLo, uHi, v.focus + vSpan / 2);
+    headJambSill(s, spec, L, X, Y, v.which, { hd, uLo, uHi, vSpan, gutter });
+    s.layerOff();
+    s.viewTitle(x, dTop + dH - 2, v.name, key, v.mark);
+  });
+
+  s.text(area.x, area.bottom - 6,
+    `Details typical at ${typ ? openingTag(typ, ops) : 'each window'}; `
+    + `${spec.wallSkin === 'girts' ? `${spec.girtSize} girts and ` : 'OSB sheathing and '}`
+    + `${spec.siding === 'metal' ? 'metal panel' : 'lap siding'}. `
+    + 'Doors are the same head and jamb with a threshold in place of the sill.',
+    { size: 5.9, anchor: 'start', fill: 'var(--ink-3)' });
+
+  s.scale = SCALES.find((z) => z.k === key);
+}
+
+/* All three details are the same wall drawn three ways, so they are one
+   function: the layers do not change, only what is cut through them. */
+function headJambSill(s, spec, L, X, Y, which, o) {
+  const T = L.T, uHi = o.uHi, uLo = o.uLo;
+  const wood = (u, v, w, h) => {
+    s.rect(X(u), Y(v), s.mlen(w), s.mlen(h), LW.cut);
+    s.hatch(X(u), Y(v), s.mlen(w), s.mlen(h), 'wood');
+  };
+  /* The skin, drawn as continuous bands past whatever is cut. */
+  const half = (o.vSpan || 40) / 2 + 6;
+  void uLo;
+  const skin = (v0, v1) => {
+    v0 = Math.min(v0, -half); v1 = Math.max(v1, half);
+    if (L.sheathing) s.rect(X(-L.sheathing), Y(v1), s.mlen(L.sheathing), s.mlen(v1 - v0), LW.medium);
+    if (L.girt) {
+      /* Girts run horizontally, so they are cut in the head and sill and seen
+         in the jamb — drawn dashed where they are behind the cut. */
+      s.rect(X(-L.sheathing - L.girt), Y(v1), s.mlen(L.girt), s.mlen(v1 - v0),
+        which === 'jamb' ? LW.thin : LW.medium,
+        which === 'jamb' ? { dash: '3 2', stroke: 'var(--ink-3)' } : null);
+    }
+    s.rect(X(-L.out), Y(v1), s.mlen(L.siding), s.mlen(v1 - v0), LW.heavy);
+    if (L.inner) s.rect(X(T), Y(v1), s.mlen(L.inner), s.mlen(v1 - v0), LW.medium);
+  };
+
+  if (which === 'head') {
+    const hd = o.hd;
+    /* Cripples over the header, seen beyond the cut rather than cut through —
+       lighter, because a section only draws heavy what the knife went through. */
+    for (let v = hd + 3; v < hd + half; v += spec.studSpacing / 4) {
+      s.rect(X(0), Y(v + 1.5), s.mlen(T), s.mlen(1.5), LW.light, { stroke: 'var(--ink-3)' });
+    }
+    /* header, sitting under the plate above and over the opening */
+    wood(0, hd, T, hd);
+    if (spec.studSize === '2x6') {
+      /* Built-up headers come out thinner than the wall, so they get packed
+         out — which is why the schedule reports the plies. */
+      s.line(X(T - 1), Y(hd), X(T - 1), Y(0), LW.thin, { stroke: 'var(--ink-3)', dash: '2 2' });
+    }
+    skin(-half, hd + half);
+    /* the unit head, below the header */
+    s.rect(X(0.25), Y(0), s.mlen(2.5), s.mlen(1.5), LW.heavy, { fill: 'var(--surface-2)' });
+    s.line(X(0.6), Y(-1.5), X(0.6), Y(-8), LW.heavy);      // the glass, going down
+    /* head trim and the flashing over it, under the siding */
+    s.rect(X(-L.sheathing - L.girt - L.trim), Y(1.5), s.mlen(L.trim), s.mlen(3.5), LW.medium);
+    s.path(`M${fx(X(-L.sheathing))},${fx(Y(4.5))} L${fx(X(-L.sheathing))},${fx(Y(2.0))} `
+      + `L${fx(X(-L.out - 1))},${fx(Y(2.0))} L${fx(X(-L.out - 1))},${fx(Y(1.2))}`,
+      LW.heavy, { stroke: 'var(--keel)' });
+    s.layerOff();
+    const G = { size: 5.2, width: o.gutter };
+    if (L.girt) {
+      s.callout(-L.girt / 2, hd + 4, uLen(X, uHi, -L.girt / 2) + 18, -46,
+        `${spec.girtSize} GIRT — BLOCK SOLID OVER THE HEADER`, G);
+    }
+    s.callout(-L.out + L.siding / 2, hd * 0.55, uLen(X, uHi, -L.out + L.siding / 2) + 18, -28,
+      spec.siding === 'metal' ? 'METAL PANEL OVER THE TRIM' : 'LAP SIDING OVER THE TRIM', G);
+    s.callout(-L.out + 0.4, 2.0, uLen(X, uHi, -L.out + 0.4) + 18, 44,
+      'Z-FLASHING OVER THE TRIM AND BEHIND THE SIDING',
+      { ...G, weight: 700, fill: 'var(--keel)' });
+    s.callout(-L.sheathing - L.girt - L.trim / 2, 3.2,
+      uLen(X, uHi, -L.sheathing - L.girt - L.trim / 2) + 18, 76,
+      '1x4 TRIM, SEALED TO THE UNIT', G);
+    s.callout(T / 2, hd / 2, 26, -8,
+      `HEADER — SEE SCHEDULE${spec.studSize === '2x6' ? ', PACKED OUT TO THE WALL' : ''}`, G);
+    s.callout(1.5, -3, 26, 20, 'UNIT HEAD, SHIMMED AND SEALED', G);
+    s.dimLine(X(uHi) + 16, Y(hd), X(uHi) + 16, Y(0), fmtIn(hd));
+  } else if (which === 'jamb') {
+    /* A plan cut: v runs ALONG the wall, and up the page is outside. */
+    wood(0, 10, T, 1.5);                                   // king stud
+    wood(0, 8.5, T, 1.5);                                  // jack stud
+    skin(-half, half);
+    s.rect(X(0.25), Y(7), s.mlen(2.5), s.mlen(1.5), LW.heavy, { fill: 'var(--surface-2)' });
+    s.line(X(0.6), Y(5.5), X(0.6), Y(-10), LW.heavy);
+    s.rect(X(-L.sheathing - L.girt - L.trim), Y(8.5), s.mlen(L.trim), s.mlen(3.5), LW.medium);
+    s.layerOff();
+    const G = { size: 5.2, width: o.gutter };
+    s.callout(T / 2, 9.25, 26, -30, 'KING STUD FULL HEIGHT', G);
+    s.callout(T / 2, 7.75, 26, 0, 'JACK STUD UNDER THE HEADER', G);
+    s.callout(-L.out + L.siding / 2, 2, uLen(X, uHi, -L.out + L.siding / 2) + 18, 30,
+      'SEALANT AT THE TRIM, BOTH SIDES', G);
+    if (L.girt) {
+      s.callout(-L.sheathing - L.girt / 2, -6,
+        uLen(X, uHi, -L.sheathing - L.girt / 2) + 18, 8,
+        'GIRTS BEYOND — BLOCK SOLID AT THE JAMB', G);
+    }
+  } else {
+    /* sill */
+    wood(0, 0, T, 1.5);                                    // rough sill
+    wood(0, -1.5, T, 9);                                   // cripples below
+    skin(-half, half);
+    s.rect(X(0.25), Y(2.6), s.mlen(2.5), s.mlen(1.1), LW.heavy, { fill: 'var(--surface-2)' });
+    s.line(X(0.6), Y(8), X(0.6), Y(3.7), LW.heavy);
+    /* the pan, sloped out, turned up at the back — the one thing a sill has
+       to get right */
+    s.path(`M${fx(X(T - 0.5))},${fx(Y(2.4))} L${fx(X(T - 0.5))},${fx(Y(0.9))} `
+      + `L${fx(X(-L.sheathing))},${fx(Y(0.4))} L${fx(X(-L.out - 1))},${fx(Y(-0.4))}`,
+      LW.heavy, { stroke: 'var(--keel)' });
+    /* sill trim with a drip under it */
+    s.rect(X(-L.sheathing - L.girt - L.trim), Y(0.4), s.mlen(L.trim + 0.6), s.mlen(3), LW.medium);
+    s.line(X(-L.out - 1.35), Y(-2.6), X(-L.sheathing - L.girt), Y(-2.6), LW.medium);
+    s.layerOff();
+    const G = { size: 5.2, width: o.gutter };
+    s.callout(-L.out + 0.4, 0.2, uLen(X, uHi, -L.out + 0.4) + 18, -34,
+      'SLOPED SILL PAN, TURNED UP AT THE BACK AND THE ENDS',
+      { ...G, weight: 700, fill: 'var(--keel)' });
+    s.callout(T / 2, 0.75, 26, -4, 'ROUGH SILL', G);
+    s.callout(T / 2, -5, 26, 18, `CRIPPLES AT ${fmtIn(spec.studSpacing)} O.C.`, G);
+    s.callout(-L.out - 1.35, -2.6, uLen(X, uHi, -L.out - 1.35) + 18, 44,
+      'DRIP CUT UNDER THE SILL TRIM', G);
+  }
+}
+
+/* How far right of a model u the detail's right edge is, in points — so a
+   leader from the outside face can reach past the whole cut before it turns. */
+function uLen(X, uHi, u) { return X(uHi) - X(u); }
 
 /* ================================================================
    E1.0 — Electrical plan
@@ -1411,6 +1659,7 @@ const PLANS = [
   { id: 'truss', number: 'S3.1', title: 'Truss shop drawing', draw: drawTrussShop,
     scaleLabel: 'As noted' },
   { id: 'elev', number: 'A2.0', title: 'Elevations', draw: drawElevations },
+  { id: 'sched', number: 'A6.0', title: 'Door & window schedule', draw: drawOpeningSchedule },
   { id: 'elec', number: 'E1.0', title: 'Electrical plan', draw: drawElectricalPlan },
 ];
 

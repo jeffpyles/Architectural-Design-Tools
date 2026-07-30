@@ -170,6 +170,10 @@ Set the frame rather than wrapping it in local helpers. A section wants heights 
 lands somewhere else on the sheet, because they all go through `s.my()`. Pass
 `{ flipY: true }` and let the frame own the direction.
 
+`s.callout()` takes a `width` and wraps to it. Use it — an unwrapped note beside a
+detail is a line of type running off the edge of the sheet, and at 5-point type it takes
+a screenshot to notice.
+
 `s.clipTo(x, y, w, h)` cuts everything drawn after it to a window, which is what lets a
 section be *broken*: two bands of the same drawing, each showing its own slice, with the
 wall running off the edge of both rather than through the gap. Annotation should come out

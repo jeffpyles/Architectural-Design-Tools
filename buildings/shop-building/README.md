@@ -166,7 +166,16 @@ a plan of.
 | **S3.0** | Roof framing plan | every truss, ridge, purlins, roof-plane bracing bays |
 | **S3.1** | Truss shop drawing | the truss at scale, every member length and cut angle, gussets drawn at cut size, heel/peak/panel-point joints blown up to nail from |
 | **A2.0** | Elevations | all four, openings tagged to the schedule |
+| **A6.0** | Door & window schedule | every opening with its rough opening, head, sill and header, plus head, jamb and sill details drawn from the wall build-up you have selected |
 | **E1.0** | Electrical plan | receptacles, switches, strip lights, sub-panel, with a legend drawn by the same routine as the symbols |
+
+The schedule and the details share a sheet on purpose: the head detail is only true if
+the header in the schedule is the header that gets cut, and both come off the same
+`sizeHeader` call. The three details are drawn from `wallLayers(spec)`, so switching from
+girts to sheathing or from metal panel to lap siding redraws them rather than leaving a
+drawing of the old assembly on the sheet — and a check asserts the drawn extent holds its
+own trim in all four combinations, which is the bug that first put a 1x4 outside the edge
+of the detail.
 
 Print at **100%** — no "fit to page" — and a scale rule reads them. Paper is selectable
 (letter, tabloid, A4, A3) and every sheet picks the largest architectural scale that

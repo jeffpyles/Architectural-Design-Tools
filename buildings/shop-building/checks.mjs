@@ -3,8 +3,8 @@
    that used to ship in the page as presets. They live here now — they are
    regression material, not something a user should have to scroll past. */
 
-export const api = ['LUMBER', 'partVolume', 'buildModel', 'aabb', 'cylinderPart', 'SONOTUBE', 'evalMember', 'leanToUnder',
-  'gussetPlan', 'anchorBoltPlan', 'leanToPostPlan', 'planExtent', 'openingTag', 'PLANS',
+export const api = ['wallLayers', 'LUMBER', 'partVolume', 'buildModel', 'aabb',
+  'cylinderPart', 'SONOTUBE', 'evalMember', 'leanToUnder', 'gussetPlan', 'anchorBoltPlan', 'leanToPostPlan', 'planExtent', 'openingTag', 'PLANS',
   'auditBuilding', 'trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
   'leanToDesign', 'leanToDrift', 'seismicShear', 'windPressure',
   'SOIL', 'REBAR', 'wallLineLoads', 'footingDesign', 'slabDesign', 'postFooting',
@@ -598,6 +598,35 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
     if (new Set(tags).size !== tags.length) fail(`duplicate opening tags: ${tags.join(', ')}`);
     if (tags.some((t) => /\?/.test(t))) fail(`an opening got no tag: ${tags.join(', ')}`);
     log(`  ok  opening tags ${tags.join(', ')}`);
+
+    /* The schedule is what gets ordered from, so every row has to be a row
+       somebody can order against: a real tag, a real opening, a real header. */
+    for (const o of openings) {
+      const st = A.stockFor(o);
+      const h = A.sizeHeader(st.w, o.wall, spec);
+      if (!(st.w > 0 && st.h > 0)) fail(`${A.openingTag(o, openings)} has no rough opening`);
+      if (o.head - st.h < -0.01) fail(`${A.openingTag(o, openings)} has a sill below the slab`);
+      if (!h.over && !(h.depth > 0)) fail(`${A.openingTag(o, openings)} has a header with no depth`);
+    }
+
+    /* The three details are drawn from the wall build-up, so the build-up has
+       to be a real one — and it has to hold its own trim, which is the bug
+       that put a 1x4 outside the edge of the detail. */
+    for (const skin of ['girts', 'sheathing']) {
+      for (const side of ['metal', 'lap']) {
+        const L = A.wallLayers({ ...spec, wallSkin: skin, siding: side });
+        if (L.T !== A.LUMBER[spec.studSize].d) fail(`${skin}/${side}: wall thickness is wrong`);
+        if (skin === 'girts' ? !L.girt : !L.sheathing) fail(`${skin}: the wall system did not take`);
+        if (skin === 'girts' ? L.sheathing : L.girt) fail(`${skin}: both wall systems came back`);
+        if (L.out < L.sheathing + L.girt + L.trim - 1e-9) {
+          fail(`${skin}/${side}: the trim stands out past the drawn extent`);
+        }
+        if (L.out < L.sheathing + L.girt + L.siding - 1e-9) {
+          fail(`${skin}/${side}: the siding stands out past the drawn extent`);
+        }
+      }
+    }
+    log('  ok  the wall build-up holds its own trim in all four skin combinations');
 
     /* Sheet numbers are how you ask for a sheet, so those have to be unique too. */
     const nums = A.PLANS.map((d) => d.number);

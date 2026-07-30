@@ -221,16 +221,24 @@ function Sheet(opts) {
     s.circle(x0, y0, 1.1, 0, { fill: 'var(--ink-2)' });
     s.tagAt(x2 + Math.sign(dx || 1) * 6.6, y1, s.keynote(text));
   };
-  /* Or just say it, where it is short enough to fit. */
+  /* Or just say it, where it is short enough to fit. `width` wraps it, which
+     is the difference between a note beside a detail and a line of type
+     running off the edge of the sheet. */
   s.callout = (mxv, myv, dx, dy, text, o) => {
+    const opt = o || {};
     const x0 = s.mx(mxv), y0 = s.my(myv);
     const x1 = x0 + dx, y1 = y0 + dy;
     s.line(x0, y0, x1, y1, LW.thin, { stroke: 'var(--ink-2)' });
     s.circle(x0, y0, 1.1, 0, { fill: 'var(--ink-2)' });
     const right = dx >= 0;
     s.line(x1, y1, x1 + (right ? 8 : -8), y1, LW.thin, { stroke: 'var(--ink-2)' });
-    s.text(x1 + (right ? 10 : -10), y1 + 2, text,
-      { size: 5.8, anchor: right ? 'start' : 'end', fill: 'var(--ink-2)', ...(o || {}) });
+    const size = opt.size || 5.8;
+    const lines = opt.width ? wrapText(text, opt.width, size) : [text];
+    /* Centre the block on the elbow, so a two-line note does not drift down
+       away from the thing it is pointing at. */
+    const top = y1 + 2 - (lines.length - 1) * (size * 1.28) / 2;
+    lines.forEach((ln, i) => s.text(x1 + (right ? 10 : -10), top + i * size * 1.28, ln,
+      { anchor: right ? 'start' : 'end', fill: 'var(--ink-2)', ...opt, size }));
   };
 
   /* A window on the page. Everything drawn while it is on is cut to it, which
