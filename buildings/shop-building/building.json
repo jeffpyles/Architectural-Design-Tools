@@ -2,7 +2,7 @@
   "name": "Shop Building",
   "title": "Shop Building — 24' × 26'",
   "blurb": "A 24' × 26' stick-framed shop with a 3/12 gable, built stud by stud from a pair of pencil sketches. Move the openings and watch the headers, the racking check and the takeoff follow.",
-  "facts": ["3D model", "truss cut list", "bracing check", "material takeoff", "lean-to solver"],
+  "facts": ["3D model", "truss cut list", "bracing check", "slab & footing calcs", "material takeoff", "lean-to solver"],
   "status": "in use",
   "codePrefix": "SHOP1-"
 }

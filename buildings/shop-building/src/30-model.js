@@ -37,12 +37,20 @@ function buildModel(spec, openings) {
   const loads = roofLoads(spec);
 
   /* ---------- 1. Site & slab ---------- */
+  const sl = slabDesign(spec);
   const over = 12;   // gravel runs past the turndown
   add('site', 'site', 'gravel', 'Compacted base',
     boxPart([W / 2, -spec.slabThickness - spec.gravelDepth / 2, D / 2],
-      [W + over * 2, spec.gravelDepth, D + over * 2]));
+      [W + over * 2, spec.gravelDepth, D + over * 2]),
+    { note: `${fmtIn(spec.gravelDepth)} of ${'¾'}" minus, compacted in lifts` });
 
-  add('site', 'slab', 'concrete', 'Slab, 4"',
+  /* Vapour retarder between the base and the slab. Drawn thick enough to see;
+     weighed per square foot, because 10 mil is not a thickness you can draw. */
+  add('site', 'site', 'wrap', '10 mil vapour retarder',
+    boxPart([W / 2, -spec.slabThickness - 0.1, D / 2], [W + 12, 0.2, D + 12]),
+    { psf: 0.05, area: (W + 12) * (D + 12) / 144 });
+
+  add('site', 'slab', 'concrete', `Slab, ${fmtIn(spec.slabThickness)}`,
     boxPart([W / 2, -spec.slabThickness / 2, D / 2], [W, spec.slabThickness, D]),
     { note: `${fmtN(W * D / 144)} sf` });
 
@@ -54,6 +62,40 @@ function buildModel(spec, openings) {
   add('site', 'slab', 'concrete', 'Turndown footing', boxPart([W / 2, yT, D - tw / 2], [W, hT, tw]));
   add('site', 'slab', 'concrete', 'Turndown footing', boxPart([tw / 2, yT, D / 2], [tw, hT, D - tw * 2]));
   add('site', 'slab', 'concrete', 'Turndown footing', boxPart([W - tw / 2, yT, D / 2], [tw, hT, D - tw * 2]));
+
+  /* Slab steel. Drawn at bar diameter and at mid-depth, which is where it has
+     to end up to do anything — the takeoff counts linear feet off these, so a
+     spacing change in the spec changes what you buy. */
+  if (spec.slabReinf === 'rebar') {
+    const dia = sl.bar.area ? REBAR[sl.bar.size].d : 0.5;
+    const yBar = -spec.slabThickness / 2;
+    const mat = (n, span) => Array.from({ length: n },
+      (_, i) => 3 + (span - 6) * (n === 1 ? 0.5 : i / (n - 1)));
+    for (const z of mat(Math.max(2, Math.floor((D - 6) / sl.spacing) + 1), D)) {
+      add('site', 'rebar', 'steelDk', `${sl.bar.size} slab bar`,
+        boxPart([W / 2, yBar, z], [W - 6, dia, dia]),
+        { len: W - 6, steel: sl.bar.key, lbft: sl.bar.lbft });
+    }
+    for (const x of mat(Math.max(2, Math.floor((W - 6) / sl.spacing) + 1), W)) {
+      add('site', 'rebar', 'steelDk', `${sl.bar.size} slab bar`,
+        boxPart([x, yBar, D / 2], [dia, dia, D - 6]),
+        { len: D - 6, steel: sl.bar.key, lbft: sl.bar.lbft });
+    }
+    /* Two continuous bars in the bottom of the turndown, all the way round. */
+    const tb = sl.turndownBar, yTB = -spec.turndownDepth + 3;
+    for (let i = 0; i < sl.turndownBars; i++) {
+      const inset = 3 + i * (tw - 6);
+      for (const [c, s, len] of [
+        [[W / 2, yTB, inset], [W, tb.d, tb.d], W],
+        [[W / 2, yTB, D - inset], [W, tb.d, tb.d], W],
+        [[inset, yTB, D / 2], [tb.d, tb.d, D], D],
+        [[W - inset, yTB, D / 2], [tb.d, tb.d, D], D],
+      ]) {
+        add('site', 'rebar', 'steelDk', `${tb.size} turndown bar`, boxPart(c, s),
+          { len, steel: `rebar${tb.size}`, lbft: tb.lbft });
+      }
+    }
+  }
 
   // Apron at the overhead door
   for (const o of openings) {
@@ -337,15 +379,31 @@ function buildModel(spec, openings) {
           [lt.beam.thickness, lt.beam.depth, lt.run])),
       { len: lt.run, size: lt.beam.label });
 
-    // Posts and their piers
+    /* Posts and their pads. The pad is sized by postFooting rather than drawn
+       at whatever looked right: an interior post takes twice what an end one
+       does, because the beam is spliced over them as simple spans. */
+    const pf = postFooting(spec);
     for (let i = 0; i < lt.posts; i++) {
       const u = 2.75 + (lt.run - 5.5) * (i / (lt.posts - 1));
       const pc = at(P - lt.beam.thickness / 2, lt.beamBot / 2, u);
       add('trusses', 'leanto', 'firDark', '6x6 post',
         boxPart([pc[0], lt.beamBot / 2, pc[2]], [5.5, lt.beamBot, 5.5]),
         { len: lt.beamBot, size: '6x6' });
-      add('site', 'slab', 'concrete', 'Lean-to pier',
-        boxPart([pc[0], -18, pc[2]], [18, 36, 18]));
+      if (!pf) continue;
+      const end = i === 0 || i === lt.posts - 1;
+      const p = end ? pf.endPad : pf.worstPad;
+      /* Bottom at frost depth, so the pier stem makes up whatever is left
+         between the top of the pad and the underside of the post. */
+      const padTop = -(pf.depth - pf.thickness);
+      add('site', 'slab', 'concrete',
+        `Lean-to pad, ${fmtIn(p.side)} sq × ${fmtIn(pf.thickness)}`,
+        boxPart([pc[0], padTop - pf.thickness / 2, pc[2]], [p.side, pf.thickness, p.side]),
+        { note: `${fmtN(end ? pf.end : pf.interior)} lb, ${fmtN(p.pressure)} psf` });
+      const stem = -padTop;
+      if (stem > 0.5) {
+        add('site', 'slab', 'concrete', 'Lean-to pier',
+          boxPart([pc[0], -stem / 2, pc[2]], [12, stem, 12]));
+      }
     }
 
     // Purlins and the roof panel, on the rafters

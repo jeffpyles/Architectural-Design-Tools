@@ -133,7 +133,9 @@ parts. Nothing asserts — a slab legitimately weighs what a slab weighs — but
 psf column gives a mis-weighed sheet away at a glance.
 
 Parts carrying `steel` (a key into `STEEL`) and `len` also roll up into a steel
-purchase table.
+purchase table. `STEEL` holds tube and I sections computed from their geometry, and the
+`REBAR` sizes, which carry their nominal ASTM weights instead — what you buy either way
+is linear feet of a named size, so they share the table.
 
 ## What the core already gives you
 

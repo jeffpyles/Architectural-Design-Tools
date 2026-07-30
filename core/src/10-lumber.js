@@ -133,3 +133,23 @@ const STEEL = {
   'i1.5x6x120':   { ...ibeamSection(1.5, 6, 0.120), label: '1½×6×.120 I-beam', Fy: 36 },
 };
 for (const s of Object.values(STEEL)) s.lbft = s.area * STEEL_DENSITY * 12;
+
+/* ---- deformed bar --------------------------------------------------------
+   Slab and footing steel. Areas and weights are the nominal ASTM A615 values
+   rather than computed ones — a deformed bar weighs slightly more than its
+   nominal diameter suggests, because of the deformations, and the mill sells
+   it by the nominal figure. Bars join STEEL after the loop above so those
+   stated weights survive, which also puts them in the same purchase table:
+   what you buy is still linear feet of a named size. */
+const REBAR = {
+  '#3': { d: 0.375, area: 0.11, lbft: 0.376 },
+  '#4': { d: 0.500, area: 0.20, lbft: 0.668 },
+  '#5': { d: 0.625, area: 0.31, lbft: 1.043 },
+  '#6': { d: 0.750, area: 0.44, lbft: 1.502 },
+};
+for (const [size, b] of Object.entries(REBAR)) {
+  b.size = size;
+  b.label = `${size} rebar, grade 60`;
+  b.Fy = 60;
+  STEEL[`rebar${size}`] = b;
+}

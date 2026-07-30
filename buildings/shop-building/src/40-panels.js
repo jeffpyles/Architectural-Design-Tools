@@ -311,6 +311,259 @@ function renderReview() {
   }
 }
 
+/* ---- foundation ----
+   Two questions that have nothing to do with each other, which is the point of
+   putting them on one panel. The footing is asked what the building weighs and
+   answers "not much" — it gets sized by frost and by detailing. The slab is
+   asked the same thing and doesn't care: it gets sized by whatever drives on
+   it, and the number that decides it is not a load but a detail, whether the
+   joints carry shear across themselves. */
+function renderFoundation() {
+  const p = $('#panel-foundation');
+  p.textContent = '';
+  const s = state.spec;
+  const fd = footingDesign(s);
+  const sl = slabDesign(s);
+  const pf = postFooting(s);
+  const ab = anchorSchedule(s, state.openings);
+
+  /* A ratio bar, the same shape the Review tab uses: capacity over demand,
+     1.00 is the line.
+
+     `muted` greys one out. A case that has been designed away — the free-edge
+     wheel, once the joints are doweled — still belongs on screen, because
+     seeing what the detail bought is the point. But a red bar next to a
+     sentence saying it does not apply reads as a failure, and it isn't one. */
+  const meter = (label, ratio, sub, cap, muted) => {
+    const row = el('div', 'meter-row');
+    const top = el('div', 'meter-top');
+    const r = el('span', null, `${fmtN(Math.min(ratio, 99), 2)} ×`);
+    const col = muted ? 'var(--ink-3)'
+      : ratio < 1 ? 'var(--keel)' : ratio < 1.15 ? 'var(--warn)' : 'var(--ok)';
+    r.style.cssText = 'font-family:var(--f-mono);font-weight:700;'
+      + `font-variant-numeric:tabular-nums;color:${col}`;
+    const lab = el('span', null, label);
+    if (muted) lab.style.color = 'var(--ink-3)';
+    top.append(lab, r);
+    const m = el('div', 'meter' + (muted ? '' : ratio < 1 ? ' short' : ratio < 1.15 ? ' tight' : ''));
+    const fill = el('i');
+    fill.style.width = `${Math.max(2, Math.min(100, ratio / (cap || 2) * 100))}%`;
+    if (muted) fill.style.background = 'var(--ink-3)';
+    m.append(fill);
+    const sb = el('div', 'meter-sub'); sb.textContent = sub;
+    row.append(top, m, sb);
+    p.append(row);
+    return row;
+  };
+
+  p.append(note(`${fd.soil.label} at ${fmtN(fd.soil.q)} psf, which is the presumptive value the `
+    + 'code lets you assume with no soils report — not a number anybody measured here. '
+    + `Subgrade modulus ${fmtN(fd.soil.k)} pci with a compacted base over it, which is what the `
+    + 'slab calculation needs.'));
+
+  /* ---- the perimeter ---- */
+  p.append(el('h3', null, 'Perimeter turndown'));
+  const kv = el('dl', 'kv');
+  for (const [k, v] of [
+    ['Under the bearing walls', `${fmtN(fd.lines.bearing.total)} plf`],
+    ['— of that, roof', `${fmtN(fd.lines.bearing.roof)} plf`],
+    ['— of that, wall', `${fmtN(fd.lines.bearing.wall)} plf`],
+    ['Under the gable ends', `${fmtN(fd.lines.gable.total)} plf`],
+    ['Width bearing asks for', fmtIn(fd.bearingWidth)],
+    ['Width detailing asks for', fmtIn(fd.detailWidth)],
+    ['Depth frost asks for', fmtIn(fd.frostDepth)],
+    ['As drawn', `${fmtIn(fd.builtWidth)} × ${fmtIn(fd.builtDepth)}`],
+  ]) kv.append(el('dt', null, k), el('dd', null, v));
+  p.append(kv);
+
+  meter('Width', fd.builtWidth / fd.width,
+    `${fmtIn(fd.builtWidth)} poured against ${fmtIn(fd.width)} required — ${fd.governs} governs`, 2.5);
+  meter('Depth', fd.builtDepth / fd.depth,
+    `${fmtIn(fd.builtDepth)} against ${fmtIn(fd.depth)}: ${fmtIn(s.frostDepth)} of frost cover `
+    + `below grade plus the ${fmtIn(s.slabThickness)} slab`, 1.6);
+  meter('Bearing pressure', fd.soil.q / fd.peak,
+    `${fmtN(fd.peak)} psf at the outside face against ${fmtN(fd.soil.q)} allowed. `
+    + `The wall lands ${fmtIn(fd.ecc)} off the centre of the strip, so ${fmtN(fd.avg)} psf `
+    + 'average understates it.', 4);
+
+  p.append(note(`${fmtN(fd.lines.bearing.total)} plf is a light building. On ${fmtN(fd.soil.q)} psf `
+    + `it wants ${fmtIn(fd.bearingWidth)} of bearing width — about a quarter of what gets poured. `
+    + `The ${fmtIn(fd.builtWidth)} is there to land a plate on, to hold a ½" bolt with its edge `
+    + 'distance, and to carry two bars in the bottom. Bearing is not the constraint, so a heavier '
+    + 'roof or taller walls will not change this trench.'));
+
+  /* ---- the slab ---- */
+  p.append(el('h3', null, 'Slab'));
+  p.append(note(`Westergaard: a ${fmtN(s.wheelLoad)} lb wheel at ${s.tirePressure} psi on an elastic `
+    + `plate over an elastic subgrade — a ${fmtN(sl.a, 2)}" contact radius. `
+    + `${fmtN(sl.fc)} psi concrete ruptures at ${fmtN(sl.fr)} psi in bending, and at a factor of `
+    + `${sl.FS} that leaves ${fmtN(sl.allow)} psi to work to. `
+    + 'The building has nothing to do with this number.'));
+
+  p.append(table(['Thickness', 'Mid-panel', 'At a free edge'],
+    sl.rows.map((r) => {
+      const mark = (v, ok) => `${fmtN(v)}${ok ? '' : ' ✕'}`;
+      return [fmtIn(r.h) + (Math.abs(r.h - s.slabThickness) < 0.001 ? ' ←' : ''),
+        mark(r.interior, r.intOK), mark(r.edge, r.edgeOK)];
+    }), [false, true, true]));
+  p.append(note(`Stress in psi against ${fmtN(sl.allow)} allowable; a ✕ is over, and ← is the `
+    + 'thickness currently drawn. The two columns are the same wheel in two places: in the middle '
+    + 'of a panel, where the concrete works in both directions, and at a free edge, where it can '
+    + 'only work in one and the stress is roughly double.'));
+
+  meter('As drawn, mid-panel', sl.allow / sl.at.interior,
+    `${fmtIn(s.slabThickness)} slab, ${fmtN(sl.at.interior)} psi of ${fmtN(sl.allow)}`, 2.5);
+  meter(sl.doweled ? 'Free edge — designed away' : 'As drawn, free edge',
+    sl.allow / sl.at.edge,
+    `${fmtN(sl.at.edge)} psi of ${fmtN(sl.allow)}`
+    + (sl.doweled
+      ? ' — what a wheel would do at a plain sawcut. Doweling the joints is what takes this case '
+        + 'off the table, so it is shown grey rather than short.'
+      : ' — and every sawcut joint is one of these'), 2.5, sl.doweled);
+
+  const decide = el('dl', 'kv');
+  for (const [k, v] of [
+    ['If only the middle mattered', sl.interiorOnly ? fmtIn(sl.interiorOnly.h) : 'over 8"'],
+    ['If every joint is a free edge', sl.edgeToo ? fmtIn(sl.edgeToo.h) : 'over 8"'],
+    ['Joints as specified', sl.doweled ? 'doweled or keyed' : 'plain sawcut'],
+    ['So the minimum is', sl.min ? fmtIn(sl.min.h) : 'more than 8"'],
+    ['Drawn at', fmtIn(s.slabThickness)],
+  ]) decide.append(el('dt', null, k), el('dd', null, v));
+  p.append(decide);
+  p.append(note(sl.interiorOnly && sl.edgeToo && sl.edgeToo.h > sl.interiorOnly.h
+    ? `The whole decision is ${fmtIn(sl.edgeToo.h - sl.interiorOnly.h)} of concrete over `
+      + `${fmtN(s.width * s.depth / 144)} sf, and it turns on a detail rather than a load: `
+      + 'put smooth dowels or a key across each contraction joint and the joints stop being free '
+      + 'edges. Dowels are cheaper. The perimeter is not a free edge either way — the turndown '
+      + 'is poured monolithic with the slab and holds it up.'
+    : 'At this wheel load the edge case and the interior case land on the same thickness, so the '
+      + 'joint detail is not what decides it. Dowel them anyway: an undoweled joint faults over '
+      + 'time whether or not the concrete cracks.'));
+
+  /* ---- steel ---- */
+  p.append(el('h3', null, 'Reinforcement'));
+  if (s.slabReinf === 'rebar') {
+    p.append(table(['Bar', 'Spacing', 'Provides', 'Steel'],
+      sl.barOptions.map((o) => [
+        o.size + (o.size === sl.bar.size ? ' ←' : ''),
+        `${fmtIn(o.at)} o.c.`,
+        `${fmtN(o.provided, 3)} in²/ft`,
+        `${fmtN(o.psf, 2)} lb/sf`,
+      ]), [false, true, true, true]));
+    p.append(note(`← is what the model draws. ${fmtN(sl.asReq, 3)} in² per foot required — 0.0018 of a `
+      + `${fmtIn(s.slabThickness)} section, grade 60, each way. Every row above satisfies it, `
+      + 'so the choice is about placing rather than strength: wider spacing is fewer pieces to '
+      + 'cut and tie, and a bar big enough to reach 18" in a slab this thin buys steel you have '
+      + 'no use for. Subgrade drag wants about a tenth of this, so it is not what sets it.'));
+  } else {
+    p.append(note(s.slabReinf === 'mesh'
+      ? 'Welded wire mesh. Order flat sheets, not rolls, and chair them: rolled mesh ends up on '
+        + 'the subgrade under a boot and does nothing at all.'
+      : 'Fibre only. That controls plastic shrinkage in the first day; it is not a substitute for '
+        + 'steel holding a shrinkage crack closed a month later, and it does nothing at a joint.'));
+  }
+  p.append(note('None of this steel makes the slab thicker or stronger — the table above assumes '
+    + 'plain concrete and has to work without it. What it does is hold a crack that has already '
+    + 'happened tight enough to keep transferring load across itself. Which means it only works '
+    + 'at mid-depth, on chairs. That is where the model draws it, inside the pour, so the '
+    + 'viewport hides it: the Takeoff tab is where you see what to buy.'));
+  if (s.slabReinf === 'rebar') {
+    p.append(note(`${sl.turndownBars} × ${sl.turndownBar.size} continuous in the bottom of the `
+      + 'turndown, lapped 40 diameters at every splice and bent round the corners. Crack control '
+      + 'in a strip footing, not flexural steel — at this line load the strip is nowhere near bending.'));
+  }
+
+  p.append(el('h3', null, 'Contraction joints'));
+  const jv = el('dl', 'kv');
+  for (const [k, v] of [
+    ['Maximum panel', `${fmtN(sl.joints.max, 1)} ft`],
+    ['Layout', `${sl.joints.nx} × ${sl.joints.nz} panels`],
+    ['Panel size', `${fmtN(sl.joints.panelX, 1)} × ${fmtN(sl.joints.panelZ, 1)} ft`],
+    ['Depth of cut', `${fmtIn(s.slabThickness / 4)} — a quarter of the slab`],
+  ]) jv.append(el('dt', null, k), el('dd', null, v));
+  p.append(jv);
+  p.append(note('Thirty times the thickness, panels as close to square as the footprint allows. '
+    + 'Cut them the same day, as soon as the surface will carry a blade — a joint cut on day three '
+    + 'is a joint the concrete has already chosen for itself somewhere else.'));
+
+  /* ---- posts ---- */
+  if (pf) {
+    p.append(el('h3', null, 'Lean-to post pads'));
+    p.append(note(`${pf.posts} posts over ${fmtFt(pf.span * (pf.posts - 1) * 12)} with the beam `
+      + 'spliced over them as simple spans, so they do not share equally: an interior post picks up '
+      + 'half a span from each side, an end post half a span from one. And they carry half the '
+      + 'lean-to between them — the ledger bolted to the shop wall takes the other half straight '
+      + "down the building's own footing."));
+    const pv = el('dl', 'kv');
+    for (const [k, v] of [
+      ['On the beam', `${fmtN(pf.w)} plf`],
+      ['Span between posts', `${fmtN(pf.span, 1)} ft`],
+      ['End post', `${fmtN(pf.end)} lb`],
+      ['Interior post', pf.posts > 2 ? `${fmtN(pf.interior)} lb` : 'none'],
+      ['All posts together', `${fmtN(pf.total)} lb`],
+      ['End pad', `${fmtIn(pf.endPad.side)} sq × ${fmtIn(pf.thickness)}`],
+      ['Worst pad', `${fmtIn(pf.worstPad.side)} sq × ${fmtIn(pf.thickness)}`],
+      ['Pad weighs', `${fmtN(pf.worstPad.selfW)} lb`],
+      ['Pressure under it', `${fmtN(pf.worstPad.pressure)} psf of ${fmtN(pf.soil.q)}`],
+      ['Bottom of pad', `${fmtIn(pf.depth)} below the slab`],
+    ]) pv.append(el('dt', null, k), el('dd', null, v));
+    p.append(pv);
+    meter('Worst pad', pf.soil.q / pf.worstPad.pressure,
+      `${fmtIn(pf.worstPad.side)} square by ${fmtIn(pf.thickness)}: ${fmtN(pf.worst)} lb of post `
+      + `plus ${fmtN(pf.worstPad.selfW)} lb of pad is ${fmtN(pf.worstPad.pressure)} psf, `
+      + `against ${fmtN(pf.soil.q)} allowed`, 2.5);
+    p.append(note('The drift surcharge that sizes the beam is smeared across the whole projection, '
+      + 'which is conservative for these: drifted snow piles against the shop wall, inside the '
+      + 'half the ledger carries, so very little of it reaches a post.'));
+  }
+
+  /* ---- bolts ---- */
+  p.append(el('h3', null, 'Anchor bolts'));
+  const av = el('dl', 'kv');
+  for (const [k, v] of [
+    ['Worst wall line delivers', `${fmtN(ab.worst)} lb`],
+    ['Per ½" bolt, 7" embed', `${fmtN(ab.per)} lb`],
+    ['Bolts that shear asks for', String(ab.byShear)],
+    ['Bolts the code asks for', String(ab.byCode)],
+    ['Governs', ab.governs],
+    ['Total round the building', String(ab.total)],
+  ]) av.append(el('dt', null, k), el('dd', null, v));
+  p.append(av);
+  p.append(note(`One within 12" of every plate end and none more than ${fmtIn(ab.spacing)} apart. `
+    + 'Plate washers, not cut washers: the washer is what stops the plate splitting off the bolt '
+    + 'when the wall tries to slide. Set them wet — a drilled-in anchor is a repair, not a plan.'));
+
+  /* ---- the pour ---- */
+  p.append(el('h3', null, 'The pour'));
+  const cv = el('dl', 'kv');
+  for (const [k, v] of [
+    ['Concrete in the model', `${fmtN(take.concrete.cuYd, 1)} cu yd`],
+    ['Order with waste', `${fmtN(take.concrete.order, 1)} cu yd`],
+    ['Compacted base', `${fmtN(s.width * s.depth / 144 * s.gravelDepth / 12 / 27, 1)} cu yd`],
+    ['Vapour retarder', `${fmtN((s.width + 12) * (s.depth + 12) / 144)} sf`],
+  ]) cv.append(el('dt', null, k), el('dd', null, v));
+  p.append(cv);
+  p.append(note(s.slabInsulation === 'none'
+    ? 'No slab insulation, because the heating question is open. Nothing here assumes any. Worth '
+      + 'knowing while the trench is still open: the edge is the part that matters and the part you '
+      + 'cannot add afterwards. Two inches of foam against the inside face of the turndown, two feet '
+      + 'down, is cheap now and a slab-edge demolition later. Under-slab foam can wait.'
+    : s.slabInsulation === 'edge'
+      ? 'Edge insulation only — 2" against the inside face of the turndown, down two feet. That is '
+        + 'where most of the loss goes, and it is the part that has to happen before the pour.'
+      : 'Edge and under. Foam under a slab has to be rated for the load: EPS at 25 psi or better, '
+        + 'and the wheel loads above go through it into the subgrade.'));
+  p.append(note('What is still assumed rather than known: the frost depth, which the building '
+    + 'department sets rather than the weather; '
+    + (s.soil === 'clay' ? 'whether this clay is expansive, which changes the detailing rather '
+      + 'than the width; ' : '')
+    + `whether ${fmtN(fd.soil.q)} psf is true of the actual dirt, which is what a test pit and a `
+    + 'hand penetrometer settle for a couple of hundred dollars; whether the pad is on cut, fill '
+    + 'or native ground, because engineered fill under a slab has to be placed in lifts and '
+    + 'compacted to a tested density; and what the water table does in February. '
+    + 'A hole dug in the wet season answers most of it.'));
+}
+
 /* ---- truss ---- */
 function renderTruss() {
   const p = $('#panel-truss');

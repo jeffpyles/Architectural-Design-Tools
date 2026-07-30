@@ -38,10 +38,29 @@ const DEFAULT_SPEC = {
   eaveOverhang: 16,       // horizontal, past the N and S walls
   rakeOverhang: 12,       // horizontal, past the E and W walls
 
-  slabThickness: 4,
+  slabThickness: 5,
   turndownWidth: 16,
   turndownDepth: 24,
   gravelDepth: 6,
+
+  /* ---- foundation ----
+     Soil is clay to silty clay, which without a test means the presumptive
+     table rather than a number anybody measured. Frost depth is the local
+     figure and wants confirming; 12" is what western Oregon usually runs. */
+  soil: 'clay',
+  frostDepth: 12,
+  concreteFc: 4000,
+  slabReinf: 'rebar',            // rebar / mesh / fibre
+  /* Sawcut joints are free edges unless something carries load across them,
+     and a wheel crossing a free edge is about twice as hard on the concrete
+     as the same wheel in the middle of a panel. This is the decision that
+     sets the thickness. */
+  jointTransfer: 'dowels',       // dowels / none
+  slabInsulation: 'none',        // none / edge / under — undecided, so nothing assumed
+  /* What drives on it. A loaded pickup or a small tractor puts about 2,500 lb
+     on one wheel; the slab is sized for that, not for the building. */
+  wheelLoad: 2500,
+  tirePressure: 80,
 
   /* Skin. The default is the light/fast build: metal both surfaces, no
      structural panel except at the braced corners. */

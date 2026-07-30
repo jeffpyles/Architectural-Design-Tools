@@ -4,7 +4,9 @@
    regression material, not something a user should have to scroll past. */
 
 export const api = ['trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
-  'leanToDesign', 'leanToDrift', 'seismicShear', 'windPressure'];
+  'leanToDesign', 'leanToDrift', 'seismicShear', 'windPressure',
+  'SOIL', 'REBAR', 'wallLineLoads', 'footingDesign', 'slabDesign', 'postFooting',
+  'anchorSchedule'];
 
 export function run({ A, spec, openings, model, take: t, fail, log, permute, flagged }) {
   /* Truss geometry, against hand calculations. */
@@ -126,6 +128,202 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
     const noD = A.leanToDesign({ ...spec, leanTo: true, leanToDrift: false });
     if (withD.psf <= noD.psf) fail('counting drift did not raise the design load');
   }
+
+  /* ---- foundation ----
+     Everything here is closed-form, so it can be checked against itself: the
+     pieces have to agree with each other, and the sensitivities have to point
+     the right way. What none of this can check is whether the presumptive
+     bearing value is true of the actual dirt. */
+  {
+    const fd = A.footingDesign(spec);
+    log(`footing: ${fd.soil.label} ${fd.soil.q} psf · `
+      + `${fd.lines.bearing.total.toFixed(0)} plf under the bearing walls · `
+      + `bearing wants ${A.fmtIn(fd.bearingWidth)}, detailing ${A.fmtIn(fd.detailWidth)} → `
+      + `${A.fmtIn(fd.width)} (${fd.governs})`);
+
+    const byHand = fd.lines.bearing.total / fd.soil.q * 12;
+    if (Math.abs(fd.bearingWidth - byHand) > 0.001) {
+      fail(`bearing width ${fd.bearingWidth} is not plf/q: ${byHand}`);
+    }
+    if (fd.width < fd.bearingWidth - 0.001 || fd.width < fd.detailWidth - 0.001) {
+      fail('required width is under one of the two things that set it');
+    }
+    const should = fd.bearingWidth >= fd.detailWidth ? 'bearing' : 'detailing and frost';
+    if (fd.governs !== should) fail(`governs says "${fd.governs}" but the numbers say "${should}"`);
+    if (fd.peak < fd.avg - 0.001) fail('peak pressure came out under the average');
+    if (fd.frostDepth !== spec.frostDepth + spec.slabThickness) {
+      fail('frost depth is not measured from grade through the slab');
+    }
+    /* The gable ends carry no roof, so they must ask for less. */
+    if (fd.lines.gable.total >= fd.lines.bearing.total) {
+      fail('gable wall line load came out at or above the bearing wall');
+    }
+    /* Better soil narrows the trench; a heavier roof does not, because bearing
+       is not what governs. This is the whole finding, so assert it. */
+    const onRock = A.footingDesign({ ...spec, soil: 'rock' });
+    if (!(onRock.bearingWidth < fd.bearingWidth)) fail('rock did not need less bearing width than clay');
+    const heavier = A.footingDesign({ ...spec, groundSnow: spec.groundSnow * 2, roofing: 'comp' });
+    if (heavier.width !== fd.width) {
+      fail(`doubling the snow changed the required footing width ${fd.width} → ${heavier.width}, `
+        + 'so bearing has started to govern and the panel copy is wrong');
+    }
+    if (!(heavier.lines.bearing.total > fd.lines.bearing.total)) {
+      fail('doubling the snow did not raise the line load');
+    }
+    /* Soft soil, tall walls and deep snow together should push it over. */
+    const soft = A.footingDesign({ ...spec, soil: 'clay', groundSnow: 120, wallHeight: 192 });
+    if (soft.governs !== 'bearing') fail('nothing makes bearing govern, so that branch is dead code');
+  }
+
+  {
+    const sl = A.slabDesign(spec);
+    log(`slab: ${sl.fc} psi, ${sl.fr.toFixed(0)} psi rupture, ${sl.allow.toFixed(0)} allowable at FS ${sl.FS} · `
+      + `${spec.wheelLoad} lb wheel on a ${sl.a.toFixed(2)}" radius · `
+      + `interior needs ${sl.interiorOnly ? A.fmtIn(sl.interiorOnly.h) : '>8"'}, `
+      + `free edge ${sl.edgeToo ? A.fmtIn(sl.edgeToo.h) : '>8"'} → `
+      + `${sl.doweled ? 'doweled' : 'sawcut'}, so ${sl.min ? A.fmtIn(sl.min.h) : '>8"'}`);
+
+    /* Westergaard, checked for the shape of the answer rather than the value:
+       an edge is always worse than the middle, and thicker is always better. */
+    for (const r of sl.rows) {
+      if (!(r.edge > r.interior)) fail(`at ${r.h}" the free edge came out no worse than mid-panel`);
+      if (!(r.l > 0 && r.b > 0)) fail(`at ${r.h}" the radius of relative stiffness is not positive`);
+    }
+    for (let i = 1; i < sl.rows.length; i++) {
+      if (sl.rows[i].interior >= sl.rows[i - 1].interior) fail('stress did not fall with thickness');
+    }
+    /* min must be the first row that passes the governing case. */
+    const first = sl.rows.find((r) => (sl.doweled ? r.intOK : r.intOK && r.edgeOK));
+    if (sl.min !== first) fail('the minimum thickness is not the first row that passes');
+    if (sl.thickOK !== (sl.at.interior <= sl.allow && (sl.doweled || sl.at.edge <= sl.allow))) {
+      fail('thickOK disagrees with the stresses it is derived from');
+    }
+    /* Undoweled joints must never be the cheaper answer. */
+    const plain = A.slabDesign({ ...spec, jointTransfer: 'none' });
+    if (plain.min && sl.min && plain.min.h < sl.min.h) fail('sawcut joints came out thinner than doweled');
+    /* A heavier wheel must want more concrete somewhere in the range. */
+    const heavy = A.slabDesign({ ...spec, wheelLoad: 9000 });
+    if (heavy.min && sl.min && heavy.min.h <= sl.min.h) fail('a 9000 lb wheel wanted no more slab');
+    /* And the building must not be able to change it. */
+    const taller = A.slabDesign({ ...spec, wallHeight: 192, groundSnow: 120 });
+    if (taller.at.interior !== sl.at.interior) fail('the building changed the slab stress');
+
+    /* Reinforcement: every option has to satisfy the requirement it was
+       chosen from, and the one picked has to be one of them. */
+    if (Math.abs(sl.asReq - 0.0018 * 12 * spec.slabThickness) > 1e-9) fail('As required drifted off 0.0018 bh');
+    for (const o of sl.barOptions) {
+      if (o.provided < sl.asReq - 1e-9) fail(`${o.size} at ${o.at}" provides ${o.provided} under ${sl.asReq}`);
+      if (o.at < 12 || o.at > 18) fail(`${o.size} landed at ${o.at}" o.c., outside 12–18`);
+      if (o.at % 2) fail(`${o.size} at ${o.at}" is not a 2" increment`);
+    }
+    if (!sl.barOptions.some((o) => o.size === sl.bar.size)) fail('the specified bar is not among the options');
+    if (sl.bar.provided < sl.asReq) fail('the specified bar provides less than required');
+    /* The point of the selection rule: widest practical spacing, not biggest
+       bar. #5 also fits at 18" and must lose to #4 on weight. */
+    const bigger = sl.barOptions.filter((o) => o.at === sl.bar.at && o.psf < sl.bar.psf);
+    if (bigger.length) fail(`${bigger[0].size} spaces as wide as ${sl.bar.size} and weighs less`);
+    if (sl.bar.excess > 0.6) fail(`the specified ${sl.bar.size} over-supplies by ${(sl.bar.excess * 100).toFixed(0)}%`);
+    log(`  slab steel: ${sl.bar.size} at ${A.fmtIn(sl.bar.at)} o.c. gives ${sl.bar.provided.toFixed(3)} `
+      + `of ${sl.asReq.toFixed(3)} in²/ft, ${sl.bar.psf.toFixed(2)} lb/sf · `
+      + `also fit: ${sl.barOptions.filter((o) => o.size !== sl.bar.size).map((o) => `${o.size}@${o.at}"`).join(', ')}`);
+
+    /* Joints. Panels inside the maximum, and square enough to behave. */
+    if (sl.joints.panelX > sl.joints.max + 0.001 || sl.joints.panelZ > sl.joints.max + 0.001) {
+      fail(`panels ${sl.joints.panelX} × ${sl.joints.panelZ} exceed the ${sl.joints.max} ft maximum`);
+    }
+    const ratio = Math.max(sl.joints.panelX, sl.joints.panelZ) / Math.min(sl.joints.panelX, sl.joints.panelZ);
+    if (ratio > 1.5) fail(`joint panels are ${ratio.toFixed(2)}:1, too far from square`);
+    log(`  joints: ${sl.joints.nx} × ${sl.joints.nz} panels of `
+      + `${sl.joints.panelX.toFixed(1)} × ${sl.joints.panelZ.toFixed(1)} ft, max ${sl.joints.max.toFixed(1)} ft`);
+
+    /* The bar in the model has to be the bar in the calculation. */
+    const bars = model.parts.filter((p) => p.sys === 'rebar');
+    const slabBars = bars.filter((p) => p.kind.includes('slab'));
+    if (!slabBars.length) fail('no slab steel in the model');
+    for (const b of slabBars) {
+      if (b.steel !== sl.bar.key) fail(`a slab bar is ${b.steel}, not the specified ${sl.bar.key}`);
+      if (!b.len || !b.lbft) fail('a slab bar has no length or section weight, so it weighs nothing');
+    }
+    const nx = Math.max(2, Math.floor((spec.depth - 6) / sl.spacing) + 1);
+    const nz = Math.max(2, Math.floor((spec.width - 6) / sl.spacing) + 1);
+    if (slabBars.length !== nx + nz) {
+      fail(`${slabBars.length} slab bars for a ${sl.spacing}" mat that wants ${nx + nz}`);
+    }
+    const row = t.steelRows.find((r) => r.key === sl.bar.key);
+    if (!row) fail('slab steel never reached the purchase table');
+    else log(`  ok  ${bars.length} bars in the model, ${row.lf.toFixed(0)} lf of `
+      + `${sl.bar.size} at ${row.lb.toFixed(0)} lb in the takeoff`);
+    /* Fibre draws no bar, and must not silently keep the old mat. */
+    const fibre = A.buildModel({ ...spec, slabReinf: 'fibre' }, openings);
+    if (fibre.parts.some((p) => p.sys === 'rebar')) fail('fibre-only still drew rebar');
+  }
+
+  {
+    const pf = A.postFooting({ ...spec, leanTo: true });
+    if (!pf) fail('no post footing under a lean-to');
+    else {
+      log(`post pads: ${pf.posts} posts, ${pf.w.toFixed(0)} plf on the beam over `
+        + `${pf.span.toFixed(1)} ft spans · end ${pf.end.toFixed(0)} lb → `
+        + `${A.fmtIn(pf.endPad.side)}, interior ${pf.interior.toFixed(0)} lb → `
+        + `${A.fmtIn(pf.worstPad.side)} at ${pf.worstPad.pressure.toFixed(0)} psf of ${pf.soil.q}`);
+      /* The reactions have to add up to the load, which is what catches both
+         of the mistakes this calculation had in it: counting the whole
+         lean-to instead of the half the posts carry, and dividing the total
+         by the post count instead of tributing it. */
+      const sum = pf.end * 2 + pf.interior * Math.max(0, pf.posts - 2);
+      if (Math.abs(sum - pf.total) > 0.5) {
+        fail(`post reactions sum to ${sum.toFixed(0)} but the total on them is ${pf.total.toFixed(0)}`);
+      }
+      if (pf.posts > 2 && Math.abs(pf.interior - pf.end * 2) > 0.5) {
+        fail('an interior post should take twice an end post on equal simple spans');
+      }
+      /* The posts carry half; leanToDesign sizes the beam off the same half. */
+      const lt = A.leanToDesign({ ...spec, leanTo: true });
+      if (Math.abs(pf.w - lt.psf * (lt.projection / 12) / 2) > 0.5) {
+        fail('the beam load is not psf x projection / 2 — the posts are carrying the wrong share');
+      }
+      if (Math.abs(pf.total - pf.w * lt.run / 12) > 0.5) fail('the total is not the load over the run');
+      if (pf.worstPad.pressure > pf.soil.q) fail('the worst pad is over the allowable bearing');
+      if (pf.worstPad.side < pf.endPad.side) fail('the pad under the heavier post came out smaller');
+      if (pf.worstPad.side % 6) fail(`pad side ${pf.worstPad.side}" is not a 6" increment`);
+      if (pf.depth < spec.frostDepth) fail('the pad does not reach the frost line');
+      /* Softer soil needs a bigger pad. */
+      const onSand = A.postFooting({ ...spec, leanTo: true, soil: 'gravel' });
+      if (!(onSand.worstPad.side <= pf.worstPad.side)) fail('gravel wanted a bigger pad than clay');
+
+      /* And what the model draws has to be what was sized. */
+      const m2 = A.buildModel({ ...spec, leanTo: true }, openings);
+      const pads = m2.parts.filter((p) => p.kind.startsWith('Lean-to pad'));
+      if (pads.length !== pf.posts) fail(`${pads.length} pads drawn for ${pf.posts} posts`);
+      const sides = pads.map((p) => Math.round(p.geom.s[0])).sort((a, b) => a - b);
+      const want = [...Array(pf.posts)].map((_, i) => (i === 0 || i === pf.posts - 1
+        ? pf.endPad.side : pf.worstPad.side)).sort((a, b) => a - b);
+      if (sides.join() !== want.join()) fail(`pads drawn ${sides.join('/')}" against ${want.join('/')}" sized`);
+      log(`  ok  ${pads.length} pads drawn at ${sides.join('", ')}"`);
+    }
+    if (A.postFooting({ ...spec, leanTo: false })) fail('post footings without a lean-to');
+  }
+
+  {
+    const ab = A.anchorSchedule(spec, openings);
+    log(`anchors: worst line ${ab.worst.toFixed(0)} lb → ${ab.byShear} by shear, `
+      + `${ab.byCode} by code on the longest wall → ${ab.total} total (${ab.governs})`);
+    const should = ab.byShear > ab.byCode ? 'shear' : 'the code minimum';
+    if (ab.governs !== should) fail(`anchors say "${ab.governs}" but the counts say "${should}"`);
+    if (ab.total < 8) fail(`${ab.total} anchor bolts round a building is not enough to be right`);
+    const drawn = model.parts.filter((p) => p.kind.startsWith('Anchor bolt')).length;
+    if (drawn !== ab.total) fail(`${drawn} bolts drawn against ${ab.total} scheduled`);
+    /* A wall line that has to carry more must not need fewer bolts. */
+    const windy = A.anchorSchedule({ ...spec, windSpeed: spec.windSpeed * 2 }, openings);
+    if (windy.byShear < ab.byShear) fail('doubling the wind speed asked for fewer bolts');
+  }
+
+  for (const p of [
+    { soil: 'rock', frostDepth: 24, slabThickness: 6, concreteFc: 3000 },
+    { soil: 'sand', jointTransfer: 'none', slabReinf: 'mesh', slabThickness: 4 },
+    { wheelLoad: 12000, tirePressure: 110, slabThickness: 8, slabInsulation: 'under' },
+    { slabReinf: 'fibre', turndownWidth: 12, turndownDepth: 18, gravelDepth: 4 },
+  ]) permute(p);
 
   /* The racking fixtures: a layout that clears every wall line, and three
      that do not, each surviving its own share code unchanged. */

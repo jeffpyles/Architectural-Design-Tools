@@ -10,7 +10,7 @@ list as you go. Everything runs in the browser — no server, no dependencies at
 
 | | |
 |---|---|
-| [`buildings/shop-building/`](buildings/shop-building/) | A 24' × 26' stick-framed shop with a 3/12 gable, built from a pair of pencil sketches. 3D model, truss cut list, racking check, lean-to solver, material takeoff, eight build stages. |
+| [`buildings/shop-building/`](buildings/shop-building/) | A 24' × 26' stick-framed shop with a 3/12 gable, built from a pair of pencil sketches. 3D model, truss cut list, racking check, slab and footing design, lean-to solver, material takeoff, eight build stages. |
 | [`buildings/tiny-house/`](buildings/tiny-house/) | A 12' × 34' tiny house on a steel trailer frame, framed around a set of salvaged windows. 3D model, window schedule, weight and centre of gravity, tow statics, material takeoff. |
 
 The shell — viewport, camera, stage rail, legend, takeoff, layout library, share codes —

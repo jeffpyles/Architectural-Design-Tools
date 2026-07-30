@@ -30,9 +30,9 @@ rail, the takeoff, the layout library and the rest of the shell live in
 ```
 building.json           name, blurb and facts for the landing page
 src/10-spec.js          dimensions, materials, window schedule, stages, walls
-src/20-engineering.js   loads, header sizing, truss geometry, bracing, lean-to, audit
-src/30-model.js         turns the spec into ~750 individual parts
-src/40-panels.js        Openings, Review and Truss panels
+src/20-engineering.js   loads, header sizing, truss geometry, bracing, lean-to, foundation, audit
+src/30-model.js         turns the spec into ~790 individual parts
+src/40-panels.js        Openings, Review, Foundation and Truss panels
 src/50-building.js      the BUILDING object the shell reads — no DOM
 docs/sketch-notes.md    how the sketches were read
 dist/index.html         standalone page, what GitHub Pages serves
@@ -54,8 +54,17 @@ python3 tools/subset_fonts.py                 # only when the character set chan
 `tools/check.mjs` is the one that matters. It rebuilds the model in plain Node, asserts
 the truss geometry against hand calculations, verifies the wall segments tile, confirms
 no girt crosses an opening, checks that every purchase length is a length you can
-actually buy, solves the lean-to at both wall heights and every post count, and re-runs
-the whole thing across five spec permutations.
+actually buy, solves the lean-to at both wall heights and every post count, reconciles
+the foundation against itself, and re-runs the whole thing across nine spec permutations.
+
+The foundation assertions are worth knowing about, because they are the ones that caught
+a real error. They check the shape of each answer rather than its value: an edge is
+always worse than mid-panel, thicker concrete is always less stressed, better soil always
+needs less bearing width, a heavier wheel always wants more slab — and the post reactions
+always sum to the load on them, which is exactly what a first pass got wrong. They also
+assert that the building **cannot** change the slab stress and **cannot** change the
+required footing width, because the panel says as much and a claim like that should fail
+loudly if it stops being true.
 
 Note for headless screenshots: launch Chromium with `--use-angle=swiftshader`. The plain
 `--use-gl=swiftshader` path paints sibling DOM layers over the WebGL canvas at the wrong
@@ -67,6 +76,64 @@ Site is outside Drain, Oregon, wooded on the west slope of the Coast Range footh
 25 psf ground snow, 100 mph basic wind at **exposure B**, S_DS 0.75 g. Wind governs the
 lateral design in both directions; seismic is checked and comes in well under it, because
 a metal-skinned shop is light. All four are editable in the Structure tab.
+
+## Foundation
+
+The **Foundation** tab answers two questions that turn out to have nothing to do with
+each other.
+
+*What the building puts on the ground.* Not much: **567 plf** under the bearing walls,
+which on 1,500 psf presumptive clay wants **4⁹⁄₁₆"** of bearing width. The 16" that gets
+poured is set by frost depth and by detailing — somewhere to land a plate, a ½" bolt with
+its edge distance, two bars in the bottom, and the fact that nobody digs a five-inch
+trench. Doubling the snow load does not change the trench, and the check asserts that.
+
+*What drives on the slab.* This is the number that matters, and the building has no say
+in it. Westergaard — a wheel on an elastic plate over an elastic subgrade — for a
+**2,500 lb** wheel at 80 psi, which is a loaded pickup or a small tractor. At 4,000 psi
+concrete the working stress is 237 psi, and the answer depends on **where** the wheel is:
+
+| | mid-panel | at a free edge |
+|---|---|---|
+| needs | 4" | 6" |
+
+The deciding detail is not a load at all. The perimeter is not a free edge — the turndown
+is poured monolithic with the slab and holds it up. The free edges are the contraction
+joints inside, and there are five of them in a 2 × 3 panel layout. Dowel or key them and
+a wheel crossing one is carried by both panels, so the interior case governs and 4" is
+enough. Leave them as plain sawcuts and every joint is an edge, and it wants 6". That is
+**two inches of concrete over 624 sf** riding on a detail that costs almost nothing.
+
+The slab is drawn at 5", between the two, and the tab shows both cases so the trade is
+visible rather than buried.
+
+Everything else on the tab follows from those two: **#4 at 18" o.c. each way** for
+shrinkage and temperature (0.0018 bh — every bar size that fits is listed, and the rule
+picks the widest practical spacing rather than the biggest bar), 2 × #4 continuous in the
+turndown, joints at 30 × the thickness, **22 × ½" anchor bolts** with the code minimum
+governing over shear by a factor of three, and pads under the lean-to posts.
+
+None of the slab steel makes the slab stronger. The thickness above assumes plain
+concrete and has to work without it; the steel holds a crack tight *after* the crack
+happens, which is why it only works at mid-depth on chairs. It is drawn there, inside the
+pour, so the model hides it — the takeoff is where you see it.
+
+### The lean-to post pads
+
+The model already drew a pier under each post — 18" square, 36" deep, the same under all
+three, at a size nobody had calculated. They are sized now, and the sizing is the part
+worth reading:
+
+- The posts carry **half** the lean-to. The other edge sits on a ledger bolted to the shop
+  wall and goes down the building's own footing. `leanToDesign` already sizes the beam off
+  that half, so `postFooting` uses the same number rather than inventing a second one.
+- The posts do **not** share equally. The beam is sized as a simple span between posts, so
+  it gets spliced over them: an interior post picks up half a span from each side, an end
+  post half a span from one. With three posts the middle one takes twice what the ends do.
+
+At 12' walls with the projection solved to its limit that is **1,872 lb** on an end post
+and **3,743 lb** on the middle one — an 18" pad and a 24" pad, not one size for all three.
+Fixed at a 10' projection it is 1,377 and 2,754 lb.
 
 ## The racking problem
 
@@ -103,6 +170,19 @@ host that fetch just fails and the section hides itself.
 The page ships no layouts of its own. Everything on offer comes from the library, so
 narrowing the design space is a matter of deleting files in `layouts/shop-building/`
 rather than editing the tool.
+
+## Still assumed rather than known
+
+- **Frost depth.** 12" is the usual western Oregon figure; the building department sets it.
+- **The soil.** 1,500 psf is the presumptive value the code allows with no report. Whether
+  this clay is expansive changes the detailing rather than the width, and neither that nor
+  the February water table is answerable from a desk. A test pit in the wet season settles
+  both cheaply.
+- **Cut, fill or native.** Engineered fill under a slab has to go in in lifts and be
+  compacted to a tested density. Nothing here knows which the pad is.
+- **Heating**, and therefore slab insulation, which is set to none. The edge is the part
+  that matters and the part that cannot be added later: 2" of foam against the inside face
+  of the turndown, two feet down, while the trench is open. Under-slab foam can wait.
 
 ## What it is not
 
