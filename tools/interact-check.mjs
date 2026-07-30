@@ -130,16 +130,40 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
   }
 }
 
-/* 4. Every tab renders without throwing. */
+/* 4. Every tab renders without throwing. A drawing sheet catches its own
+   errors so one bad sheet does not take the set down, which means a throw
+   turns into a line of text rather than a page error — so look for that too. */
 for (const tab of await page.$$eval('.tabs button', (bs) => bs.map((b) => b.dataset.tab))) {
   const before = errors.length;
   await page.click(`.tabs button[data-tab="${tab}"]`);
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   const n = await page.$eval(`#panel-${tab}`, (p) => p.children.length);
   if (errors.length > before) fail(`the ${tab} tab threw: ${errors[before]}`);
   if (!n) fail(`the ${tab} tab rendered nothing`);
+  const swallowed = await page.$eval(`#panel-${tab}`,
+    (p) => (p.textContent.match(/could not be drawn: .*/) || [])[0] || '');
+  if (swallowed) fail(`the ${tab} tab swallowed an error: ${swallowed.slice(0, 120)}`);
 }
 console.log('  ok  every tab renders');
+
+/* 5. If the building draws sheets, each one has to have something on it and
+   carry the line that says what it is not. */
+{
+  const sheets = await page.$$eval('#sheets .sheet', (list) => list.map((sv) => ({
+    nodes: sv.querySelectorAll('*').length,
+    text: sv.textContent,
+    box: sv.getAttribute('viewBox'),
+  })));
+  if (sheets.length) {
+    for (const [i, sh] of sheets.entries()) {
+      if (sh.nodes < 120) fail(`sheet ${i + 1} has only ${sh.nodes} elements — it is empty`);
+      if (!/Not for construction/i.test(sh.text)) fail(`sheet ${i + 1} has no title block warning`);
+      if (/undefined|NaN/.test(sh.text)) fail(`sheet ${i + 1} says "${(sh.text.match(/\S*(undefined|NaN)\S*/) || [])[0]}"`);
+      if (!/= 1'-0"|As noted/.test(sh.text)) fail(`sheet ${i + 1} states no scale`);
+    }
+    console.log(`  ok  ${sheets.length} drawing sheets, all dimensioned and stamped`);
+  }
+}
 
 await browser.close();
 server.close();

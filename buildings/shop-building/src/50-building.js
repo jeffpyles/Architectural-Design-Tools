@@ -154,6 +154,8 @@ const BUILDING = {
     { id: 'structure', label: 'Structure', render: () => renderControlsPanel() },
     { id: 'review', label: 'Review', render: () => renderReview() },
     { id: 'foundation', label: 'Foundation', render: () => renderFoundation() },
+    /* Lazy: six sheets of SVG is not something to redraw on every drag. */
+    { id: 'plans', label: 'Plans', render: () => renderShopPlans(), lazy: true },
     { id: 'truss', label: 'Truss', render: () => renderTruss() },
     { id: 'takeoff', label: 'Takeoff', render: () => renderTakeoff() },
     { id: 'layouts', label: 'Layouts', render: () => renderLayouts() },

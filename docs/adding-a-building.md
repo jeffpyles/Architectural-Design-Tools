@@ -137,6 +137,50 @@ purchase table. `STEEL` holds tube and I sections computed from their geometry, 
 `REBAR` sizes, which carry their nominal ASTM weights instead — what you buy either way
 is linear feet of a named size, so they share the table.
 
+## Drawings
+
+A building can also put working drawings on paper. `core/src/60-draw.js` is a small
+drafting kit — page, scale, line weights, dimension strings, hatches, leaders,
+keynotes, schedules, a title block — and a building declares a list of sheets:
+
+```js
+const PLANS = [
+  { id: 'fdn', number: 'S1.0', title: 'Foundation plan', draw: drawFoundationPlan },
+  …
+];
+{ id: 'plans', label: 'Plans', render: () => renderPlans('plans', PLANS, info), lazy: true }
+```
+
+Everything in the kit works in **points on the page**, 72 to the inch, because that is
+the only unit in which a line weight means anything. `s.frame(x, y, scaleKey, modelBox)`
+connects the two: after it, `s.mx()` and `s.my()` map model inches onto the page at a
+real architectural scale, and `s.pickScale(w, h, availW, availH)` returns the largest
+scale from the list that still fits — a drawing at a scale nobody owns a rule for is
+worse than a smaller drawing.
+
+Sheets should read the model rather than restate it. Where a sheet does need its own
+little layout function — where the anchor bolts go, where the posts land — check it
+against the parts it is a drawing of in `checks.mjs`. That is the one thing a set of
+drawings has always got wrong, and here it is a five-line assertion.
+
+`lazy: true` on a panel means it only renders while it is the open tab. Use it for
+anything expensive; six sheets of SVG is not something to redraw on every drag.
+
+**Printing.** `window.print()` is wired to lift `#sheets` out to a container hanging
+straight off `<body>`, because a nested scroller does not paginate — hiding its siblings
+with `visibility` leaves their boxes in the flow and you get a stack of blank pages. The
+`@page` size is written from the chosen paper, margins are zero, and each sheet is set to
+its true page size, so printing at 100% gives a drawing a scale rule reads correctly.
+`tools/interact-check.mjs` asserts every sheet has content, a stated scale and its title
+block; the print path itself is checked by taking a PDF and counting the pages.
+
+## Controls inside a panel
+
+`inlineControls(target, ['slabThickness', 'jointTransfer'])` drops named controls from
+`BUILDING.controls` into any panel, so a knob can sit next to the number it moves instead
+of in the Structure tab. They are the same widgets — changing one there changes it
+everywhere.
+
 ## What the core already gives you
 
 - `pickMember` over `LUMBER` and `LVL` — sizes a header, rafter, joist or beam
@@ -148,6 +192,8 @@ is linear feet of a named size, so they share the table.
 - `Viewport` — the WebGL renderer, camera, picking and edge pass
 - share codes, the browser store and the published library, all keyed off
   `BUILDING.id` and `BUILDING.codePrefix`
+- `Sheet`, `renderPlans`, `titleBlock`, `schedule`, `keynoteList`, `sheetNotes` — the
+  drafting kit above
 
 ## Checking it
 

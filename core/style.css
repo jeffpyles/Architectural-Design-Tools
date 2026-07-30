@@ -602,3 +602,58 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--rule); border-bottom: 0
 .stack-bar > div { background: var(--chalk); opacity: 0.85; }
 .stack-bar > div:nth-child(even) { opacity: 0.45; }
 .stack-bar > div + div { border-left: 1px solid var(--paper); }
+
+/* ---- drawing sheets ----
+   A sheet is an SVG laid out in points at real page size, so what you see on
+   screen is what comes off the printer at 100%. On screen it is scaled to the
+   panel width and given a shadow so it reads as paper; in print it is set to
+   its true size and everything else on the page gets out of the way. */
+.sheets { margin-top: 6px; }
+.sheet-cap {
+  font-family: var(--f-display); font-size: 11px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-3); margin: 16px 0 5px;
+}
+.sheet-cap b { color: var(--ink-2); font-family: var(--f-mono); letter-spacing: 0; }
+.sheet-holder {
+  background: #fff; border: 1px solid var(--rule);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16); border-radius: 2px; overflow: hidden;
+}
+.sheet { display: block; width: 100%; height: auto; }
+/* Sheets are drawn in ink on white paper whatever the app's theme is doing,
+   because that is what a printer will do with them either way. */
+.sheet-holder .sheet {
+  --ink: #16181a; --ink-2: #45494e; --ink-3: #7b8189;
+  --surface: #ffffff; --surface-2: #f2f2ef; --rule: #c9ccd0; --rule-soft: #e3e5e7;
+  --keel: #a33a2a; --paper: #ffffff;
+}
+
+@media print {
+  /* Only the sheets. Everything else on the page is for deciding; paper is
+     for building from.
+
+     The sheets live inside a scrolling panel inside a grid inside the app, and
+     no amount of `visibility: hidden` gets a nested scroller to paginate — the
+     hidden boxes still take their space and you get twenty-eight blank pages.
+     So before printing they are lifted out to a container that is a direct
+     child of <body>, and everything else is display:none. See prepPrint(). */
+  html.printing > body > *:not(#printRoot) { display: none !important; }
+  html.printing, html.printing > body {
+    display: block !important; margin: 0 !important; padding: 0 !important;
+    height: auto !important; overflow: visible !important; background: #fff !important;
+  }
+  #printRoot, #printRoot .sheets {
+    display: block !important; margin: 0 !important; padding: 0 !important;
+  }
+  #printRoot .sheet-cap { display: none !important; }
+  /* Exactly one page each: a stray six pixels of margin anywhere in here is a
+     seventh blank sheet coming out of the printer. */
+  #printRoot .sheet-holder {
+    border: 0; box-shadow: none; border-radius: 0; background: #fff;
+    break-after: page; page-break-after: always; overflow: hidden;
+    margin: 0 !important; padding: 0 !important; line-height: 0;
+    aspect-ratio: auto !important;
+    width: var(--sheet-w) !important; height: var(--sheet-h) !important;
+  }
+  #printRoot .sheet-holder:last-child { break-after: auto; page-break-after: auto; }
+  #printRoot .sheet { width: var(--sheet-w) !important; height: var(--sheet-h) !important; }
+}

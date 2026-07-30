@@ -33,6 +33,7 @@ src/10-spec.js          dimensions, materials, window schedule, stages, walls
 src/20-engineering.js   loads, header sizing, truss geometry, bracing, lean-to, foundation, audit
 src/30-model.js         turns the spec into ~790 individual parts
 src/40-panels.js        Openings, Review, Foundation and Truss panels
+src/45-plans.js         the six drawing sheets
 src/50-building.js      the BUILDING object the shell reads — no DOM
 docs/sketch-notes.md    how the sketches were read
 dist/index.html         standalone page, what GitHub Pages serves
@@ -47,6 +48,7 @@ From the repository root:
 node tools/build.mjs shop-building            # → dist/index.html and dist/page.html
 node tools/check.mjs shop-building            # headless model + engineering assertions
 node tools/viewport-check.mjs shop-building   # browser layout across window shapes
+node tools/interact-check.mjs shop-building  # picking, dragging, every tab, every sheet
 node tools/shoot.mjs '[{"name":"iso","stage":7}]'   # screenshots into build/
 python3 tools/subset_fonts.py                 # only when the character set changes
 ```
@@ -134,6 +136,37 @@ worth reading:
 At 12' walls with the projection solved to its limit that is **1,872 lb** on an end post
 and **3,743 lb** on the middle one — an 18" pad and a 24" pad, not one size for all three.
 Fixed at a 10' projection it is 1,377 and 2,754 lb.
+
+## Drawings
+
+The **Plans** tab draws six sheets and prints them. They are not pictures of the model —
+each one is a flat, dimensioned, annotated view at a real architectural scale, drawn from
+the same model the viewport draws, so a plan cannot get out of step with the thing it is
+a plan of.
+
+| | | |
+|---|---|---|
+| **S1.0** | Foundation plan | slab edge, turndown, post pads, anchor bolts, contraction joints, apron, keynotes |
+| **S1.1** | Foundation details | A — turndown at a bearing wall · B — lean-to post pad · C — slab at a contraction joint |
+| **S2.0** | Framing plan | wall poché, openings with swings and sills, braced panels in red, opening schedule with every header |
+| **S3.0** | Roof framing plan | every truss, ridge, purlins, roof-plane bracing bays, one-truss cut list |
+| **A2.0** | Elevations | all four, openings tagged to the schedule |
+| **E1.0** | Electrical plan | receptacles, switches, strip lights, sub-panel, with a legend drawn by the same routine as the symbols |
+
+Print at **100%** — no "fit to page" — and a scale rule reads them. Paper is selectable
+(letter, tabloid, A4, A3) and every sheet picks the largest architectural scale that
+still fits it, so on letter the plans come out at 3/16" = 1'-0" and on tabloid at 1/4".
+
+Two things make this trustworthy rather than decorative. The sheets read the model
+directly wherever they can — the electrical plan draws the symbols off the parts in the
+`elec` stage, so there is no second layout to drift. Where a sheet does need its own
+layout function, `checks.mjs` asserts it against the parts it is a drawing of: every
+anchor bolt drawn has a bolt under it, every pad drawn has a pad under it, every opening
+tag is unique, and the plan extent holds everything it draws. Getting a plan out of step
+with the model is the classic failure of a hand-drawn set; here it is a test.
+
+The title block says **not for construction** on every page, because nothing here is
+stamped.
 
 ## The racking problem
 

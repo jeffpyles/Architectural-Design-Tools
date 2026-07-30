@@ -2,7 +2,9 @@
 
 Interactive building models. Each one draws a structure member by member, lets you slide
 the doors and windows around, and recalculates the framing, the loads and the material
-list as you go. Everything runs in the browser — no server, no dependencies at runtime.
+list as you go. The shop building also puts the result on paper: dimensioned plans,
+sections and elevations at real architectural scales, printed straight from the same
+model. Everything runs in the browser — no server, no dependencies at runtime.
 
 **Live site:** https://jeffpyles.github.io/architectural-design-tools/
 
@@ -10,7 +12,7 @@ list as you go. Everything runs in the browser — no server, no dependencies at
 
 | | |
 |---|---|
-| [`buildings/shop-building/`](buildings/shop-building/) | A 24' × 26' stick-framed shop with a 3/12 gable, built from a pair of pencil sketches. 3D model, truss cut list, racking check, slab and footing design, lean-to solver, material takeoff, eight build stages. |
+| [`buildings/shop-building/`](buildings/shop-building/) | A 24' × 26' stick-framed shop with a 3/12 gable, built from a pair of pencil sketches. 3D model, truss cut list, racking check, slab and footing design, lean-to solver, material takeoff, and six printable drawing sheets. |
 | [`buildings/tiny-house/`](buildings/tiny-house/) | A 12' × 34' tiny house on a steel trailer frame, framed around a set of salvaged windows. 3D model, window schedule, weight and centre of gravity, tow statics, material takeoff. |
 
 The shell — viewport, camera, stage rail, legend, takeoff, layout library, share codes —

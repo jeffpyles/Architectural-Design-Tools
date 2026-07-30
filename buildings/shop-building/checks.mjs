@@ -3,7 +3,8 @@
    that used to ship in the page as presets. They live here now — they are
    regression material, not something a user should have to scroll past. */
 
-export const api = ['auditBuilding', 'trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
+export const api = ['aabb', 'anchorBoltPlan', 'leanToPostPlan', 'planExtent', 'openingTag', 'PLANS',
+  'auditBuilding', 'trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
   'leanToDesign', 'leanToDrift', 'seismicShear', 'windPressure',
   'SOIL', 'REBAR', 'wallLineLoads', 'footingDesign', 'slabDesign', 'postFooting',
   'anchorSchedule'];
@@ -383,6 +384,66 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
     { slabBar: '#6', postPad: 36, leanTo: true },
     { slabBar: '#3', slabThickness: 8, postPad: 12, leanTo: true },
   ]) permute(p);
+
+  /* ---- the drawings ----
+     A sheet is only worth printing if it says the same thing as the model. The
+     drawings work off their own little layout functions rather than digging
+     through the parts list, which is faster and readable but is exactly the
+     kind of second implementation that drifts — so it gets checked against the
+     parts it is a drawing of. */
+  {
+    const bolts = A.anchorBoltPlan(spec);
+    const drawn = model.parts.filter((p) => p.kind.startsWith('Anchor bolt'))
+      .map((p) => A.aabb(p.geom).c);
+    if (bolts.length !== drawn.length) {
+      fail(`the foundation plan draws ${bolts.length} anchor bolts, the model has ${drawn.length}`);
+    }
+    for (const b of bolts) {
+      const near = drawn.some((c) => Math.abs(c[0] - b.x) < 0.75 && Math.abs(c[2] - b.z) < 0.75);
+      if (!near) fail(`a bolt is drawn at ${b.x.toFixed(1)}, ${b.z.toFixed(1)} with none there`);
+    }
+
+    const s2 = { ...spec, leanTo: true };
+    const posts = A.leanToPostPlan(s2);
+    const pads = A.buildModel(s2, openings).parts.filter((p) => p.kind.startsWith('Lean-to pad'))
+      .map((p) => A.aabb(p.geom).c);
+    if (posts.length !== pads.length) {
+      fail(`the plan draws ${posts.length} post pads, the model builds ${pads.length}`);
+    }
+    for (const p of posts) {
+      const near = pads.some((c) => Math.abs(c[0] - p.x) < 0.75 && Math.abs(c[2] - p.z) < 0.75);
+      if (!near) fail(`a pad is drawn at ${p.x.toFixed(1)}, ${p.z.toFixed(1)} with none there`);
+    }
+    if (A.leanToPostPlan({ ...spec, leanTo: false }).length) fail('posts drawn with no lean-to');
+    log(`  ok  ${bolts.length} bolts and ${posts.length} pads drawn where the model puts them`);
+
+    /* The plan has to hold everything it draws, or the sheet crops it. */
+    const ext = A.planExtent(s2, 0);
+    for (const p of posts) {
+      if (p.x < ext[0] || p.x > ext[2] || p.z < ext[1] || p.z > ext[3]) {
+        fail(`post at ${p.x.toFixed(0)}, ${p.z.toFixed(0)} falls outside the plan extent`);
+      }
+    }
+    if (ext[2] - ext[0] < spec.width || ext[3] - ext[1] < spec.depth) {
+      fail('the plan extent does not even hold the building');
+    }
+
+    /* Tags are what tie the drawing to the schedule, so they have to be
+       unique — two openings sharing one tag is a wrong header on site. */
+    const tags = openings.map((o) => A.openingTag(o, openings));
+    if (new Set(tags).size !== tags.length) fail(`duplicate opening tags: ${tags.join(', ')}`);
+    if (tags.some((t) => /\?/.test(t))) fail(`an opening got no tag: ${tags.join(', ')}`);
+    log(`  ok  opening tags ${tags.join(', ')}`);
+
+    /* Sheet numbers are how you ask for a sheet, so those have to be unique too. */
+    const nums = A.PLANS.map((d) => d.number);
+    if (new Set(nums).size !== nums.length) fail(`duplicate sheet numbers: ${nums.join(', ')}`);
+    for (const d of A.PLANS) {
+      if (typeof d.draw !== 'function') fail(`sheet ${d.number} has no draw()`);
+      if (!d.title) fail(`sheet ${d.number} has no title`);
+    }
+    log(`  ok  ${A.PLANS.length} sheets: ${nums.join(', ')}`);
+  }
 
   /* The racking fixtures: a layout that clears every wall line, and three
      that do not, each surviving its own share code unchanged. */
