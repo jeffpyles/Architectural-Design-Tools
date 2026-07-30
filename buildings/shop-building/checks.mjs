@@ -3,7 +3,8 @@
    that used to ship in the page as presets. They live here now — they are
    regression material, not something a user should have to scroll past. */
 
-export const api = ['aabb', 'anchorBoltPlan', 'leanToPostPlan', 'planExtent', 'openingTag', 'PLANS',
+export const api = ['LUMBER', 'partVolume', 'buildModel', 'aabb', 'cylinderPart', 'SONOTUBE', 'evalMember', 'leanToUnder',
+  'gussetPlan', 'anchorBoltPlan', 'leanToPostPlan', 'planExtent', 'openingTag', 'PLANS',
   'auditBuilding', 'trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
   'leanToDesign', 'leanToDrift', 'seismicShear', 'windPressure',
   'SOIL', 'REBAR', 'wallLineLoads', 'footingDesign', 'slabDesign', 'postFooting',
@@ -121,6 +122,167 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
         + `bottom at ${A.fmtFt(lt.beamBot)}`);
     }
   }
+  /* ---- how the rafters meet the beam ----
+     Hanging them off the face rather than stacking them on top is worth
+     exactly the shallower of the two members, and the whole reason to do it is
+     that reach is set by headroom. Both halves of that get asserted, because
+     the second one is the claim the panel makes. */
+  {
+    const base = { ...spec, wallHeight: 144, leanTo: true };
+    const onTop = A.leanToDesign({ ...base, leanToFraming: 'onTop' });
+    const flush = A.leanToDesign({ ...base, leanToFraming: 'flush' });
+    log(`framing: on top → ${A.fmtFt(onTop.projection)}, ${onTop.rafter.label} on `
+      + `${onTop.beam.label}, ${A.fmtIn(onTop.under)} below the roof line · `
+      + `flush → ${A.fmtFt(flush.projection)}, ${flush.rafter.label} into `
+      + `${flush.beam.label}, ${A.fmtIn(flush.under)}`);
+    if (!(flush.projection > onTop.projection)) {
+      fail(`flush framing reached ${flush.projection}, no further than ${onTop.projection} on top`);
+    }
+    if (!(flush.under < onTop.under)) fail('flush framing did not reduce what hangs below');
+    /* The formula itself, both ways round. */
+    for (const lt of [onTop, flush]) {
+      const dr = A.LUMBER[lt.rafter.size].d / Math.cos(lt.angle);
+      const want = A.leanToUnder(dr, lt.beam.depth, lt.flush);
+      if (Math.abs(lt.under - want) > 0.001) fail(`${lt.flush ? 'flush' : 'on top'}: under is ${lt.under}, not ${want}`);
+      if (Math.abs(lt.headroom - (144 - lt.projection * lt.slope - lt.under)) > 0.06) {
+        fail(`${lt.flush ? 'flush' : 'on top'}: headroom does not follow H - P·slope - under`);
+      }
+      if (lt.headroom < lt.clear - 0.06) fail('a solved lean-to came in under its own clearance');
+    }
+    /* At the SAME projection, the gain has to show up as headroom. */
+    const P = onTop.projection;
+    const a2 = A.leanToDesign({ ...base, leanToFraming: 'onTop', leanToProjection: P });
+    const b2 = A.leanToDesign({ ...base, leanToFraming: 'flush', leanToProjection: P });
+    if (!(b2.headroom > a2.headroom + 1)) {
+      fail(`at ${P}" the flush detail gave ${b2.headroom} against ${a2.headroom} on top`);
+    }
+    /* A face-mount hanger has to land on a beam at least as deep as the rafter. */
+    for (const raf of ['2x6', '2x8', '2x10', '2x12']) {
+      const lt = A.leanToDesign({ ...base, leanToFraming: 'flush', leanToRafter: raf });
+      if (lt.beam.depth < A.LUMBER[raf].d - 0.001) {
+        fail(`flush with ${raf} rafters picked a ${lt.beam.label} — shallower than the rafter`);
+      }
+    }
+    /* And the model has to draw what was decided: rafters stopping at the
+       beam face, with a hanger at each. */
+    for (const framing of ['onTop', 'flush']) {
+      const sp = { ...base, leanToFraming: framing };
+      const lt = A.leanToDesign(sp);
+      const parts = A.buildModel(sp, openings).parts;
+      const raf = parts.filter((q) => q.kind.includes('lean-to rafter'));
+      const hangers = parts.filter((q) => q.kind === 'Sloped-seat rafter hanger');
+      if (!raf.length) fail(`${framing}: no lean-to rafters in the model`);
+      if (framing === 'flush') {
+        if (hangers.length !== raf.length) fail(`${raf.length} rafters, ${hangers.length} hangers`);
+        if (!(lt.rafterRun < lt.projection - 0.5)) fail('flush rafters still run the full projection');
+      } else if (hangers.length) {
+        fail('hangers drawn where the rafters sit on top of the beam');
+      }
+    }
+  }
+
+  /* ---- naming a rafter ---- */
+  {
+    const base = { ...spec, wallHeight: 144, leanTo: true, leanToFraming: 'flush' };
+    let last = 0;
+    for (const raf of ['2x6', '2x8', '2x10', '2x12']) {
+      const lt = A.leanToDesign({ ...base, leanToRafter: raf });
+      if (lt.rafter.size !== raf) fail(`naming ${raf} rafters got ${lt.rafter.size}`);
+      if (!lt.rafterNamed) fail(`naming ${raf} did not read as named`);
+      /* Deeper rafters reach further and cost headroom — the trade the panel
+         claims, asserted rather than asserted-to. */
+      if (lt.projection <= last) fail(`${raf} reached no further than the size below it`);
+      last = lt.projection;
+      log(`  ${raf} rafters → ${A.fmtFt(lt.projection)}, headroom ${A.fmtFt(lt.headroom)}, `
+        + `${(lt.rafter.ratio * 100).toFixed(0)}% of bending`);
+    }
+    /* A size that cannot carry it must be reported, not silently swapped. */
+    const over = A.leanToDesign({ ...base, leanToRafter: '2x6', leanToProjection: 240 });
+    if (over.rafter.size !== '2x6') fail('a named rafter got swapped out when it failed');
+    if (over.rafterOK) fail('a 2x6 spanning 20 ft came back as adequate');
+    const notes = A.auditBuilding({ ...base, leanToRafter: '2x6', leanToProjection: 240 }, openings);
+    if (!notes.some((n) => n.level === 'crit' && /rafters are over/.test(n.title))) {
+      fail('an overloaded named rafter produced no critical note');
+    }
+    /* Tighter spacing has to lighten each rafter. */
+    const wide = A.leanToDesign({ ...base, leanToSpacing: 48, leanToRafter: '2x10' });
+    const tight = A.leanToDesign({ ...base, leanToSpacing: 12, leanToRafter: '2x10' });
+    if (!(tight.projection > wide.projection)) fail('halving the spacing did not buy any reach');
+  }
+
+  /* ---- round footings ---- */
+  {
+    const base = { ...spec, leanTo: true };
+    const sq = A.postFooting({ ...base, postForm: 'square' });
+    const tube = A.postFooting({ ...base, postForm: 'tube' });
+    log(`footings: ${A.fmtIn(sq.worstPad.side)} square, ${sq.worstPad.area.toFixed(2)} sf, `
+      + `${sq.worstPad.pressure.toFixed(0)} psf · ${A.fmtIn(tube.worstPad.d)} tube, `
+      + `${tube.worstPad.area.toFixed(2)} sf, ${tube.worstPad.pressure.toFixed(0)} psf`);
+    if (tube.form !== 'tube' || sq.form !== 'square') fail('the footing form did not take');
+    if (!A.SONOTUBE.includes(tube.worstPad.d)) {
+      fail(`${tube.worstPad.d}" is not a diameter anybody forms`);
+    }
+    for (const p of [sq, tube]) {
+      if (p.worstPad.pressure > p.soil.q) fail(`${p.form}: sized itself over the allowable`);
+      if (!(p.worstPad.area > 0)) fail(`${p.form}: no bearing area`);
+      /* Pressure is gross — post plus concrete over the bearing area. */
+      const want = (p.worst + p.worstPad.selfW) / p.worstPad.area;
+      if (Math.abs(p.worstPad.pressure - want) > 0.5) fail(`${p.form}: pressure is not (P + pad)/area`);
+      for (let i = 1; i < p.padOptions.length; i++) {
+        if (p.padOptions[i].pressure >= p.padOptions[i - 1].pressure) {
+          fail(`${p.form}: a bigger footing did not lower the pressure`);
+        }
+      }
+    }
+    /* A round footing of the same nominal size bears on less than a square
+       one — π/4 of it — which is the trade the panel describes. */
+    const t24 = tube.padOptions.find((o) => o.side === 24);
+    const s24 = sq.padOptions.find((o) => o.side === 24);
+    if (t24 && s24 && !(Math.abs(t24.area / s24.area - Math.PI / 4) < 0.001)) {
+      fail(`a 24" tube bears on ${t24.area} sf against ${s24.area} for the square — not π/4`);
+    }
+    /* Naming a diameter overrides, and an inadequate one is reported. */
+    for (const dia of [12, 24, 36]) {
+      const o = A.postFooting({ ...base, postForm: 'tube', postTube: dia });
+      if (o.worstPad.d !== dia) fail(`naming a ${dia}" tube got ${o.worstPad.d}`);
+      if (o.padChosen !== 'named') fail(`naming a ${dia}" tube did not read as named`);
+    }
+    if (A.postFooting({ ...base, postForm: 'tube', postTube: 8 }).padOK) {
+      fail('an 8" tube passed under thousands of pounds on clay');
+    }
+    /* The model draws a cylinder, and it holds together as one. */
+    const m = A.buildModel({ ...base, postForm: 'tube' }, openings);
+    const piers = m.parts.filter((q) => q.kind.startsWith('Sonotube pier'));
+    if (piers.length !== tube.posts) fail(`${piers.length} tubes drawn for ${tube.posts} posts`);
+    for (const q of piers) {
+      if (q.geom.t !== 'cyl') fail('a Sonotube pier is not drawn as a cylinder');
+      if (Math.abs(q.geom.h - tube.depth) > 0.01) fail('a tube is not the depth it was sized to');
+      const b = A.aabb(q.geom);
+      if (Math.abs((b.mx[0] - b.mn[0]) - q.geom.d) > 0.01) fail('a cylinder bounding box is not its diameter');
+    }
+    /* Volume, so the concrete order is right. */
+    const one = piers[0];
+    const want = Math.PI * (one.geom.d / 2) ** 2 * one.geom.h;
+    if (Math.abs(A.partVolume(one.geom) - want) > 0.01) fail('cylinder volume is not πr²h');
+    if (m.parts.some((q) => q.kind.startsWith('Lean-to pad'))) fail('square pads drawn alongside tubes');
+  }
+
+  /* ---- the truss shop drawing ---- */
+  {
+    const tr = A.trussGeometry(spec);
+    const g = A.gussetPlan(tr);
+    if (g.length !== 8) fail(`${g.length} gussets planned for an 8-joint truss`);
+    for (const q of g) {
+      if (!(q.w > tr.chord.d && q.h > tr.chord.d)) {
+        fail(`a ${q.w} × ${q.h} gusset is smaller than the ${tr.chord.d}" chord it joins`);
+      }
+      const near = Object.values(tr.nodes).some((n) => Math.abs(n[0] - q.z) < 0.5)
+        || Math.abs(q.z - tr.half) < 0.5;
+      if (!near) fail(`a gusset at z=${q.z} is not at any truss node`);
+    }
+    log(`  ok  ${g.length} gussets, ${g[0].w}" × ${g[0].h}" at the heel`);
+  }
+
   {
     const d = A.leanToDrift(spec);
     if (!(d.pd > 0 && d.width > 0)) fail('drift surcharge came out zero');
@@ -383,6 +545,8 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
     { slabReinf: 'fibre', turndownWidth: 12, turndownDepth: 18, gravelDepth: 4 },
     { slabBar: '#6', postPad: 36, leanTo: true },
     { slabBar: '#3', slabThickness: 8, postPad: 12, leanTo: true },
+    { leanTo: true, leanToFraming: 'flush', leanToRafter: '2x12', leanToSpacing: 12 },
+    { leanTo: true, postForm: 'tube', postTube: 30, leanToFraming: 'flush' },
   ]) permute(p);
 
   /* ---- the drawings ----

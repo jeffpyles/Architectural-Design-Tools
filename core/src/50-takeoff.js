@@ -20,6 +20,7 @@ const DENSITY = {
 function partVolume(g) {
   if (!g) return 0;
   if (g.t === 'box') return g.s[0] * g.s[1] * g.s[2];
+  if (g.t === 'cyl') return Math.PI * (g.d / 2) ** 2 * g.h;
   if (g.t === 'prism') {
     let a = 0;
     for (let i = 0, n = g.pts.length; i < n; i++) {
@@ -99,7 +100,7 @@ function takeoff(model, spec) {
     }
     if (p.mat === 'concrete') {
       const g = p.geom;
-      if (g.t === 'box') concreteCuIn += g.s[0] * g.s[1] * g.s[2];
+      concreteCuIn += partVolume(g);
       continue;
     }
     if (p.kind === '¾" plywood gusset') { gussets++; continue; }

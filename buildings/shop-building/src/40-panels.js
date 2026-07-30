@@ -253,6 +253,8 @@ function renderReview() {
   const lt = leanToDesign(s);
   if (lt) {
     p.append(el('h3', null, 'Lean-to'));
+    inlineControls(p, ['leanToProjection', 'leanToClear', 'leanToPosts', 'leanToSpacing',
+      'leanToRafter', 'leanToFraming'], 'r');
     if (lt.impossible) {
       p.append(note(`No lean-to fits on the ${WALLS[lt.wall].label.toLowerCase()} wall — ${lt.reason}. `
         + `A ${fmtFt(s.wallHeight)} wall leaves ${fmtFt(s.wallHeight - lt.clear)} above the required `
@@ -275,8 +277,52 @@ function renderReview() {
         ['Beam', `${lt.beam.label} over ${fmtFt(lt.beamSpan)}`],
         ['Posts', `${lt.posts} × 6x6, ${fmtFt(lt.beamBot)} tall`],
         ['Design load', `${fmtN(lt.psf, 1)} psf`],
+        ['Hangs below the roof', fmtIn(lt.under)],
       ]) kvl.append(el('dt', null, k), el('dd', null, v));
       p.append(kvl);
+
+      /* The framing choice, as a number rather than an argument. Compared at
+         the same projection, because comparing at each one's own maximum
+         hides the gain inside a bigger building. */
+      {
+        const other = leanToDesign({ ...s, leanToFraming: lt.flush ? 'onTop' : 'flush',
+          leanToProjection: lt.projection });
+        const gain = lt.otherUnder - lt.under;
+        p.append(el('h4', null, lt.flush ? 'Rafters hung off the beam face'
+          : 'Rafters sitting on top of the beam'));
+        p.append(note(lt.flush
+          ? `Sloped-seat hangers at every rafter. The rafter and the beam share one band `
+            + `instead of stacking, so ${fmtIn(lt.under)} hangs below the roof line rather `
+            + `than ${fmtIn(lt.otherUnder)}. That is ${fmtIn(gain)} of headroom at the same `
+            + `projection — or, since reach is set by headroom, `
+            + `${fmtFt(gain / lt.slope)} of extra reach at the same clear height. `
+            + 'The costs: a hanger per rafter, and a beam at least as deep as the rafters.'
+          : `The simple build — beam up, rafters across it. It stacks the two, so `
+            + `${fmtIn(lt.under)} hangs below the roof line. Hanging them off the face `
+            + `instead would put ${fmtIn(lt.otherUnder)} below it, `
+            + `${fmtIn(-gain)} back, worth ${fmtFt(-gain / lt.slope)} of reach — `
+            + 'at the price of a sloped-seat hanger at every rafter.'));
+        if (other && !other.impossible) {
+          const cmp = el('dl', 'kv');
+          for (const [k, a, b] of [
+            ['Headroom at this projection', lt.headroom, other.headroom],
+            ['Beam', null, null],
+          ]) {
+            if (a == null) { cmp.append(el('dt', null, k), el('dd', null, `${lt.beam.label} vs ${other.beam.label}`)); continue; }
+            cmp.append(el('dt', null, k), el('dd', null, `${fmtFt(a)} vs ${fmtFt(b)}`));
+          }
+          p.append(cmp);
+        }
+        if (lt.rafterNamed) {
+          const bad = !lt.rafterOK;
+          const w = note(`${lt.rafter.label} named rather than sized: `
+            + `${fmtN(lt.rafter.ratio * 100)}% of bending and `
+            + `${fmtN(lt.rafter.deflRatio * 100)}% of the L/180 deflection limit`
+            + (bad ? ` — over, ${lt.rafter.governs} governs.` : '.'));
+          if (bad) w.style.color = 'var(--keel)';
+          p.append(w);
+        }
+      }
       if (s.leanToDrift && lt.drift.pd > 0) {
         p.append(note(`Includes drifted snow: ${fmtN(lt.drift.pd)} psf over the `
           + `${fmtN(lt.drift.width, 1)} ft nearest the wall, smeared across the span. `
@@ -503,7 +549,7 @@ function renderFoundation() {
 
   /* ---- posts ---- */
   if (pf) {
-    p.append(el('h3', null, 'Lean-to post pads'));
+    p.append(el('h3', null, pf.form === 'tube' ? 'Lean-to post footings' : 'Lean-to post pads'));
     p.append(note(`${pf.posts} posts over ${fmtFt(pf.span * (pf.posts - 1) * 12)} with the beam `
       + 'spliced over them as simple spans, so they do not share equally: an interior post picks up '
       + 'half a span from each side, an end post half a span from one. And they carry half the '
@@ -516,28 +562,54 @@ function renderFoundation() {
       ['End post', `${fmtN(pf.end)} lb`],
       ['Interior post', pf.posts > 2 ? `${fmtN(pf.interior)} lb` : 'none'],
       ['All posts together', `${fmtN(pf.total)} lb`],
-      ['End pad', `${fmtIn(pf.endPad.side)} sq × ${fmtIn(pf.thickness)}`],
-      ['Worst pad', `${fmtIn(pf.worstPad.side)} sq × ${fmtIn(pf.thickness)}`],
-      ['Pad weighs', `${fmtN(pf.worstPad.selfW)} lb`],
+      ['End footing', pf.form === 'tube' ? `${fmtIn(pf.endPad.d)} dia`
+        : `${fmtIn(pf.endPad.side)} sq × ${fmtIn(pf.thickness)}`],
+      ['Worst footing', pf.form === 'tube' ? `${fmtIn(pf.worstPad.d)} dia`
+        : `${fmtIn(pf.worstPad.side)} sq × ${fmtIn(pf.thickness)}`],
+      ['Bearing on', `${fmtN(pf.worstPad.area, 2)} sf`],
+      ['Concrete weighs', `${fmtN(pf.worstPad.selfW)} lb`],
       ['Pressure under it', `${fmtN(pf.worstPad.pressure)} psf of ${fmtN(pf.soil.q)}`],
-      ['Bottom of pad', `${fmtIn(pf.depth)} below the slab`],
+      ['Bottom', `${fmtIn(pf.depth)} below the slab`],
     ]) pv.append(el('dt', null, k), el('dd', null, v));
     p.append(pv);
-    inlineControls(p, ['postPad'], 'f');
-    p.append(table(['Pad', 'Pressure', 'Of allowable', 'Concrete'],
+    inlineControls(p, ['postForm', pf.form === 'tube' ? 'postTube' : 'postPad'], 'f');
+    p.append(table([pf.form === 'tube' ? 'Tube' : 'Pad', 'Bearing on', 'Pressure', 'Concrete'],
       pf.padOptions.map((o) => [
         fmtIn(o.side) + (o.side === pf.worstPad.side ? ' ←' : '') + (o.ok ? '' : ' ✕'),
+        `${fmtN(o.area, 2)} sf`,
         `${fmtN(o.pressure)} psf`,
-        `${fmtN(o.pressure / pf.soil.q * 100)}%`,
         `${fmtN(o.cuYd, 2)} cu yd`,
       ]), [false, true, true, true]));
     p.append(note(`Under the worst post. ✕ is over ${fmtN(pf.soil.q)} psf; ← is what the model `
       + `draws${pf.padChosen === 'named' ? ', named rather than sized' : ''}. `
-      + `The concrete column is all ${pf.posts} pads at that size — the whole range costs less `
-      + 'than a yard, which is why it is worth going a size up rather than to the edge.'));
-    meter('Worst pad', pf.soil.q / pf.worstPad.pressure,
-      `${fmtIn(pf.worstPad.side)} square by ${fmtIn(pf.thickness)}: ${fmtN(pf.worst)} lb of post `
-      + `plus ${fmtN(pf.worstPad.selfW)} lb of pad is ${fmtN(pf.worstPad.pressure)} psf, `
+      + `The concrete column is all ${pf.posts} of them — the whole range costs about a yard, `
+      + 'which is the argument for going a size up rather than sizing to the edge.'));
+    {
+      /* The two forms, side by side, because the trade is not obvious: a tube
+         is quicker and needs more diameter; a pad spreads more for the same
+         concrete and has to be formed. */
+      const other = postFooting({ ...s, postForm: pf.form === 'tube' ? 'square' : 'tube' });
+      const mine = pf.padOptions.find((o) => o.side === pf.worstPad.side) || {};
+      const theirs = other && other.padOptions.find((o) => o.side === other.worstPad.side);
+      p.append(note(pf.form === 'tube'
+        ? `A Sonotube bears on its own end, so there is no spread — the footing is the pier. `
+          + `${fmtIn(pf.worstPad.d)} of tube gives ${fmtN(pf.worstPad.area, 2)} sf against the `
+          + `${fmtN(other.worstPad.area, 2)} sf a ${fmtIn(other.worstPad.side)} square pad gives, `
+          + `at ${fmtN(mine.cuYd, 2)} cu yd of concrete against ${fmtN(theirs ? theirs.cuYd : 0, 2)}. `
+          + 'What you buy with the extra diameter is an auger and an afternoon instead of forming. '
+          + 'If the diameter starts getting silly, a bell-bottom form spreads the end without a '
+          + 'formed pad — nothing here models one, so size it separately.'
+        : `A formed pad spreads: ${fmtN(pf.worstPad.area, 2)} sf under a `
+          + `${fmtIn(pf.worstPad.side)} square, against ${fmtN(other.worstPad.area, 2)} sf for the `
+          + `${fmtIn(other.worstPad.d)} Sonotube that would be needed instead — for about the same `
+          + 'concrete. The pad is the cheaper bearing and the tube is the quicker afternoon.'));
+    }
+    meter('Worst footing', pf.soil.q / pf.worstPad.pressure,
+      (pf.form === 'tube'
+        ? `${fmtIn(pf.worstPad.d)} tube, ${fmtIn(pf.depth)} deep: `
+        : `${fmtIn(pf.worstPad.side)} square by ${fmtIn(pf.thickness)}: `)
+      + `${fmtN(pf.worst)} lb of post plus ${fmtN(pf.worstPad.selfW)} lb of concrete over `
+      + `${fmtN(pf.worstPad.area, 2)} sf is ${fmtN(pf.worstPad.pressure)} psf, `
       + `against ${fmtN(pf.soil.q)} allowed`, 2.5);
     p.append(note('The drift surcharge that sizes the beam is smeared across the whole projection, '
       + 'which is conservative for these: drifted snow piles against the shop wall, inside the '

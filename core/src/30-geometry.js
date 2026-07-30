@@ -12,6 +12,11 @@
 function boxPart(p, s, rx) { return { t: 'box', p, s, rx: rx || 0 }; }
 function prismPart(pts, x0, x1) { return { t: 'prism', pts, x0, x1 }; }
 
+/* A vertical cylinder on its own axis. A prism extrudes along X, which is no
+   use for a Sonotube pier — so this is its own shape rather than a prism
+   turned on its side. `p` is the centre, as everywhere else. */
+function cylinderPart(p, d, h, sides) { return { t: 'cyl', p, d, h, n: sides || 20 }; }
+
 /* A box on an arbitrary basis: b holds the world vectors of the local X, Y
    and Z axes. Used for members that run diagonally in more than one plane. */
 function orientedBox(p, s, b) { return { t: 'box', p, s, rx: 0, b }; }
@@ -113,6 +118,31 @@ class MeshBuilder {
       this.l.push(...a, ...b); this.l.push(...d, ...c2); this.l.push(...a, ...d);
     }
   }
+  cyl(g, col) {
+    const N = Math.max(6, g.n || 20), r = g.d / 2;
+    const [cx, cy, cz] = g.p, hy = g.h / 2;
+    const ring = (y) => Array.from({ length: N }, (_, i) => {
+      const a = i / N * Math.PI * 2;
+      return [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r];
+    });
+    const lo = ring(cy - hy), hi = ring(cy + hy);
+    for (let i = 1; i < N - 1; i++) {
+      this.tri(hi[0], hi[i], hi[i + 1], [0, 1, 0], col);
+      this.tri(lo[0], lo[i + 1], lo[i], [0, -1, 0], col);
+    }
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      const nrm = [(lo[i][0] - cx + lo[j][0] - cx) / 2, 0, (lo[i][2] - cz + lo[j][2] - cz) / 2];
+      const ln = Math.hypot(nrm[0], nrm[2]) || 1;
+      const n = [nrm[0] / ln, 0, nrm[2] / ln];
+      this.tri(lo[i], lo[j], hi[j], n, col);
+      this.tri(lo[i], hi[j], hi[i], n, col);
+      /* Only every third vertical, or a 20-sided pier is a bundle of sticks. */
+      if (i % Math.max(1, Math.round(N / 6)) === 0) this.l.push(...lo[i], ...hi[i]);
+      this.l.push(...lo[i], ...lo[j]);
+      this.l.push(...hi[i], ...hi[j]);
+    }
+  }
   tri(a, b, c, n, col) {
     for (const p of [a, b, c]) this.v.push(p[0], p[1], p[2], n[0], n[1], n[2], col[0], col[1], col[2]);
   }
@@ -120,6 +150,12 @@ class MeshBuilder {
 function aabb(g) {
   const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
   const put = (p) => { for (let i = 0; i < 3; i++) { mn[i] = Math.min(mn[i], p[i]); mx[i] = Math.max(mx[i], p[i]); } };
+  if (g.t === 'cyl') {
+    const r = g.d / 2;
+    put([g.p[0] - r, g.p[1] - g.h / 2, g.p[2] - r]);
+    put([g.p[0] + r, g.p[1] + g.h / 2, g.p[2] + r]);
+    return { mn, mx, c: [...g.p] };
+  }
   if (g.t === 'box') {
     const xf = boxXform(g);
     for (const k of CUBE_CORNERS) {

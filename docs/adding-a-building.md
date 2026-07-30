@@ -103,6 +103,12 @@ your own panels. A part is:
   len, note, … }                  // optional extras
 ```
 
+Geometry comes in three shapes: `box` (optionally rotated about X or on an arbitrary
+basis), `prism` (a polygon extruded along X, for gable triangles) and `cyl` (a vertical
+cylinder, for a pier). Adding a fourth means touching four places — `MeshBuilder`,
+`aabb`, `partVolume` and the render dispatch — and `tools/check.mjs` will want to know
+how to sanity-check its numbers.
+
 `geom` positions are **centres**, not corners. Add parts through a small local
 helper so the shape stays uniform:
 
@@ -157,6 +163,18 @@ connects the two: after it, `s.mx()` and `s.my()` map model inches onto the page
 real architectural scale, and `s.pickScale(w, h, availW, availH)` returns the largest
 scale from the list that still fits — a drawing at a scale nobody owns a rule for is
 worse than a smaller drawing.
+
+Set the frame rather than wrapping it in local helpers. A section wants heights measured
+*up* from a datum while a plan runs *down* the page, and the temptation is a local
+`Y = (v) => s.my(-v)`; do that and every `s.callout()`, `s.dimV()` and leader in the kit
+lands somewhere else on the sheet, because they all go through `s.my()`. Pass
+`{ flipY: true }` and let the frame own the direction.
+
+`s.clipTo(x, y, w, h)` cuts everything drawn after it to a window, which is what lets a
+section be *broken*: two bands of the same drawing, each showing its own slice, with the
+wall running off the edge of both rather than through the gap. Annotation should come out
+from under the clip — a leader that reaches for clear space gets its text trimmed off
+otherwise.
 
 Sheets should read the model rather than restate it. Where a sheet does need its own
 little layout function — where the anchor bolts go, where the posts land — check it

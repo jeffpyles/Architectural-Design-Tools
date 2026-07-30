@@ -158,7 +158,9 @@ class Viewport {
       const mb = new MeshBuilder();
       for (const p of parts) {
         const col = MATERIALS[p.mat] ? MATERIALS[p.mat].c : [0.7, 0.7, 0.7];
-        if (p.geom.t === 'box') mb.box(p.geom, col); else mb.prism(p.geom, col);
+        if (p.geom.t === 'box') mb.box(p.geom, col);
+        else if (p.geom.t === 'cyl') mb.cyl(p.geom, col);
+        else mb.prism(p.geom, col);
       }
       const tri = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, tri);

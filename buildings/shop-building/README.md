@@ -137,6 +137,19 @@ At 12' walls with the projection solved to its limit that is **1,872 lb** on an 
 and **3,743 lb** on the middle one — an 18" pad and a 24" pad, not one size for all three.
 Fixed at a 10' projection it is 1,377 and 2,754 lb.
 
+They can be **formed pads** or **Sonotubes**, and the trade is worth seeing rather than
+assuming. A tube bears on its own end, so there is no spread — the footing *is* the pier,
+and a round one bears on π/4 of what the same nominal square does:
+
+| | bearing | pressure | concrete, all 3 |
+|---|---|---|---|
+| 24" square pad + pier | 4.00 sf | 1,086 psf | 0.50 cu yd |
+| 24" Sonotube, full depth | 3.14 sf | 1,416 psf | 0.52 cu yd |
+
+Same concrete, less bearing — what the extra diameter buys is an auger and an afternoon
+instead of forming. If the diameter starts getting silly, a bell-bottom form spreads the
+end without a formed pad; nothing here models one, so it would want sizing separately.
+
 ## Drawings
 
 The **Plans** tab draws six sheets and prints them. They are not pictures of the model —
@@ -146,10 +159,12 @@ a plan of.
 
 | | | |
 |---|---|---|
-| **S1.0** | Foundation plan | slab edge, turndown, post pads, anchor bolts, contraction joints, apron, keynotes |
-| **S1.1** | Foundation details | A — turndown at a bearing wall · B — lean-to post pad · C — slab at a contraction joint |
+| **S1.0** | Foundation plan | slab edge, turndown, post footings, anchor bolts, contraction joints, apron, keynotes |
+| **S1.1** | Foundation details | A — turndown at a bearing wall · B — lean-to post footing · C — slab at a contraction joint |
 | **S2.0** | Framing plan | wall poché, openings with swings and sills, braced panels in red, opening schedule with every header |
-| **S3.0** | Roof framing plan | every truss, ridge, purlins, roof-plane bracing bays, one-truss cut list |
+| **S2.1** | Wall section | footing to eave in one cut, broken through the middle of the wall so it draws at 1/2" instead of 1/4" |
+| **S3.0** | Roof framing plan | every truss, ridge, purlins, roof-plane bracing bays |
+| **S3.1** | Truss shop drawing | the truss at scale, every member length and cut angle, gussets drawn at cut size, heel/peak/panel-point joints blown up to nail from |
 | **A2.0** | Elevations | all four, openings tagged to the schedule |
 | **E1.0** | Electrical plan | receptacles, switches, strip lights, sub-panel, with a legend drawn by the same routine as the symbols |
 
@@ -186,8 +201,41 @@ and the member depth that carries the longer reach is what eats the headroom, so
 solver bisects for the widest projection whose own rafter and beam still clear the
 required height. Leeward drift is included, 26.2 psf over the first 6.1 ft.
 
-With three posts: **8'-6⅛"** off 10' walls (beam capacity binds), **15'-8⅞"** off 12'
-walls (headroom binds).
+### How the rafters meet the beam
+
+Sitting them **on top** is the simple build: beam up, rafters across it, done. It also
+stacks the two, so what hangs below the roof line is the rafter depth *plus* the beam
+depth.
+
+Hanging them off the **face** — sloped-seat face-mount hangers, rafter top flush with the
+beam top — puts the two in one band, so what hangs below is whichever is *deeper*, not
+the sum. Off 12' walls that is 18¹³⁄₁₆" down to 11⅝", and since reach is set by headroom
+the saving comes back as projection:
+
+| | on top | hung off the face |
+|---|---|---|
+| Reach at 12' walls, 3 posts | 15'-8⅞" | **18'-1⅝"** |
+| Below the roof line | 18¹³⁄₁₆" | 11⅝" |
+
+The costs are real and both are enforced: a hanger at every rafter, and the beam has to
+be at least as deep as the rafter for a face-mount hanger to land on — `pickMember` takes
+a `minDepth` for exactly that, and a check asserts no flush beam ever comes out shallower
+than its rafters.
+
+### Rafter size and spacing
+
+`leanToRafter` takes `auto` or a size, and spacing runs 12" to 48". Naming a size that
+cannot carry it does not get overruled — it reports what it costs, because the trade is
+not a structural question:
+
+| Rafters | Reach | Headroom |
+|---|---|---|
+| 2x6 | 9'-6" | 8'-8¼" |
+| 2x8 | 12'-7⅞" | 7'-10¹³⁄₁₆" |
+| 2x10 | 16'-0⅛" | 7'-2⁷⁄₁₆" |
+| 2x12 | 18'-1⅝" | 6'-6" |
+
+Deeper rafters buy reach and spend headroom. Which of those you want is up to you.
 
 ## Sharing a layout
 

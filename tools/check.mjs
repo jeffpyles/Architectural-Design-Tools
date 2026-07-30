@@ -61,10 +61,13 @@ function badParts(parts) {
   const out = [];
   for (const p of parts) {
     const g = p.geom;
-    const nums = g.t === 'box' ? [...g.p, ...g.s, g.rx] : [g.x0, g.x1, ...g.pts.flat()];
+    const nums = g.t === 'box' ? [...g.p, ...g.s, g.rx]
+      : g.t === 'cyl' ? [...g.p, g.d, g.h]
+        : [g.x0, g.x1, ...g.pts.flat()];
     if (nums.some((n) => !Number.isFinite(n))) out.push([p, 'non-finite', nums]);
     else if (nums.some((n) => Math.abs(n) > LIM)) out.push([p, 'out of range', nums]);
     else if (g.t === 'box' && g.s.some((n) => n <= 0)) out.push([p, 'zero/negative size', g.s]);
+    else if (g.t === 'cyl' && (g.d <= 0 || g.h <= 0)) out.push([p, 'zero/negative cylinder', [g.d, g.h]]);
   }
   return out;
 }

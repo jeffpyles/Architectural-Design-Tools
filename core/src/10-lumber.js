@@ -39,33 +39,51 @@ const RAFTER_LADDER = [
   { size: '2x10', plies: 1 }, { size: '2x12', plies: 1 },
 ];
 
-/* Shallowest member from a ladder that carries wPlf over clearSpan inches.
-   Cr applies to repetitive members — rafters and joists at 24" o.c. or
-   tighter, and built-up beams of three plies or more. */
-function pickMember(clearSpan, wPlf, ladder, defDiv, repetitive) {
+/* One candidate, worked out whether or not it passes. Split out of
+   pickMember so a member somebody has NAMED can be reported with what it
+   costs — being overruled by the ladder tells you nothing. */
+function evalMember(opt, clearSpan, wPlf, defDiv, repetitive) {
+  const isLvl = opt.kind === 'lvl';
+  const sec = isLvl ? LVL[opt.size] : LUMBER[opt.size];
+  if (!sec) return null;
   const L = clearSpan;
   const win = wPlf / 12;
   const M = win * L * L / 8;
   const defLimit = L / defDiv;
+  const Sx = sec.Sx * opt.plies;
+  const Ix = sec.Ix * opt.plies;
+  const Cr = repetitive || opt.plies >= 3 ? 1.15 : 1.0;
+  const Fb = isLvl ? 2600 * 1.15 : 900 * 1.15 * sec.Cf * Cr;
+  const E = isLvl ? 2.0e6 : 1.6e6;
+  const capM = Fb * Sx;
+  const defl = 5 * win * Math.pow(L, 4) / (384 * E * Ix);
+  return {
+    size: opt.size, plies: opt.plies, kind: opt.kind || 'sawn',
+    depth: sec.d, thickness: opt.plies * sec.t,
+    M, capM, defl, defLimit, w: wPlf, ratio: M / capM,
+    deflRatio: defLimit > 0 ? defl / defLimit : 0,
+    ok: capM >= M && defl <= defLimit,
+    governs: capM < M ? 'bending' : defl > defLimit ? 'deflection' : null,
+    label: isLvl
+      ? `(${opt.plies}) 1¾×${opt.size.endsWith('14') ? '14' : '11⅞'} LVL`
+      : (opt.plies === 1 ? opt.size : `(${opt.plies}) ${opt.size}`),
+  };
+}
+
+/* Shallowest member from a ladder that carries wPlf over clearSpan inches.
+   Cr applies to repetitive members — rafters and joists at 24" o.c. or
+   tighter, and built-up beams of three plies or more.
+
+   `minDepth` rejects anything shallower than a stated depth, which is what a
+   beam needs when something is hung off its face rather than sitting on top:
+   a face-mount hanger has to land on a member at least as deep as the one it
+   carries. */
+function pickMember(clearSpan, wPlf, ladder, defDiv, repetitive, minDepth) {
   for (const opt of ladder) {
-    const isLvl = opt.kind === 'lvl';
-    const sec = isLvl ? LVL[opt.size] : LUMBER[opt.size];
-    if (!sec) continue;
-    const Sx = sec.Sx * opt.plies;
-    const Ix = sec.Ix * opt.plies;
-    const Cr = repetitive || opt.plies >= 3 ? 1.15 : 1.0;
-    const Fb = isLvl ? 2600 * 1.15 : 900 * 1.15 * sec.Cf * Cr;
-    const E = isLvl ? 2.0e6 : 1.6e6;
-    const capM = Fb * Sx;
-    const defl = 5 * win * Math.pow(L, 4) / (384 * E * Ix);
-    if (capM >= M && defl <= defLimit) {
-      return { size: opt.size, plies: opt.plies, kind: opt.kind || 'sawn',
-        depth: sec.d, thickness: opt.plies * sec.t, M, capM, defl, defLimit,
-        w: wPlf, ratio: M / capM,
-        label: isLvl
-          ? `(${opt.plies}) 1¾×${opt.size.endsWith('14') ? '14' : '11⅞'} LVL`
-          : (opt.plies === 1 ? opt.size : `(${opt.plies}) ${opt.size}`) };
-    }
+    const r = evalMember(opt, clearSpan, wPlf, defDiv, repetitive);
+    if (!r) continue;
+    if (minDepth && r.depth < minDepth - 0.001) continue;
+    if (r.ok) return r;
   }
   return null;
 }
@@ -99,6 +117,10 @@ function splitRun(len) {
   const n = Math.ceil(len / 192);
   return Array.from({ length: n }, () => len / n);
 }
+
+/* Fibre form tubes, in the diameters the yards actually stock. A pier is only
+   ever one of these — asking for 22" gets you 24" and a puzzled look. */
+const SONOTUBE = [8, 10, 12, 14, 16, 18, 20, 24, 30, 36, 42, 48];
 
 /* ---- structural steel ----------------------------------------------------
    Trailer frames are built from rectangular tube and light I sections. Weight

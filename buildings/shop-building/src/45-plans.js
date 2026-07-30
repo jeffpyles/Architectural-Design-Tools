@@ -62,6 +62,16 @@ function planFrame(s, area, spec, bleed, maxScale, box) {
 
 const PLAN_WARNING = 'Preliminary. Not for construction — no engineer has reviewed this.';
 
+/* A section frame. Plans run +v DOWN the page; a section is talked about in
+   heights above the slab, so this flips it — and it flips it inside the frame
+   rather than in a local helper, so s.callout(), s.dimH() and everything else
+   in the kit land where the drawing is rather than where a plan would put
+   them. `vTop` is the height at the top edge of the view. */
+function sectionFrame(s, x, y, scaleKey, uLo, uHi, vTop) {
+  s.frame(x, y, scaleKey, [uLo, vTop, uHi, vTop], { flipY: true });
+  return { X: s.mx, Y: s.my, L: s.mlen };
+}
+
 /* ================================================================
    S1.0 — Foundation plan
    ================================================================ */
@@ -267,26 +277,23 @@ function drawFoundationDetails(s) {
   /* The frame runs +v DOWN the page, as every plan here does. A section wants
      to be talked about in heights above the slab, so AY() takes an upward
      value and hands the frame the downward one. */
-  s.frame(area.x + 32, area.y + 20, keyA,
-    [-12, -16, spec.turndownWidth + 18, spec.turndownDepth + 6]);
-  const AX = (u) => s.mx(u);
-  const AY = (v) => s.my(-v);
-  const L = (v) => s.mlen(v);
+  const { X: AX, Y: AY, L } = sectionFrame(s, area.x + 32, area.y + 20, keyA,
+    -12, spec.turndownWidth + 18, 16);
 
-  /* earth, then base, then concrete */
-  s.hatch(AX(-12), AY(-4), L(12), L(spec.turndownDepth + 6), 'earth');
-  s.hatch(AX(spec.turndownWidth), AY(-4), L(14), L(spec.turndownDepth + 6), 'earth');
-  s.hatch(AX(-12), AY(-spec.slabThickness), L(spec.turndownWidth + 26), L(spec.gravelDepth), 'gravel');
-
-  /* the concrete: slab plus turndown, as one poured shape */
+  /* Earth outside, base under the slab, then the concrete — each hatch on the
+     material it is actually hatching, so the stipple does not end up in the
+     gravel and the diagonals in the pour. */
   const tw = spec.turndownWidth, td = spec.turndownDepth, st = spec.slabThickness;
-  const concrete = [
+  s.hatch(AX(-12), AY(-st), L(10), L(td), 'earth');
+  s.hatch(AX(tw), AY(-st - spec.gravelDepth), L(26), L(td - st), 'earth');
+  s.hatch(AX(tw), AY(-st), L(26), L(spec.gravelDepth), 'gravel');
+  s.hatch(AX(-2), AY(0), L(tw + 28), L(st), 'concrete');
+  s.hatch(AX(-2), AY(-st), L(tw + 2), L(td - st), 'concrete');
+  s.poly([
     [AX(-2), AY(0)], [AX(tw + 26), AY(0)],
     [AX(tw + 26), AY(-st)], [AX(tw), AY(-st)],
     [AX(tw), AY(-td)], [AX(-2), AY(-td)],
-  ];
-  s.hatch(AX(-2), AY(0), L(tw + 28), L(td), 'concrete');
-  s.poly(concrete, LW.cut);
+  ], LW.cut);
 
   /* vapour retarder under the slab, turned up at the edge */
   s.path(`M${AX(tw + 26)},${AY(-st) + 1.2} L${AX(-2)},${AY(-st) + 1.2} L${AX(-2)},${AY(-td)}`,
@@ -334,20 +341,37 @@ function drawFoundationDetails(s) {
   if (pf) {
     const bModelW = pf.worstPad.side + 26, bModelH = pf.depth + 26;
     const keyB = s.pickScale(bModelW, bModelH, area.w - colW - 44, rowTop - 34, '1');
-    s.frame(area.x + colW + 32, area.y + 20, keyB,
-      [-13, -16, pf.worstPad.side + 13, pf.depth + 10]);
-    const BX = (u) => s.mx(u), BY = (v) => s.my(-v), BL = (v) => s.mlen(v);
+    const { X: BX, Y: BY, L: BL } = sectionFrame(s, area.x + colW + 32, area.y + 20, keyB,
+      -13, pf.worstPad.side + 13, 16);
     const side = pf.worstPad.side, th = pf.thickness, dep = pf.depth;
 
     s.hatch(BX(-13), BY(-2), BL(13), BL(dep + 4), 'earth');
     s.hatch(BX(side), BY(-2), BL(13), BL(dep + 4), 'earth');
-    s.hatch(BX(0), BY(-(dep - th)), BL(side), BL(th), 'concrete');
-    s.rect(BX(0), BY(-(dep - th)), BL(side), BL(th), LW.cut);
-    /* the pier stem, from the top of the pad up to grade */
-    const stemW = 12, sx = (side - stemW) / 2;
-    if (dep - th > 0.5) {
-      s.hatch(BX(sx), BY(0), BL(stemW), BL(dep - th), 'concrete');
-      s.rect(BX(sx), BY(0), BL(stemW), BL(dep - th), LW.cut);
+    if (pf.form === 'tube') {
+      /* One pour, full depth, bearing on its own end — there is no pad and no
+         stem, which is the whole point of the tube. */
+      s.hatch(BX(0), BY(0), BL(side), BL(dep), 'concrete');
+      s.rect(BX(0), BY(0), BL(side), BL(dep), LW.cut);
+      s.line(BX(0) + 1.4, BY(0), BX(0) + 1.4, BY(-dep), LW.thin, { stroke: 'var(--ink-3)' });
+      s.line(BX(side) - 1.4, BY(0), BX(side) - 1.4, BY(-dep), LW.thin, { stroke: 'var(--ink-3)' });
+      s.callout(side / 2, -dep * 0.45, 40, 16,
+        `${fmtIn(side)} FIBRE FORM, ${fmtN(pf.worstPad.area, 2)} SF BEARING`, { size: 5.2 });
+      s.callout(side / 2, -dep * 0.75, -34, 22, '4 × #4 VERTICAL, #3 TIES @ 12"', { size: 5.2 });
+      for (const u of [4, side - 4]) {
+        s.line(BX(u), BY(-3), BX(u), BY(-dep + 3), LW.medium);
+      }
+    } else {
+      s.hatch(BX(0), BY(-(dep - th)), BL(side), BL(th), 'concrete');
+      s.rect(BX(0), BY(-(dep - th)), BL(side), BL(th), LW.cut);
+      /* the pier stem, from the top of the pad up to grade */
+      const stemW = 12, sx = (side - stemW) / 2;
+      if (dep - th > 0.5) {
+        s.hatch(BX(sx), BY(0), BL(stemW), BL(dep - th), 'concrete');
+        s.rect(BX(sx), BY(0), BL(stemW), BL(dep - th), LW.cut);
+      }
+      s.callout(side / 2, -(dep - th / 2), 40, 16,
+        `${fmtIn(side)} SQ × ${fmtIn(th)}, ${fmtN(pf.worstPad.area, 2)} SF BEARING`,
+        { size: 5.2 });
     }
     /* the post and its base */
     s.rect(BX(side / 2 - 2.75), BY(14), BL(5.5), BL(12.8), LW.heavy);
@@ -358,7 +382,8 @@ function drawFoundationDetails(s) {
 
     s.dimLine(BX(0), BY(-dep) + 13, BX(side), BY(-dep) + 13, fmtIn(side));
     s.dimLine(BX(side) + 14, BY(0), BX(side) + 14, BY(-dep), fmtIn(dep));
-    s.viewTitle(area.x + colW + 32, area.y + rowTop - 8, 'Lean-to post pad', keyB, 'B');
+    s.viewTitle(area.x + colW + 32, area.y + rowTop - 8,
+      pf.form === 'tube' ? 'Lean-to post on a Sonotube' : 'Lean-to post pad', keyB, 'B');
   }
 
   /* ---- detail C: the joint the slab thickness turns on ----
@@ -368,9 +393,8 @@ function drawFoundationDetails(s) {
     const st2 = spec.slabThickness;
     const cModelW = 60, cModelH = st2 + spec.gravelDepth + 22;
     const keyC = s.pickScale(cModelW, cModelH, area.w - 60, rowBot - 40, '3');
-    s.frame(area.x + 34, area.y + rowTop + 24, keyC,
-      [-6, -14, 54, st2 + spec.gravelDepth + 8]);
-    const CX = (u) => s.mx(u), CY = (v) => s.my(-v), CL = (v) => s.mlen(v);
+    const { X: CX, Y: CY, L: CL } = sectionFrame(s, area.x + 34, area.y + rowTop + 24, keyC,
+      -6, 54, 14);
 
     s.hatch(CX(-6), CY(0), CL(60), CL(spec.gravelDepth), 'gravel');
     s.hatch(CX(-6), CY(st2), CL(60), CL(st2), 'concrete');
@@ -592,6 +616,250 @@ function openingTag(o, list) {
   const same = ops.filter((x) => x.kind === o.kind);
   const i = same.indexOf(o);
   return pre + (i < 0 ? '?' : i + 1);
+}
+
+/* ================================================================
+   S2.1 — Wall section
+
+   Cut through a bearing wall from the bottom of the footing to the eave. The
+   middle of the wall is broken out, which is what lets it be drawn at 3/4"
+   instead of the quarter inch a full-height section fits into on letter
+   paper — and nothing happens in the middle of a wall anyway.
+   ================================================================ */
+function drawWallSection(s) {
+  const spec = state.spec;
+  const area = sheetArea(s, { noteWidth: 168 });
+  const tr = trussGeometry(spec);
+  const T = LUMBER[spec.studSize].d;
+  const H = spec.wallHeight;
+  const eo = spec.eaveOverhang;
+  const sk = spec.wallSkin === 'sheathing' ? 0.4375 : 0;   // exterior OSB
+  const gt = spec.wallSkin === 'girts' ? LUMBER[spec.girtSize].t : 0;
+  const outT = sk + gt + 0.5;                              // to the face of the siding
+
+  /* Two windows onto the same section, at the same scale, with a break
+     between. Model u runs across the wall, v UP from the top of the slab. */
+  const uLo = -(eo + 14), uHi = T + 28;
+  const baseV = [-(spec.turndownDepth + 6), 34];           // footing to 2'-10"
+  const headV = [H - 34, H + tr.heelSpace + 26];           // 2'-10" of wall to the roof
+  const uSpan = uHi - uLo;
+  const vTotal = (baseV[1] - baseV[0]) + (headV[1] - headV[0]);
+  const BREAK = 28;                                        // points between the two
+  const key = s.pickScale(uSpan, vTotal, area.w - 70, area.h - BREAK - 34, '1.5');
+  const f = SCALES.find((z) => z.k === key).f * PT;
+
+  const x0 = area.x + 52;
+  const headH = (headV[1] - headV[0]) * f;
+  const baseH = (baseV[1] - baseV[0]) * f;
+  const headTop = area.y + 12;
+  const baseTop = headTop + headH + BREAK;
+
+  /* One band of the section, clipped to its own slice so the wall runs off the
+     edge of both rather than straight through the break. */
+  const band = (pageTop, vTop, hPts) => {
+    s.clipTo(area.x, pageTop - 1, area.w, hPts + 2);
+    return sectionFrame(s, x0, pageTop, key, uLo, uHi, vTop);
+  };
+
+  /* ---------- the head ----------
+     The wall's outside face of framing is u = 1, which is also where the truss
+     bears, so truss coordinates and section coordinates line up: the chord
+     working line runs z = u - 1 in from that face, rising inward toward a
+     ridge that is off this drawing. */
+  {
+    const { X, Y, L } = band(headTop, headV[1], headH);
+    const bcBot = tr.bcBot, bcTop = tr.bcTop;
+    const eaveU = 1 - eo;
+    const tcBot = (u) => bcTop + (u - 1) * tr.slope;        // top chord underside
+    const tcTop = (u) => tcBot(u) + tr.perp;                // and its top face
+
+    /* wall below, running off the bottom of the band */
+    s.rect(X(1), Y(H - 3), L(T), L(H - 3 - headV[0] + 2), LW.medium);
+    s.hatch(X(1), Y(H - 3), L(T), L(H - 3 - headV[0] + 2), 'wood');
+    if (spec.insulation) s.hatch(X(1), Y(H - 3), L(T), L(H - 3 - headV[0] + 2), 'insul');
+
+    /* double top plate, cut */
+    s.rect(X(1), Y(H), L(T), L(3), LW.cut);
+    s.hatch(X(1), Y(H), L(T), L(3), 'wood');
+    s.line(X(1), Y(H - 1.5), X(1 + T), Y(H - 1.5), LW.light);
+
+    /* bottom chord, cut, bearing on the plate and running inward */
+    s.rect(X(1), Y(bcTop), L(uHi - 1), L(tr.chord.d), LW.cut);
+    s.hatch(X(1), Y(bcTop), L(uHi - 1), L(tr.chord.d), 'wood');
+    if (spec.heelHeight > 0) {
+      s.rect(X(1), Y(bcBot), L(T), L(spec.heelHeight), LW.medium);
+      s.callout(1 + T / 2, bcBot - spec.heelHeight / 2, 48, 16,
+        `${fmtIn(spec.heelHeight)} RAISED HEEL`, { size: 5.2 });
+    }
+
+    /* top chord, a sloping band from the eave up and inward */
+    s.poly([[X(eaveU), Y(tcBot(eaveU))], [X(uHi), Y(tcBot(uHi))],
+      [X(uHi), Y(tcTop(uHi))], [X(eaveU), Y(tcTop(eaveU))]], LW.cut);
+    s.hatch(X(eaveU), Y(tcTop(uHi)), L(uHi - eaveU), L(tcTop(uHi) - tcBot(eaveU)), 'wood');
+
+    /* roof build-up on top of it */
+    if (spec.roofDeck === 'osb') {
+      s.line(X(eaveU), Y(tcTop(eaveU) + 0.44), X(uHi), Y(tcTop(uHi) + 0.44), LW.medium);
+      s.line(X(eaveU), Y(tcTop(eaveU) + 1.1), X(uHi), Y(tcTop(uHi) + 1.1), LW.heavy);
+    } else {
+      for (let u = eaveU + 2; u < uHi; u += spec.purlinSpacing / 4) {
+        s.rect(X(u), Y(tcTop(u) + 1.5), L(3.5), L(1.5), LW.light);
+      }
+      s.line(X(eaveU), Y(tcTop(eaveU) + 1.8), X(uHi), Y(tcTop(uHi) + 1.8), LW.heavy);
+    }
+
+    /* fascia hung off the chord ends, and the soffit line back to the wall */
+    s.rect(X(eaveU - 1.5), Y(tcTop(eaveU)), L(1.5), L(7.25), LW.medium);
+    s.line(X(eaveU), Y(tcBot(eaveU)), X(1 - outT), Y(tcBot(1)), LW.light,
+      { stroke: 'var(--ink-3)', dash: '3 2' });
+
+    /* girts or sheathing, then the siding face */
+    if (gt) {
+      for (let v = H - 4; v > headV[0]; v -= spec.girtSpacing) {
+        s.rect(X(1 - gt), Y(v), L(gt), L(3.5), LW.light);
+      }
+    } else {
+      s.rect(X(1 - sk), Y(H + 3), L(sk), L(H + 3 - headV[0]), LW.medium);
+    }
+    s.line(X(1 - outT), Y(tcBot(1)), X(1 - outT), Y(headV[0]), LW.heavy);
+
+    /* the lid */
+    if (spec.ceilingDrywall) {
+      s.rect(X(1 + T), Y(bcBot), L(uHi - 1 - T), L(0.625), LW.medium);
+      s.hatch(X(1 + T), Y(bcBot + spec.ceilingInsulation), L(uHi - 1 - T),
+        L(spec.ceilingInsulation), 'insul');
+      s.callout(uHi - 4, bcBot + spec.ceilingInsulation / 2, -18, 46,
+        `${fmtIn(spec.ceilingInsulation)} BLOWN OVER A ⅝" CEILING`, { size: 5.2 });
+    }
+
+    /* Annotation is not part of the cut, so it comes out from under the clip —
+       otherwise every leader that reaches for clear space gets its text
+       trimmed off at the edge of the band. */
+    s.layerOff();
+    s.callout(1 + T / 2, H + 1.5, 46, 30, `DOUBLE ${spec.studSize} TOP PLATE`, { size: 5.2 });
+    s.callout(1 + T + 8, bcTop - tr.chord.d / 2, 40, -14,
+      `${tr.chordSize} BOTTOM CHORD — TRUSS BEARS ON THE PLATE`, { size: 5.2 });
+    s.callout(eaveU + eo * 0.45, tcTop(eaveU + eo * 0.45) + 2, -8, -26,
+      spec.roofing === 'metal'
+        ? (spec.roofDeck === 'osb' ? '26 GA PANEL ON OSB DECK'
+          : `26 GA PANEL ON ${spec.purlinSize} PURLINS @ ${fmtIn(spec.purlinSpacing)} O.C.`)
+        : 'ASPHALT SHINGLE ON UNDERLAYMENT AND DECK',
+      { size: 5.2 });
+
+    s.dimLine(X(eaveU), Y(headV[1]) - 9, X(1), Y(headV[1]) - 9, fmtIn(eo));
+    s.dimLine(X(uHi) + 16, Y(bcTop), X(uHi) + 16, Y(bcBot), fmtIn(tr.chord.d));
+  }
+
+  /* ---------- the break ---------- */
+  s.layerOff();
+  {
+    const y = headTop + headH + BREAK / 2;
+    const xa = x0 + (1 - uLo) * f - 16, xb = x0 + (1 + T - uLo) * f + 16;
+    let d = `M${fx(xa)},${fx(y - 4)}`;
+    const n = 7;
+    for (let i = 1; i <= n; i++) {
+      d += ` L${fx(xa + (xb - xa) * (i / n))},${fx(y + (i % 2 ? 4 : -4))}`;
+    }
+    s.path(d, LW.medium, { stroke: 'var(--ink-2)' });
+    s.text(xb + 10, y + 2,
+      `${fmtFt(headV[0] - baseV[1])} OF WALL NOT SHOWN`,
+      { size: 5.4, anchor: 'start', fill: 'var(--ink-3)' });
+  }
+
+  /* ---------- the base ---------- */
+  {
+    const { X, Y, L } = band(baseTop, baseV[1], baseH);
+    const st = spec.slabThickness, td = spec.turndownDepth, tw = spec.turndownWidth;
+
+    s.hatch(X(uLo), Y(-st), L(-uLo), L(td), 'earth');
+    s.hatch(X(tw), Y(-st), L(uHi - tw), L(spec.gravelDepth), 'gravel');
+    /* Two rectangles rather than one, so the stipple lands on the concrete and
+       not on the base under the slab. */
+    s.hatch(X(0), Y(0), L(uHi), L(st), 'concrete');
+    s.hatch(X(0), Y(-st), L(tw), L(td - st), 'concrete');
+    s.poly([[X(0), Y(0)], [X(uHi), Y(0)], [X(uHi), Y(-st)], [X(tw), Y(-st)],
+      [X(tw), Y(-td)], [X(0), Y(-td)]], LW.cut);
+    s.path(`M${fx(X(uHi))},${fx(Y(-st) + 1.2)} L${fx(X(0))},${fx(Y(-st) + 1.2)} `
+      + `L${fx(X(0))},${fx(Y(-td))}`, LW.medium, { stroke: 'var(--ink-2)', dash: '3 1.6' });
+
+    /* plate, bolt, stud, skin */
+    s.rect(X(1), Y(1.5), L(T), L(1.5), LW.cut);
+    s.hatch(X(1), Y(1.5), L(T), L(1.5), 'wood');
+    s.rect(X(1), Y(baseV[1]), L(T), L(baseV[1] - 1.5), LW.medium);
+    s.hatch(X(1), Y(baseV[1]), L(T), L(baseV[1] - 1.5), 'wood');
+    const bx = X(1 + T / 2);
+    s.line(bx, Y(4), bx, Y(-7), LW.heavy);
+    s.line(bx, Y(-7), bx + L(5), Y(-7), LW.heavy);
+    s.rect(bx - 5, Y(1.7), 10, 2, LW.light, { fill: 'var(--ink-2)' });
+    if (gt) {
+      for (let v = baseV[1] - 4; v > 2; v -= spec.girtSpacing) {
+        s.rect(X(1 - gt), Y(v), L(gt), L(3.5), LW.light);
+      }
+    } else {
+      s.rect(X(1 - sk), Y(baseV[1]), L(sk), L(baseV[1]), LW.medium);
+    }
+    s.line(X(1 - outT), Y(baseV[1]), X(1 - outT), Y(-2), LW.heavy);
+    if (spec.insulation) s.hatch(X(1), Y(baseV[1] - 4), L(T), L(baseV[1] - 8), 'insul');
+
+    /* grade */
+    s.line(X(uLo), Y(-st), X(0), Y(-st), LW.medium, { stroke: 'var(--ink-2)' });
+    s.text(X(uLo), Y(-st) - 3, 'GRADE', { size: 5.2, anchor: 'start', fill: 'var(--ink-3)' });
+
+    const sl2 = slabDesign(spec);
+    for (let i = 0; i < sl2.turndownBars; i++) {
+      s.circle(X(3 + i * (tw - 6)), Y(-td + 3), 1.6, LW.medium, { fill: 'var(--ink)' });
+    }
+    if (spec.slabReinf === 'rebar') {
+      for (let u = 4; u < uHi; u += sl2.spacing) {
+        s.circle(X(u), Y(-st / 2), 1.4, LW.medium, { fill: 'var(--ink)' });
+      }
+    }
+
+    s.layerOff();
+    s.dimLine(X(0) - 16, Y(0), X(0) - 16, Y(-td), fmtIn(td));
+    s.dimLine(X(uHi) + 16, Y(0), X(uHi) + 16, Y(-st), fmtIn(st));
+    s.dimLine(X(0), Y(-td) - 13, X(tw), Y(-td) - 13, fmtIn(tw));
+    s.callout(1 + T / 2, 0.75, 54, -14, `${spec.studSize} PT PLATE ON SILL SEALER`,
+      { size: 5.2 });
+    s.callout(1 + T / 2, -7, 54, 22, '½" ANCHOR BOLT, 7" EMBED, PLATE WASHER', { size: 5.2 });
+    s.callout(tw / 2, -td + 3, -34, 22,
+      `${sl2.turndownBars} × ${sl2.turndownBar.size} CONTINUOUS`, { size: 5.2 });
+    if (spec.slabReinf === 'rebar') {
+      s.callout(uHi * 0.62, -st / 2, 24, -30,
+        `${sl2.bar.size} @ ${fmtIn(sl2.spacing)} O.C. EACH WAY, ON CHAIRS`, { size: 5.2 });
+    }
+  }
+
+  /* ---------- the column ---------- */
+  s.layerOff();
+  let cy = sheetNotes(s, area.noteX, area.y + 8, area.noteW, 'Assembly', [
+    `${spec.studSize} studs at ${fmtIn(spec.studSpacing)} o.c., treated bottom plate on a sill `
+    + `sealer, double top plate. Wall height ${fmtFt(H)} slab to top of plate.`,
+    spec.wallSkin === 'girts'
+      ? `${spec.girtSize} girts flat on the outside of the studs at ${fmtIn(spec.girtSpacing)} o.c., `
+        + 'no structural sheathing except at the braced panels. Housewrap or a rigid air barrier '
+        + 'on the studs, or the wind washes straight through the cavity.'
+      : '7/16" OSB sheathing over the studs, housewrap, then the siding.',
+    spec.roofDeck === 'osb'
+      ? '7/16" OSB deck with H-clips at mid-span, underlayment, then the roofing.'
+      : `${spec.purlinSize} purlins flat at ${fmtIn(spec.purlinSpacing)} o.c. on the top chords, `
+        + 'panel screwed through to the purlins at every flat.',
+    spec.insulation ? 'R-21 batt in the wall cavity.' : 'No wall insulation.',
+    spec.ceilingDrywall
+      ? `⅝" ceiling on the bottom chords with ${fmtIn(spec.ceilingInsulation)} of blown over it.`
+      : 'No ceiling — the trusses are open to the shop.',
+  ]);
+  cy = sheetNotes(s, area.noteX, cy + 12, area.noteW, 'Heights', [
+    `Top of slab is the datum for everything on these sheets — 0'-0".`,
+    `Top plate ${fmtFt(H)}. Bottom chord ${fmtFt(tr.bcBot)}. `
+    + `Peak ${fmtFt(tr.overallHeight)} above the slab.`,
+    `Eave overhang ${fmtIn(eo)} horizontal; rake ${fmtIn(spec.rakeOverhang)}.`,
+    `Footing bottom ${fmtIn(spec.turndownDepth)} below the slab, which is `
+    + `${fmtIn(spec.frostDepth)} of frost cover below grade.`,
+  ]);
+
+  s.viewTitle(x0, area.bottom - 6, 'Wall section at a bearing wall', key, '1');
+  s.scale = SCALES.find((z) => z.k === key);
 }
 
 /* ================================================================
@@ -850,6 +1118,211 @@ function drawElectricalPlan(s) {
 }
 
 /* ================================================================
+   S3.1 — Truss shop drawing
+
+   The one sheet you build from rather than price from: the truss laid out at
+   scale with every member length, every cut angle, the gussets drawn at the
+   size they get cut, and the joints blown up big enough to nail from.
+   ================================================================ */
+function drawTrussShop(s) {
+  const spec = state.spec;
+  const tr = trussGeometry(spec);
+  const area = sheetArea(s, { noteWidth: 156 });
+  const d = tr.chord.d;
+
+  /* ---- 1. the truss, elevation ---- */
+  const rowTop = area.h * 0.52;
+  const uLo = -spec.eaveOverhang - 10, uHi = tr.span + spec.eaveOverhang + 10;
+  const eaveY = tr.bcTop - spec.eaveOverhang * tr.slope;
+  const vLo = Math.min(tr.bcBot, eaveY) - 14, vHi = tr.peakY + tr.perp + 22;
+  const key = s.pickScale(uHi - uLo, vHi - vLo, area.w - 40, rowTop - 34);
+  const f = SCALES.find((z) => z.k === key).f * PT;
+  const x0 = area.x + (area.w - (uHi - uLo) * f) / 2;
+  const y0 = area.y + 14 + Math.max(0, (rowTop - 44 - (vHi - vLo) * f) / 2);
+  const { X, Y } = sectionFrame(s, x0, y0, key, uLo, uHi, vHi);
+
+  /* Chords as real members with depth, webs as single lines — which is how a
+     truss drawing reads: the chords are what you cut to a line, the webs are
+     what you cut to an angle. */
+  /* Depth is measured vertically here, which is how a chord is cut and how
+     trussGeometry reports it. */
+  const memberBand = (a, b, depth, lw) => {
+    s.poly([[X(a[0]), Y(a[1])], [X(b[0]), Y(b[1])],
+      [X(b[0]), Y(b[1] - depth)], [X(a[0]), Y(a[1] - depth)]], lw || LW.heavy);
+  };
+  /* bottom chord */
+  memberBand([0, tr.bcTop], [tr.span, tr.bcTop], d, LW.cut);
+  /* top chords, both slopes, out to the eave */
+  memberBand([-spec.eaveOverhang, eaveY + tr.perp], [tr.half, tr.peakY + tr.perp], tr.perp, LW.cut);
+  memberBand([tr.span + spec.eaveOverhang, eaveY + tr.perp], [tr.half, tr.peakY + tr.perp],
+    tr.perp, LW.cut);
+  /* webs */
+  for (const w of tr.webs) {
+    s.line(X(w.a[0]), Y(w.a[1]), X(w.b[0]), Y(w.b[1]), LW.medium);
+  }
+  /* gussets, drawn where they go and at the size they get cut */
+  const gus = gussetPlan(tr);
+  for (const g2 of gus) {
+    s.rect(X(g2.z - g2.w / 2), Y(g2.y + g2.h / 2), s.mlen(g2.w), s.mlen(g2.h),
+      LW.thin, { stroke: 'var(--ink-3)', dash: '3 2' });
+  }
+  /* panel points, dimensioned along the bottom chord */
+  const stops = [0, ...tr.webs.filter((w) => w.id !== 'kp').map((w) => w.a[1] === tr.bcTop ? w.a[0] : w.b[0]),
+    tr.half, tr.span].filter((v, i, arr) => arr.indexOf(v) === i).sort((a, b) => a - b);
+  s.dimChainH(stops, tr.bcBot - 26, tr.bcBot);
+  s.dimH(0, tr.span, tr.bcBot - 40, null, tr.bcBot);
+  s.dimV(tr.bcTop, tr.peakY + tr.perp, -spec.eaveOverhang - 8, fmtIn(tr.rise + tr.perp), tr.half);
+  s.callout(tr.half * 0.5, tr.bcTop + (tr.half * 0.5) * tr.slope + tr.perp, 0, -22,
+    `${spec.pitch}/12`, { size: 6.5, weight: 700 });
+
+  /* joint marks, keyed to the details below */
+  const joints = [
+    { mark: 'A', z: 0, y: tr.bcTop, name: 'Heel' },
+    { mark: 'B', z: tr.half, y: tr.peakY, name: 'Peak' },
+    { mark: 'C', z: tr.span / 3, y: tr.bcTop, name: 'Panel point' },
+  ];
+  for (const j of joints) {
+    const up = j.mark === 'B';
+    const cy2 = Y(j.y) + (up ? -18 : 14);
+    s.line(X(j.z), Y(j.y), X(j.z), cy2 + (up ? 6.4 : -6.4), LW.thin, { stroke: 'var(--ink-3)' });
+    s.circle(X(j.z), cy2, 6.4, LW.medium, { fill: 'var(--surface)' });
+    s.text(X(j.z), cy2 + 2.2, j.mark, { size: 6.5, weight: 700 });
+  }
+  s.viewTitle(area.x + 10, Y(vLo) + 16, 'Truss elevation', key, '1');
+
+  /* ---- 2. the joints, big ---- */
+  const dW = (area.w - 30) / 3;
+  const dKey = s.pickScale(30, 26, dW - 24, area.h - rowTop - 44, '3');
+  const dF = SCALES.find((z) => z.k === dKey).f * PT;
+  joints.forEach((j, i) => {
+    const jx = area.x + 12 + i * dW;
+    const { X: JX, Y: JY } = sectionFrame(s, jx, area.y + rowTop + 12, dKey,
+      j.z - 15, j.z + 15, j.y + 13);
+    /* chords through the joint */
+    if (j.mark === 'B') {
+      s.poly([[JX(j.z - 15), JY(tr.bcTop + (tr.half - 15) * tr.slope + tr.perp)],
+        [JX(j.z), JY(tr.peakY + tr.perp)],
+        [JX(j.z), JY(tr.peakY)], [JX(j.z - 15), JY(tr.bcTop + (tr.half - 15) * tr.slope)]], LW.cut);
+      s.poly([[JX(j.z + 15), JY(tr.bcTop + (tr.half - 15) * tr.slope + tr.perp)],
+        [JX(j.z), JY(tr.peakY + tr.perp)],
+        [JX(j.z), JY(tr.peakY)], [JX(j.z + 15), JY(tr.bcTop + (tr.half - 15) * tr.slope)]], LW.cut);
+      s.line(JX(j.z), JY(tr.peakY), JX(j.z), JY(tr.peakY - 13), LW.medium);
+    } else {
+      s.poly([[JX(j.z - 15), JY(tr.bcTop)], [JX(j.z + 15), JY(tr.bcTop)],
+        [JX(j.z + 15), JY(tr.bcTop - d)], [JX(j.z - 15), JY(tr.bcTop - d)]], LW.cut);
+      if (j.mark === 'A') {
+        const yTC = (u) => tr.bcTop + u * tr.slope;
+        s.poly([[JX(j.z - 15), JY(yTC(-15) + tr.perp)], [JX(j.z + 15), JY(yTC(15) + tr.perp)],
+          [JX(j.z + 15), JY(yTC(15))], [JX(j.z - 15), JY(yTC(-15))]], LW.cut);
+        /* the bearing: top plate under the heel */
+        s.rect(JX(j.z - 15), JY(tr.bcBot), s.mlen(30), s.mlen(3), LW.medium);
+        s.hatch(JX(j.z - 15), JY(tr.bcBot), s.mlen(30), s.mlen(3), 'wood');
+      } else {
+        for (const w of tr.webs) {
+          for (const end of [w.a, w.b]) {
+            if (Math.abs(end[0] - j.z) > 0.5 || Math.abs(end[1] - j.y) > 0.5) continue;
+            const far = end === w.a ? w.b : w.a;
+            const ux = far[0] - end[0], uy = far[1] - end[1];
+            const ln = Math.hypot(ux, uy) || 1;
+            s.line(JX(j.z), JY(j.y), JX(j.z + ux / ln * 14), JY(j.y + uy / ln * 14), LW.heavy);
+          }
+        }
+      }
+    }
+    /* the gusset over it */
+    const g2 = gus.find((q) => Math.abs(q.z - j.z) < 0.5 && Math.abs(q.y - j.y) < 0.5) || gus[0];
+    s.rect(JX(j.z - g2.w / 2), JY(j.y + g2.h / 2), s.mlen(g2.w), s.mlen(g2.h),
+      LW.medium, { stroke: 'var(--keel)', dash: '4 2.5' });
+    /* nailing, drawn at the pattern it gets nailed at */
+    for (let a = -g2.w / 2 + 1.5; a < g2.w / 2 - 1; a += 3) {
+      for (let b = -g2.h / 2 + 1.5; b < g2.h / 2 - 1; b += 3) {
+        s.circle(JX(j.z + a), JY(j.y + b), 0.7, 0, { fill: 'var(--ink-3)' });
+      }
+    }
+    s.text(jx + dW / 2 - 12, area.y + rowTop + 4,
+      `¾" CDX GUSSET ${fmtIn(g2.w)} × ${fmtIn(g2.h)}, BOTH FACES`,
+      { size: 5.4, fill: 'var(--ink-2)' });
+    s.viewTitle(jx, area.y + rowTop + 24 + 26 * dF, `${j.name} joint`, dKey, j.mark);
+  });
+
+  /* ---- 3. the column ---- */
+  let cy = schedule(s, area.noteX, area.y + 8, area.noteW, `One truss × ${tr.count}`,
+    [{ h: 'Qty', w: 8 }, { h: 'Member', w: 30 }, { h: 'Length', w: 22, mono: true },
+      { h: 'Cut', w: 20, mono: true }],
+    trussShopRows(tr, spec));
+  cy = sheetNotes(s, area.noteX, cy + 14, area.noteW, 'Shop notes', [
+    `Build the first one flat on the slab against a full-size chalked layout, then use it `
+    + `as the jig for the other ${tr.count - 1}. Check the jig every few trusses.`,
+    'Crown every chord the same way and keep the crowns up.',
+    '¾" CDX gussets both faces at all 8 joints — 16 pieces per truss, '
+    + `${tr.count * 16} in total. Glue and nail 8d at 3" o.c. staggered, minimum 4 nails per `
+    + 'member per face. The heel and the peak carry the most; be generous there.',
+    `At ${spec.pitch}/12 with panel points at the third points the webs land on 3-4-5 `
+    + `triangles — ${fmtN(tr.webs[0].deg, 2)}° at every diagonal, and the lengths come out to `
+    + 'exact sixteenths.',
+    `Overall height ${fmtFt(tr.overallHeight)} above the slab. Check that against the door `
+    + 'header and the ceiling before the first chord is cut.',
+    tr.span > 240
+      ? `A ${fmtFt(tr.span)} site-built truss is a real structural element. Have this reviewed `
+        + 'before any are set, or price engineered trusses — at this span the delivered price is '
+        + 'often close.'
+      : 'Have the design reviewed before any are set.',
+  ]);
+
+  s.scale = SCALES.find((z) => z.k === key);
+}
+
+/* Where the gussets go and how big they are. Sized off the members they have
+   to reach across rather than picked out of the air: a gusset has to land at
+   least four nails on every member at every joint. */
+function gussetPlan(tr) {
+  const d = tr.chord.d;
+  return [
+    { z: 0, y: tr.bcTop, w: Math.round(d * 2.6), h: Math.round(d * 2.2), name: 'Heel' },
+    { z: tr.span, y: tr.bcTop, w: Math.round(d * 2.6), h: Math.round(d * 2.2), name: 'Heel' },
+    { z: tr.half, y: tr.peakY, w: Math.round(d * 2.4), h: Math.round(d * 2.4), name: 'Peak' },
+    { z: tr.span / 3, y: tr.bcTop, w: Math.round(d * 2.2), h: Math.round(d * 1.8), name: 'Panel point' },
+    { z: tr.span * 2 / 3, y: tr.bcTop, w: Math.round(d * 2.2), h: Math.round(d * 1.8), name: 'Panel point' },
+    { z: tr.half, y: tr.bcTop, w: Math.round(d * 2.2), h: Math.round(d * 1.8), name: 'Splice' },
+    { z: tr.nodes.tcL[0], y: tr.nodes.tcL[1], w: Math.round(d * 2.0), h: Math.round(d * 1.8), name: 'Top chord' },
+    { z: tr.nodes.tcR[0], y: tr.nodes.tcR[1], w: Math.round(d * 2.0), h: Math.round(d * 1.8), name: 'Top chord' },
+  ];
+}
+
+function trussShopRows(tr, spec) {
+  const rows = [
+    ['2', `Top chord, ${tr.chordSize}`, fmtFt(tr.tcLength),
+      `${fmtN(90 - tr.angle / D2R, 1)}° / ${fmtN(tr.angle / D2R, 1)}°`],
+    ['2', `Bottom chord, ${tr.chordSize}`, fmtFt(tr.half), 'square'],
+  ];
+  /* Group by length. The mirrored webs come back from trussGeometry with
+     supplementary angles — 33.7° on the left, 146.3° on the right — because
+     the angle is measured off the +z axis and one of them runs the other way.
+     Same stick, same cut, so fold them together. */
+  const acute = (deg) => (deg > 90 ? 180 - deg : deg);
+  const webs = new Map();
+  for (const w of tr.webs) {
+    const k = Math.round(w.len * 16) / 16;
+    const e = webs.get(k) || { n: 0, deg: acute(w.deg) };
+    e.n++;
+    webs.set(k, e);
+  }
+  for (const [len, e] of [...webs.entries()].sort((a, b) => b[0] - a[0])) {
+    rows.push([String(e.n), `Web, ${tr.chordSize}`, fmtFt(len),
+      Math.abs(e.deg - 90) < 0.05 ? 'square' : `${fmtN(e.deg, 1)}° both`]);
+  }
+  const g = gussetPlan(tr);
+  const byName = new Map();
+  for (const q of g) {
+    const k = `${q.w}×${q.h}`;
+    byName.set(k, (byName.get(k) || 0) + 2);       // both faces
+  }
+  for (const [k, n] of byName) rows.push([String(n), `¾" CDX gusset`, k.replace('×', ' × ') + '"', '—']);
+  void spec;
+  return rows;
+}
+
+/* ================================================================
    A2.0 — Elevations
    ================================================================ */
 function drawElevations(s) {
@@ -933,7 +1406,10 @@ const PLANS = [
   { id: 'fdn-det', number: 'S1.1', title: 'Foundation details', draw: drawFoundationDetails,
     scaleLabel: 'As noted' },
   { id: 'framing', number: 'S2.0', title: 'Framing plan', draw: drawFramingPlan },
+  { id: 'wallsec', number: 'S2.1', title: 'Wall section', draw: drawWallSection },
   { id: 'roof', number: 'S3.0', title: 'Roof framing plan', draw: drawRoofPlan },
+  { id: 'truss', number: 'S3.1', title: 'Truss shop drawing', draw: drawTrussShop,
+    scaleLabel: 'As noted' },
   { id: 'elev', number: 'A2.0', title: 'Elevations', draw: drawElevations },
   { id: 'elec', number: 'E1.0', title: 'Electrical plan', draw: drawElectricalPlan },
 ];

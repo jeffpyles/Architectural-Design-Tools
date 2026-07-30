@@ -56,7 +56,9 @@ const DEFAULT_SPEC = {
      able to size something by hand and be told what it costs is more use than
      being handed one answer, so both ends are open. */
   slabBar: 'auto',               // auto / #3 / #4 / #5 / #6
+  postForm: 'square',            // square = formed pad and pier · tube = Sonotube
   postPad: 0,                    // inches square, 0 = size it
+  postTube: 0,                   // Sonotube diameter, 0 = size it
   /* Sawcut joints are free edges unless something carries load across them,
      and a wheel crossing a free edge is about twice as hard on the concrete
      as the same wheel in the middle of a panel. This is the decision that
@@ -99,6 +101,11 @@ const DEFAULT_SPEC = {
   leanToClear: 78,        // required clear height under the beam
   leanToPosts: 3,
   leanToSpacing: 24,      // rafter o.c.
+  leanToRafter: 'auto',   // auto, or a size you have decided on
+  /* 'onTop' stacks the rafter on the beam, which is the easy build and costs
+     the rafter depth in headroom. 'flush' hangs the rafters off the beam face
+     in sloped-seat hangers so the two share one band — see leanToUnder. */
+  leanToFraming: 'onTop', // onTop / flush
   leanToDrift: true,      // count the snow that drifts off the taller roof
 
   ceilingDrywall: true,

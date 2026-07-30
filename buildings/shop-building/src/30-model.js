@@ -359,13 +359,23 @@ function buildModel(spec, openings) {
       wallBox(lt.wall, spec, e.u0, e.u1 - e.u0, H - rd, rd, T, 1.5),
       { len: e.u1 - e.u0, size: lt.rafter.size });
 
-    // Rafters
+    /* Rafters. Flush framing stops them at the beam's near face, because that
+       is where the hanger is — running them over the top would draw the thing
+       the flush detail exists to avoid. */
     const yWall = H - rd / 2 / Math.cos(lt.angle);
+    const rr = lt.rafterRun == null ? P : lt.rafterRun;
     for (let u = 0; u <= lt.run - 1.5 + 0.01; u += spec.leanToSpacing) {
       const uu = Math.min(u, lt.run - 1.5);
       add('trusses', 'leanto', 'fir', `${lt.rafter.size} lean-to rafter`,
-        memberBox3(at(0, yWall, uu + 0.75), at(P, yWall - P * lt.slope, uu + 0.75), 1.5, rd),
+        memberBox3(at(0, yWall, uu + 0.75), at(rr, yWall - rr * lt.slope, uu + 0.75), 1.5, rd),
         { len: lt.rafterLen, size: lt.rafter.size });
+      if (lt.flush) {
+        add('trusses', 'leanto', 'steelDk', 'Sloped-seat rafter hanger',
+          (e.axis === 'x'
+            ? boxPart([uu + 0.75, yWall - rr * lt.slope, face + out * (rr - 0.6)], [2.6, rd * 0.8, 1.2])
+            : boxPart([face + out * (rr - 0.6), yWall - rr * lt.slope, uu + 0.75], [1.2, rd * 0.8, 2.6])),
+          { lb: 0.9 });
+      }
     }
 
     // Beam at the outer edge, carried on posts
@@ -392,17 +402,26 @@ function buildModel(spec, openings) {
       if (!pf) continue;
       const end = i === 0 || i === lt.posts - 1;
       const p = end ? pf.endPad : pf.worstPad;
-      /* Bottom at frost depth, so the pier stem makes up whatever is left
-         between the top of the pad and the underside of the post. */
-      const padTop = -(pf.depth - pf.thickness);
-      add('site', 'slab', 'concrete',
-        `Lean-to pad, ${fmtIn(p.side)} sq × ${fmtIn(pf.thickness)}`,
-        boxPart([pc[0], padTop - pf.thickness / 2, pc[2]], [p.side, pf.thickness, p.side]),
-        { note: `${fmtN(end ? pf.end : pf.interior)} lb, ${fmtN(p.pressure)} psf` });
-      const stem = -padTop;
-      if (stem > 0.5) {
-        add('site', 'slab', 'concrete', 'Lean-to pier',
-          boxPart([pc[0], -stem / 2, pc[2]], [12, stem, 12]));
+      const load = end ? pf.end : pf.interior;
+      if (pf.form === 'tube') {
+        /* A Sonotube bears on its own end, so the whole footing is one pour
+           the full depth — no pad, no stem. */
+        add('site', 'slab', 'concrete', `Sonotube pier, ${fmtIn(p.d)} dia`,
+          cylinderPart([pc[0], -pf.depth / 2, pc[2]], p.d, pf.depth),
+          { note: `${fmtN(load)} lb, ${fmtN(p.pressure)} psf` });
+      } else {
+        /* Bottom at frost depth, so the pier stem makes up whatever is left
+           between the top of the pad and the underside of the post. */
+        const padTop = -(pf.depth - pf.thickness);
+        add('site', 'slab', 'concrete',
+          `Lean-to pad, ${fmtIn(p.side)} sq × ${fmtIn(pf.thickness)}`,
+          boxPart([pc[0], padTop - pf.thickness / 2, pc[2]], [p.side, pf.thickness, p.side]),
+          { note: `${fmtN(load)} lb, ${fmtN(p.pressure)} psf` });
+        const stem = -padTop;
+        if (stem > 0.5) {
+          add('site', 'slab', 'concrete', 'Lean-to pier',
+            boxPart([pc[0], -stem / 2, pc[2]], [12, stem, 12]));
+        }
       }
     }
 

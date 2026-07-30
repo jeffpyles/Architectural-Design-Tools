@@ -233,6 +233,25 @@ function Sheet(opts) {
       { size: 5.8, anchor: right ? 'start' : 'end', fill: 'var(--ink-2)', ...(o || {}) });
   };
 
+  /* A window on the page. Everything drawn while it is on is cut to it, which
+     is what lets a section be broken: two bands of the same drawing, each
+     showing only its own slice, with the wall running off the edge of both
+     rather than through the gap. */
+  s.clipTo = (x, y, w, h) => {
+    const id = `c${Math.random().toString(36).slice(2, 8)}`;
+    const cp = document.createElementNS(SVG_NS, 'clipPath');
+    cp.setAttribute('id', id);
+    const r = document.createElementNS(SVG_NS, 'rect');
+    r.setAttribute('x', fx(x)); r.setAttribute('y', fx(y));
+    r.setAttribute('width', fx(w)); r.setAttribute('height', fx(h));
+    cp.append(r);
+    svg.append(cp);
+    const grp = g(root);
+    grp.setAttribute('clip-path', `url(#${id})`);
+    s.layer = grp;
+    return grp;
+  };
+
   /* --- hatches ---
      Drawn as real lines rather than a <pattern>, because a pattern scales with
      the element and these have to stay at a paper spacing. */

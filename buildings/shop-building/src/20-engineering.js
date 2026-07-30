@@ -18,10 +18,11 @@ function roofLoads(spec) {
 }
 
 /* ---- lean-to ----
-   Reach is set by headroom, not by the pitch. Drop the ledger height by the
-   rafter depth and the beam depth, and whatever is left above the required
-   clearance is what the slope has to spend: P = (H - dr - db - clear) / slope.
-   Both depths depend on P, so it iterates. */
+   Reach is set by headroom, not by the pitch. Drop the ledger height by
+   whatever the rafter and the beam together hang below the roof line, and what
+   is left above the required clearance is all the slope has to spend:
+   P = (H - under - clear) / slope. How much `under` is depends on how the two
+   members meet — see leanToUnder — and both depths depend on P, so it iterates. */
 function leanToLoads(spec) {
   const r = roofLoads(spec);
   return { live: r.live, dead: r.tcDead, total: r.live + r.tcDead };
@@ -37,6 +38,24 @@ function leanToDrift(spec) {
   const hd = Math.max(0, 0.43 * Math.cbrt(lu) * Math.pow(pg + 10, 0.25) - 1.5);
   return { gamma, hd, pd: hd * gamma, width: 4 * hd };
 }
+/* How the rafters meet the beam, and what it is worth.
+
+   Sitting the rafters ON the beam is the simplest thing to build: the beam
+   goes up, the rafters lie across it, done. It also stacks the two members,
+   so what hangs below the roof line is the rafter depth PLUS the beam depth.
+
+   Hanging them off the FACE of the beam — sloped-seat face-mount hangers,
+   rafter top flush with the beam top — puts the two in the same vertical
+   band. What hangs below is then whichever is deeper, not the sum. On a 3/12
+   shed that is the rafter depth back, about 9½" for a 2x10, and since reach
+   is set by headroom every inch buys four inches of projection.
+
+   The costs are real: a hanger at every rafter, and the beam has to be at
+   least as deep as the rafter for the hanger to land on. */
+function leanToUnder(rafterDepthVert, beamDepth, flush) {
+  return flush ? Math.max(rafterDepthVert, beamDepth) : rafterDepthVert + beamDepth;
+}
+
 function leanToDesign(spec) {
   if (!spec.leanTo) return null;
   const wall = spec.leanToWall;
@@ -51,6 +70,8 @@ function leanToDesign(spec) {
   const loads = leanToLoads(spec);
   const drift = spec.leanToDrift ? leanToDrift(spec) : { hd: 0, pd: 0, width: 0, gamma: 0 };
   const fixed = spec.leanToProjection > 0;
+  const flush = spec.leanToFraming === 'flush';
+  const named = spec.leanToRafter && spec.leanToRafter !== 'auto' ? spec.leanToRafter : null;
 
   /* Bisect: the widest projection whose own members still leave the required
      clearance under the beam. Deeper members eat headroom, which shortens the
@@ -59,13 +80,20 @@ function leanToDesign(spec) {
     const Pft = Math.max(P, 1) / 12;
     const surcharge = drift.pd * Math.min(drift.width, Pft) / Pft;
     const psf = loads.total + surcharge;
-    const rafter = pickMember(Math.max(P, 12), psf * spec.leanToSpacing / 12,
-      RAFTER_LADDER, 180, true);
-    const beam = pickMember(beamSpan, psf * (Pft / 2), HEADER_LADDER, 240, false);
-    if (!rafter || !beam) return null;
+    const wRaf = psf * spec.leanToSpacing / 12;
+    /* A named rafter is used whatever it works out to; the panel and the
+       review say what it costs. */
+    const rafter = named
+      ? evalMember({ size: named, plies: 1 }, Math.max(P, 12), wRaf, 180, true)
+      : pickMember(Math.max(P, 12), wRaf, RAFTER_LADDER, 180, true);
+    if (!rafter) return null;
     const dr = LUMBER[rafter.size].d / Math.cos(angle);
-    const reach = (H - dr - beam.depth - clear) / slope;
-    return { psf, rafter, beam, dr, reach, ok: reach >= P };
+    const beam = pickMember(beamSpan, psf * (Pft / 2), HEADER_LADDER, 240, false,
+      flush ? LUMBER[rafter.size].d : 0);
+    if (!beam) return null;
+    const under = leanToUnder(dr, beam.depth, flush);
+    const reach = (H - under - clear) / slope;
+    return { psf, rafter, beam, dr, under, reach, ok: reach >= P && rafter.ok };
   };
 
   let found = null, P = 0;
@@ -79,30 +107,44 @@ function leanToDesign(spec) {
       const r = evalAt(mid);
       if (r && r.ok) { found = r; P = mid; lo = mid; } else hi = mid;
     }
+    /* A named rafter that never passes still has to produce a drawing and a
+       reason, rather than reading as "no lean-to fits". */
+    if (!found && named) { P = 0; found = evalAt(1); }
   }
 
   if (!found) {
     return { wall, run, posts, beamSpan, projection: 0, impossible: true,
       reason: fixed ? 'past dimension lumber at that projection' : 'no headroom left',
-      clear, drift, psf: loads.total };
+      clear, drift, psf: loads.total, flush };
   }
   const rafter = found.rafter, beam = found.beam, psf = found.psf;
 
   P = Math.round(P * 16) / 16;
   const dr = LUMBER[rafter.size].d / Math.cos(angle);
+  const under = leanToUnder(dr, beam.depth, flush);
   const ledgerTop = H;
   const rafterBotAtWall = H - dr;
-  const beamTop = rafterBotAtWall - P * slope;
+  /* On top of the beam the rafter's underside is the beam's top. Flush, the
+     rafter's TOP is the beam's top and they share the band. */
+  const beamTop = flush ? H - P * slope : rafterBotAtWall - P * slope;
   const beamBot = beamTop - beam.depth;
+  const rafterBotAtBeam = H - P * slope - dr;
+  /* Flush framing stops the rafter at the beam's near face. */
+  const rafterRun = flush ? Math.max(0, P - beam.thickness) : P;
   return {
-    wall, run, posts, beamSpan, projection: P, fixed,
+    wall, run, posts, beamSpan, projection: P, fixed, flush, under,
     rafter, beam, psf, drift, clear,
-    ledgerTop, rafterBotAtWall, beamTop, beamBot,
-    headroom: beamBot,
-    rafterLen: P / Math.cos(angle),
+    rafterNamed: !!named, rafterOK: rafter.ok !== false,
+    ledgerTop, rafterBotAtWall, beamTop, beamBot, rafterBotAtBeam,
+    headroom: flush ? Math.min(beamBot, rafterBotAtBeam) : beamBot,
+    rafterRun,
+    rafterLen: rafterRun / Math.cos(angle),
     area: P * run / 144,
     count: Math.floor(run / spec.leanToSpacing) + 1,
     angle, slope,
+    /* What the other way of framing it would give, so the trade is a number
+       rather than an argument. */
+    otherUnder: leanToUnder(dr, beam.depth, !flush),
   };
 }
 function sizeHeader(clearSpan, wall, spec) {
@@ -508,6 +550,33 @@ function auditBuilding(spec, openings) {
         + `headroom that sets the reach. One more post would shorten it to `
         + `${fmtFt(lt.run / lt.posts)} and buy back projection.`);
     }
+    if (lt.flush) {
+      add('info', 'Rafters hung off the beam face',
+        `Sloped-seat face-mount hangers at every rafter, ${lt.rafter.label} into a `
+        + `${lt.beam.label}. The two members share one band instead of stacking, so what `
+        + `hangs below the roof line is ${fmtIn(lt.under)} rather than ${fmtIn(lt.otherUnder)} — `
+        + `${fmtIn(lt.otherUnder - lt.under)} back, which at ${spec.pitch}/12 is worth `
+        + `${fmtFt((lt.otherUnder - lt.under) / (spec.pitch / 12))} of reach. `
+        + 'The beam has to be at least as deep as the rafter for the hanger to land on, '
+        + 'which is why it sizes up as the rafters do.');
+    }
+    if (lt.rafterNamed && !lt.rafterOK) {
+      add('crit', `${lt.rafter.label} lean-to rafters are over at ${fmtFt(lt.projection)}`,
+        `${fmtN(lt.rafter.ratio * 100)}% of bending capacity and `
+        + `${fmtN(lt.rafter.deflRatio * 100)}% of the L/180 deflection limit — `
+        + `${lt.rafter.governs} governs. This is a named size, not what the sizing chose. `
+        + 'Go deeper, tighten the spacing, or shorten the projection.');
+    } else if (lt.rafterNamed) {
+      const auto = leanToDesign({ ...spec, leanToRafter: 'auto' });
+      if (auto && !auto.impossible && auto.rafter.size !== lt.rafter.size) {
+        add('info', `${lt.rafter.label} rafters named over ${auto.rafter.label}`,
+          `At ${fmtIn(spec.leanToSpacing)} o.c. they carry it. Against the sizing's `
+          + `${auto.rafter.label} the reach goes ${fmtFt(auto.projection)} → `
+          + `${fmtFt(lt.projection)} and the headroom ${fmtFt(auto.headroom)} → `
+          + `${fmtFt(lt.headroom)} — deeper rafters buy reach and spend headroom, `
+          + 'and which of those you want is not a structural question.');
+      }
+    }
     add('info', 'Lean-to ledger carries the whole roof into the wall',
       `${fmtN(lt.psf * lt.projection / 2 / 12, 0)} lb per foot of wall. Lag or through-bolt into `
       + 'every stud, not into the siding or the girts, and flash the top under the rake trim.');
@@ -623,16 +692,32 @@ function auditBuilding(spec, openings) {
   const pf = postFooting(spec);
   if (pf) {
     if (!pf.padOK) {
-      add('crit', `${fmtIn(pf.worstPad.side)} post pads are over the bearing`,
+      add('crit',
+        `${fmtIn(pf.worstPad.side)} post ${pf.form === 'tube' ? 'tubes' : 'pads'} are over the bearing`,
         `${fmtN(pf.worstPad.pressure)} psf under the worst post against ${fmtN(pf.soil.q)} allowed. `
-        + `${fmtIn((pf.padOptions.find((o) => o.ok) || {}).side || 48)} square is the smallest that `
+        + `${fmtIn((pf.padOptions.find((o) => o.ok) || {}).side || 48)} is the smallest that `
         + 'works on this soil. This is a named override, not what the sizing chose.');
     }
+    if (pf.form === 'tube') {
+      const sq = postFooting({ ...spec, postForm: 'square' });
+      add('info', `Sonotube piers: ${fmtIn(pf.worstPad.d)} diameter`,
+        `A tube bears on its own end, so the footing has no spread — the whole thing is the `
+        + `pier. ${fmtIn(pf.worstPad.d)} gives ${fmtN(pf.worstPad.area, 2)} sf and `
+        + `${fmtN(pf.worstPad.pressure)} psf on ${fmtN(pf.soil.q)} allowable, against `
+        + `${fmtN(sq.worstPad.pressure)} psf under a ${fmtIn(sq.worstPad.side)} square pad. `
+        + 'Faster — auger, drop the tube, fill — and no forming. If the diameter is getting '
+        + 'silly, a bell-bottom form on the end of the tube spreads it without a formed pad; '
+        + 'nothing here models one, so it would want sizing separately.');
+    }
     add(!pf.padOK ? 'warn' : 'info',
-      `Lean-to post pads: ${fmtIn(pf.worstPad.side)} square`,
+      pf.form === 'tube'
+        ? `Lean-to post footings: ${fmtIn(pf.worstPad.d)} Sonotube`
+        : `Lean-to post pads: ${fmtIn(pf.worstPad.side)} square`,
       `${pf.posts} posts over ${fmtFt(lt.run)} with the beam spliced over them, so they do not share `
       + `equally — ${fmtN(pf.interior)} lb on an interior post against ${fmtN(pf.end)} lb on an end one. `
-      + `${fmtIn(pf.worstPad.side)} square by ${fmtIn(pf.thickness)} thick gives `
+      + (pf.form === 'tube'
+        ? `${fmtIn(pf.worstPad.d)} diameter full depth gives `
+        : `${fmtIn(pf.worstPad.side)} square by ${fmtIn(pf.thickness)} thick gives `)
       + `${fmtN(pf.worstPad.pressure)} psf on ${fmtN(pf.soil.q)} allowable. `
       + `Bottom at ${fmtIn(pf.depth)} below grade for frost. `
       + `The posts carry half the lean-to; the ledger on the shop wall takes the other half `
@@ -904,6 +989,9 @@ function postFooting(spec) {
      reported gross — post plus pad — because that is the figure the
      presumptive value is meant to be compared against. */
   const THICK = 12;
+  /* Measured down from the top of the slab, the same datum the turndown uses,
+     so the two dig to the same line. */
+  const depthBelow = Math.max(spec.frostDepth + spec.slabThickness, 18);
   const pad = (load) => {
     let side = 12;
     for (let i = 0; i < 40; i++) {
@@ -914,34 +1002,66 @@ function postFooting(spec) {
     }
     const sf = (side / 12) ** 2;
     const selfW = sf * (THICK / 12) * 150;
-    return { side, selfW, pressure: (load + selfW) / sf, net: load / sf };
+    return { side, selfW, pressure: (load + selfW) / sf, net: load / sf,
+      area: sf, form: 'square' };
   };
 
   /* A named pad size overrides both, and gets checked rather than trusted. */
   const fix = (load, side) => {
     const sf = (side / 12) ** 2;
     const selfW = sf * (THICK / 12) * 150;
-    return { side, selfW, pressure: (load + selfW) / sf, net: load / sf };
+    return { side, selfW, pressure: (load + selfW) / sf, net: load / sf,
+      area: sf, form: 'square' };
   };
-  const named = spec.postPad > 0 ? Math.round(spec.postPad) : 0;
-  const endPad = named ? fix(end, named) : pad(end);
-  const worstPad = named ? fix(worst, named) : pad(worst);
+
+  /* ---- the round option ----
+     A Sonotube pier bears on its own end, so it has no spread: the whole
+     footing is the tube. That makes it fast — no forming, no pad, dig with an
+     auger and fill — and hungry for diameter, because area goes as d² and
+     1,500 psf clay is not much to bear on. It also goes the full depth, so it
+     is more concrete than a pad and a stem for the same bearing.
+
+     The bell-bottom forms that clip on the end of a tube are the usual answer
+     to that and are not modelled here: this is the plain tube, and the panel
+     says so. */
+  const tubeAt = (load, d) => {
+    const sf = Math.PI * (d / 12) ** 2 / 4;
+    const selfW = sf * (depthBelow / 12) * 150;
+    return { side: d, d, selfW, pressure: (load + selfW) / sf, net: load / sf,
+      area: sf, form: 'tube' };
+  };
+  const sizeTube = (load) => {
+    for (const d of SONOTUBE) if (tubeAt(load, d).pressure <= soil.q) return tubeAt(load, d);
+    return tubeAt(load, SONOTUBE[SONOTUBE.length - 1]);
+  };
+
+  const isTube = spec.postForm === 'tube';
+  const namedSq = spec.postPad > 0 ? Math.round(spec.postPad) : 0;
+  const namedTube = spec.postTube > 0 ? Math.round(spec.postTube) : 0;
+  const named = isTube ? namedTube : namedSq;
+  const one = (load) => (isTube
+    ? (namedTube ? tubeAt(load, namedTube) : sizeTube(load))
+    : (namedSq ? fix(load, namedSq) : pad(load)));
+  const endPad = one(end), worstPad = one(worst);
+
   /* Every size worth offering, and what it does — the point of naming one is
      to see the trade, not to be handed a number. */
-  const padOptions = [12, 18, 24, 30, 36, 42, 48].map((side) => ({
-    ...fix(worst, side), ok: fix(worst, side).pressure <= soil.q,
-    cuYd: (side / 12) ** 2 * (THICK / 12) / 27 * lt.posts,
-  }));
+  const padOptions = (isTube ? SONOTUBE : [12, 18, 24, 30, 36, 42, 48]).map((side) => {
+    const r = isTube ? tubeAt(worst, side) : fix(worst, side);
+    const vol = isTube
+      ? r.area * (depthBelow / 12)
+      : (side / 12) ** 2 * (THICK / 12) + (12 / 12) ** 2 * Math.max(0, depthBelow - THICK) / 12;
+    return { ...r, ok: r.pressure <= soil.q, cuYd: vol / 27 * lt.posts };
+  });
   return {
+    form: isTube ? 'tube' : 'square',
     padChosen: named ? 'named' : 'auto', padOptions,
     padOK: worstPad.pressure <= soil.q,
     soil, posts: lt.posts, span, w, total,
     end, interior, worst,
     endPad, worstPad,
     side: worstPad.side, thickness: THICK,
-    /* Measured down from the top of the slab, the same datum the turndown
-       uses, so the two dig to the same line. */
-    depth: Math.max(spec.frostDepth + spec.slabThickness, 18),
+    depth: depthBelow,
     pressure: worstPad.pressure,
     /* leanToDesign smears the drift surcharge across the whole projection to
        size the beam, which is conservative for the beam and for these — the
