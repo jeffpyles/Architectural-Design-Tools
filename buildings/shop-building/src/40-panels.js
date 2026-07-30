@@ -359,10 +359,13 @@ function renderFoundation() {
   p.append(note(`${fd.soil.label} at ${fmtN(fd.soil.q)} psf, which is the presumptive value the `
     + 'code lets you assume with no soils report — not a number anybody measured here. '
     + `Subgrade modulus ${fmtN(fd.soil.k)} pci with a compacted base over it, which is what the `
-    + 'slab calculation needs.'));
+    + 'slab calculation needs. Every knob on this tab is here rather than in Structure, so you '
+    + 'can watch what each one moves.'));
+  inlineControls(p, ['soil', 'concreteFc'], 'f');
 
   /* ---- the perimeter ---- */
   p.append(el('h3', null, 'Perimeter turndown'));
+  inlineControls(p, ['turndownWidth', 'turndownDepth', 'frostDepth', 'gravelDepth'], 'f');
   const kv = el('dl', 'kv');
   for (const [k, v] of [
     ['Under the bearing walls', `${fmtN(fd.lines.bearing.total)} plf`],
@@ -394,6 +397,7 @@ function renderFoundation() {
 
   /* ---- the slab ---- */
   p.append(el('h3', null, 'Slab'));
+  inlineControls(p, ['slabThickness', 'wheelLoad', 'tirePressure', 'jointTransfer'], 'f');
   p.append(note(`Westergaard: a ${fmtN(s.wheelLoad)} lb wheel at ${s.tirePressure} psi on an elastic `
     + `plate over an elastic subgrade — a ${fmtN(sl.a, 2)}" contact radius. `
     + `${fmtN(sl.fc)} psi concrete ruptures at ${fmtN(sl.fr)} psi in bending, and at a factor of `
@@ -442,19 +446,30 @@ function renderFoundation() {
 
   /* ---- steel ---- */
   p.append(el('h3', null, 'Reinforcement'));
+  inlineControls(p, ['slabReinf', 'slabBar'], 'f');
   if (s.slabReinf === 'rebar') {
     p.append(table(['Bar', 'Spacing', 'Provides', 'Steel'],
-      sl.barOptions.map((o) => [
-        o.size + (o.size === sl.bar.size ? ' ←' : ''),
+      sl.barAll.map((o) => [
+        o.size + (o.size === sl.bar.size ? ' ←' : '') + (o.ok ? '' : ' ✕'),
         `${fmtIn(o.at)} o.c.`,
         `${fmtN(o.provided, 3)} in²/ft`,
         `${fmtN(o.psf, 2)} lb/sf`,
       ]), [false, true, true, true]));
-    p.append(note(`← is what the model draws. ${fmtN(sl.asReq, 3)} in² per foot required — 0.0018 of a `
-      + `${fmtIn(s.slabThickness)} section, grade 60, each way. Every row above satisfies it, `
-      + 'so the choice is about placing rather than strength: wider spacing is fewer pieces to '
+    p.append(note(`← is what the model draws${sl.barChosen === 'named'
+      ? `, named over the ${sl.auto.size} the rule picks` : ''}; a ✕ cannot make the area even at `
+      + `${fmtIn(12)} o.c. ${fmtN(sl.asReq, 3)} in² per foot required — 0.0018 of a `
+      + `${fmtIn(s.slabThickness)} section, grade 60, each way. Where more than one row works the `
+      + 'choice is about placing rather than strength: wider spacing is fewer pieces to '
       + 'cut and tie, and a bar big enough to reach 18" in a slab this thin buys steel you have '
       + 'no use for. Subgrade drag wants about a tenth of this, so it is not what sets it.'));
+    if (sl.barShort) {
+      const w = note(`${sl.bar.size} at ${fmtIn(sl.spacing)} gives ${fmtN(sl.bar.provided, 3)} `
+        + `against ${fmtN(sl.asReq, 3)} required, and ${fmtIn(sl.spacing)} is as close together as `
+        + `${sl.bar.size} gets placed in a slab. ${sl.auto.size} at ${fmtIn(sl.auto.at)} is the `
+        + 'smallest that makes it.');
+      w.style.color = 'var(--keel)';
+      p.append(w);
+    }
   } else {
     p.append(note(s.slabReinf === 'mesh'
       ? 'Welded wire mesh. Order flat sheets, not rolls, and chair them: rolled mesh ends up on '
@@ -508,6 +523,18 @@ function renderFoundation() {
       ['Bottom of pad', `${fmtIn(pf.depth)} below the slab`],
     ]) pv.append(el('dt', null, k), el('dd', null, v));
     p.append(pv);
+    inlineControls(p, ['postPad'], 'f');
+    p.append(table(['Pad', 'Pressure', 'Of allowable', 'Concrete'],
+      pf.padOptions.map((o) => [
+        fmtIn(o.side) + (o.side === pf.worstPad.side ? ' ←' : '') + (o.ok ? '' : ' ✕'),
+        `${fmtN(o.pressure)} psf`,
+        `${fmtN(o.pressure / pf.soil.q * 100)}%`,
+        `${fmtN(o.cuYd, 2)} cu yd`,
+      ]), [false, true, true, true]));
+    p.append(note(`Under the worst post. ✕ is over ${fmtN(pf.soil.q)} psf; ← is what the model `
+      + `draws${pf.padChosen === 'named' ? ', named rather than sized' : ''}. `
+      + `The concrete column is all ${pf.posts} pads at that size — the whole range costs less `
+      + 'than a yard, which is why it is worth going a size up rather than to the edge.'));
     meter('Worst pad', pf.soil.q / pf.worstPad.pressure,
       `${fmtIn(pf.worstPad.side)} square by ${fmtIn(pf.thickness)}: ${fmtN(pf.worst)} lb of post `
       + `plus ${fmtN(pf.worstPad.selfW)} lb of pad is ${fmtN(pf.worstPad.pressure)} psf, `
@@ -543,6 +570,7 @@ function renderFoundation() {
     ['Vapour retarder', `${fmtN((s.width + 12) * (s.depth + 12) / 144)} sf`],
   ]) cv.append(el('dt', null, k), el('dd', null, v));
   p.append(cv);
+  inlineControls(p, ['slabInsulation'], 'f');
   p.append(note(s.slabInsulation === 'none'
     ? 'No slab insulation, because the heating question is open. Nothing here assumes any. Worth '
       + 'knowing while the trench is still open: the edge is the part that matters and the part you '

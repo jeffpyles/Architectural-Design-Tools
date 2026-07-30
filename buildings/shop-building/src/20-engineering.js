@@ -583,6 +583,19 @@ function auditBuilding(spec, openings) {
       + 'Smooth ½" dowels at 12" o.c., greased or sleeved on one side so the joint can still shrink — '
       + 'bond them both sides and the joint cannot open, which puts the crack somewhere you did not choose.');
   }
+  if (sl.barShort && spec.slabReinf === 'rebar') {
+    add('crit', `${sl.bar.size} at ${fmtIn(sl.spacing)} does not make the shrinkage steel`,
+      `${fmtN(sl.bar.provided, 3)} in² per foot against ${fmtN(sl.asReq, 3)} required for a `
+      + `${fmtIn(spec.slabThickness)} slab, and ${fmtIn(sl.spacing)} is as close together as `
+      + `${sl.bar.size} gets placed. ${sl.auto.size} at ${fmtIn(sl.auto.at)} is the smallest bar `
+      + 'that makes it. This is a named override, not what the rule chose.');
+  } else if (sl.barChosen === 'named' && sl.bar.size !== sl.auto.size) {
+    add('info', `${sl.bar.size} named over the ${sl.auto.size} the rule picks`,
+      `Both make the ${fmtN(sl.asReq, 3)} in² per foot. ${sl.bar.size} at ${fmtIn(sl.bar.at)} `
+      + `puts ${fmtN(sl.bar.psf, 2)} lb of steel in every square foot against `
+      + `${fmtN(sl.auto.psf, 2)} — ${sl.bar.psf > sl.auto.psf ? 'more' : 'less'} steel, and `
+      + `${sl.bar.at < sl.auto.at ? 'more' : 'fewer'} pieces to cut and tie.`);
+  }
   add('info', `Slab steel: ${sl.bar.size} at ${fmtIn(sl.spacing)} o.c. each way`,
     `${fmtN(sl.asReq, 3)} in² per foot required for shrinkage and temperature `
     + `(0.0018 of a ${fmtIn(spec.slabThickness)} section); this gives ${fmtN(sl.bar.provided, 3)}. `
@@ -609,7 +622,13 @@ function auditBuilding(spec, openings) {
 
   const pf = postFooting(spec);
   if (pf) {
-    add(pf.worstPad.pressure > pf.soil.q ? 'warn' : 'info',
+    if (!pf.padOK) {
+      add('crit', `${fmtIn(pf.worstPad.side)} post pads are over the bearing`,
+        `${fmtN(pf.worstPad.pressure)} psf under the worst post against ${fmtN(pf.soil.q)} allowed. `
+        + `${fmtIn((pf.padOptions.find((o) => o.ok) || {}).side || 48)} square is the smallest that `
+        + 'works on this soil. This is a named override, not what the sizing chose.');
+    }
+    add(!pf.padOK ? 'warn' : 'info',
       `Lean-to post pads: ${fmtIn(pf.worstPad.side)} square`,
       `${pf.posts} posts over ${fmtFt(lt.run)} with the beam spliced over them, so they do not share `
       + `equally — ${fmtN(pf.interior)} lb on an interior post against ${fmtN(pf.end)} lb on an end one. `
@@ -799,19 +818,32 @@ function slabDesign(spec) {
      anything from 4" to 6" — the answer every slab this size gets built with. */
   const asReq = 0.0018 * 12 * spec.slabThickness;
   const MAX_SPACING = 18;   // as far apart as bar goes in a slab this thin
-  const options = ['#3', '#4', '#5', '#6'].map((size) => {
+  const MIN_SPACING = 12;   // closer than this and it is a mat, not a slab
+  const barAt = (size) => {
     const b = REBAR[size];
-    /* Round down to a 2" increment so it chalks out on a tape. */
-    const spacing = Math.min(MAX_SPACING, Math.floor(b.area / asReq * 12 / 2) * 2);
+    /* Round down to a 2" increment so it chalks out on a tape, and never
+       report a spacing tighter than anybody would place. */
+    const spacing = Math.max(MIN_SPACING,
+      Math.min(MAX_SPACING, Math.floor(b.area / asReq * 12 / 2) * 2));
     const provided = b.area * 12 / spacing;
     return { size, key: `rebar${size}`, area: b.area, lbft: b.lbft,
       at: spacing, provided, excess: provided / asReq - 1,
+      ok: provided >= asReq - 1e-9,
       /* Two ways, so a foot of slab carries 2 × 12/spacing feet of bar. */
       psf: 2 * (12 / spacing) * b.lbft };
-  }).filter((o) => o.at >= 12);
+  };
+  const all = ['#3', '#4', '#5', '#6'].map(barAt);
+  const options = all.filter((o) => o.ok);
   const sane = options.filter((o) => o.excess <= 0.6);
-  const bar = (sane.length ? sane : options).sort((a, b) => b.at - a.at || a.psf - b.psf)[0]
-    || { size: '#4', key: 'rebar#4', area: 0.20, lbft: 0.668, at: 12, provided: 0.20, excess: 0, psf: 1.336 };
+  const auto = (sane.length ? sane : options).sort((a, b) => b.at - a.at || a.psf - b.psf)[0]
+    || all[all.length - 1];
+  /* A named bar wins over the rule, including a bar that does not make the
+     area — being told what your choice costs beats being overruled by it. */
+  const named = spec.slabBar && spec.slabBar !== 'auto'
+    ? all.find((o) => o.size === spec.slabBar) : null;
+  const bar = named || auto;
+  const barChosen = named ? 'named' : 'auto';
+  const barShort = !bar.ok;
   const spacing = bar.at;
 
   /* Two bars continuous in the bottom of the turndown, lapped 40 diameters at
@@ -831,7 +863,7 @@ function slabDesign(spec) {
     thickness: spec.slabThickness,
     thickOK: at.interior <= allow && (doweled ? true : at.edge <= allow),
     doweled, interiorOnly, edgeToo,
-    asReq, bar, barOptions: options, spacing,
+    asReq, bar, auto, barOptions: options, barAll: all, barChosen, barShort, spacing,
     turndownBar, turndownBars,
     joints: { max: maxJoint, nx, nz,
       panelX: spec.width / 12 / nx, panelZ: spec.depth / 12 / nz },
@@ -885,8 +917,24 @@ function postFooting(spec) {
     return { side, selfW, pressure: (load + selfW) / sf, net: load / sf };
   };
 
-  const endPad = pad(end), worstPad = pad(worst);
+  /* A named pad size overrides both, and gets checked rather than trusted. */
+  const fix = (load, side) => {
+    const sf = (side / 12) ** 2;
+    const selfW = sf * (THICK / 12) * 150;
+    return { side, selfW, pressure: (load + selfW) / sf, net: load / sf };
+  };
+  const named = spec.postPad > 0 ? Math.round(spec.postPad) : 0;
+  const endPad = named ? fix(end, named) : pad(end);
+  const worstPad = named ? fix(worst, named) : pad(worst);
+  /* Every size worth offering, and what it does — the point of naming one is
+     to see the trade, not to be handed a number. */
+  const padOptions = [12, 18, 24, 30, 36, 42, 48].map((side) => ({
+    ...fix(worst, side), ok: fix(worst, side).pressure <= soil.q,
+    cuYd: (side / 12) ** 2 * (THICK / 12) / 27 * lt.posts,
+  }));
   return {
+    padChosen: named ? 'named' : 'auto', padOptions,
+    padOK: worstPad.pressure <= soil.q,
     soil, posts: lt.posts, span, w, total,
     end, interior, worst,
     endPad, worstPad,

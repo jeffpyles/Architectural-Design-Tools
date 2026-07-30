@@ -51,6 +51,12 @@ const DEFAULT_SPEC = {
   frostDepth: 12,
   concreteFc: 4000,
   slabReinf: 'rebar',            // rebar / mesh / fibre
+  /* 'auto' lets the selection rule pick; naming a bar or a pad size overrides
+     it, and the Review tab says so if the choice you named is short. Being
+     able to size something by hand and be told what it costs is more use than
+     being handed one answer, so both ends are open. */
+  slabBar: 'auto',               // auto / #3 / #4 / #5 / #6
+  postPad: 0,                    // inches square, 0 = size it
   /* Sawcut joints are free edges unless something carries load across them,
      and a wheel crossing a free edge is about twice as hard on the concrete
      as the same wheel in the middle of a panel. This is the decision that

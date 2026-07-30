@@ -316,6 +316,68 @@ function renderTitleFacts() {
   if (sub) $('#tbSub').textContent = sub;
 }
 
+/* One control, as an element. Pulled out of the Structure tab so a panel can
+   put the knob next to the number it moves rather than making you leave the
+   numbers to find it. `idp` namespaces the element ids, because the same
+   control can now appear in two panels at once and duplicate ids break the
+   label-for association for everyone using a screen reader. */
+function controlWidget(c, idp) {
+  const id = `c${idp || ''}-${c.k}`;
+  if (c.type === 'bool') {
+    const row = el('div', 'toggle-row');
+    row.append(el('span', null, c.label));
+    const sw = el('label', 'switch');
+    const i = document.createElement('input');
+    i.type = 'checkbox'; i.checked = !!state.spec[c.k];
+    i.setAttribute('aria-label', c.label);
+    i.addEventListener('change', () => { state.spec[c.k] = i.checked; scheduleRebuild(); });
+    sw.append(i, el('i'));
+    row.append(sw);
+    return row;
+  }
+  const f = el('div', 'field');
+  f.style.marginBottom = '8px';
+  const l = el('label', null, c.label); l.htmlFor = id;
+  if (c.type === 'sel') {
+    const sel = document.createElement('select');
+    sel.id = id;
+    for (const [v, t] of c.opts) {
+      const o = document.createElement('option');
+      o.value = String(v); o.textContent = t;
+      if (String(state.spec[c.k]) === String(v)) o.selected = true;
+      sel.append(o);
+    }
+    sel.addEventListener('change', () => {
+      state.spec[c.k] = c.num ? Number(sel.value) : sel.value;
+      scheduleRebuild();
+    });
+    f.append(l, sel);
+    return f;
+  }
+  const i = document.createElement('input');
+  i.type = 'text'; i.id = id;
+  i.value = c.type === 'len' ? fmtFt(state.spec[c.k]) : String(state.spec[c.k]);
+  i.addEventListener('change', () => {
+    const v = c.type === 'len' ? parseFeetInches(i.value) : parseFloat(i.value);
+    if (v != null && Number.isFinite(v)) { state.spec[c.k] = v; scheduleRebuild(); }
+    else i.value = c.type === 'len' ? fmtFt(state.spec[c.k]) : String(state.spec[c.k]);
+  });
+  f.append(l, i);
+  return f;
+}
+
+/* Drop a named subset of the building's controls into any container, in the
+   order the building declared them. */
+function inlineControls(target, keys, idp) {
+  const wrap = el('div', 'inline-controls');
+  for (const k of keys) {
+    const c = BUILDING.controls.find((x) => x.k === k);
+    if (c) wrap.append(controlWidget(c, idp || 'i'));
+  }
+  target.append(wrap);
+  return wrap;
+}
+
 /* The Structure tab is a generic driver over whatever controls the building
    declares — nothing here knows what a girt is. */
 function renderControlsPanel() {
@@ -325,52 +387,7 @@ function renderControlsPanel() {
   let group = null;
   for (const c of BUILDING.controls) {
     if (c.g !== group) { group = c.g; p.append(el('h3', null, group)); }
-    if (c.type === 'bool') {
-      const row = el('div', 'toggle-row');
-      row.append(el('span', null, c.label));
-      const sw = el('label', 'switch');
-      const i = document.createElement('input');
-      i.type = 'checkbox'; i.checked = !!state.spec[c.k];
-      i.setAttribute('aria-label', c.label);
-      i.addEventListener('change', () => { state.spec[c.k] = i.checked; scheduleRebuild(); });
-      sw.append(i, el('i'));
-      row.append(sw);
-      p.append(row);
-    } else if (c.type === 'sel') {
-      const f = el('div', 'field');
-      f.style.marginBottom = '8px';
-      const id = 'c-' + c.k;
-      const l = el('label', null, c.label); l.htmlFor = id;
-      const sel = document.createElement('select');
-      sel.id = id;
-      for (const [v, t] of c.opts) {
-        const o = document.createElement('option');
-        o.value = String(v); o.textContent = t;
-        if (String(state.spec[c.k]) === String(v)) o.selected = true;
-        sel.append(o);
-      }
-      sel.addEventListener('change', () => {
-        state.spec[c.k] = c.num ? Number(sel.value) : sel.value;
-        scheduleRebuild();
-      });
-      f.append(l, sel);
-      p.append(f);
-    } else {
-      const f = el('div', 'field');
-      f.style.marginBottom = '8px';
-      const id = 'c-' + c.k;
-      const l = el('label', null, c.label); l.htmlFor = id;
-      const i = document.createElement('input');
-      i.type = 'text'; i.id = id;
-      i.value = c.type === 'len' ? fmtFt(state.spec[c.k]) : String(state.spec[c.k]);
-      i.addEventListener('change', () => {
-        const v = c.type === 'len' ? parseFeetInches(i.value) : parseFloat(i.value);
-        if (v != null && Number.isFinite(v)) { state.spec[c.k] = v; scheduleRebuild(); }
-        else i.value = c.type === 'len' ? fmtFt(state.spec[c.k]) : String(state.spec[c.k]);
-      });
-      f.append(l, i);
-      p.append(f);
-    }
+    p.append(controlWidget(c));
   }
   const reset = el('button', 'btn', BUILDING.resetLabel || 'Back to the defaults');
   reset.style.marginTop = '14px';
@@ -588,7 +605,24 @@ function buildTabs() {
 
 function renderPanels() {
   renderTitleFacts();
-  for (const pn of BUILDING.panels) pn.render();
+  /* Each panel is its own scroller, and rebuilding one throws its scroll
+     position away — unbearable when the control you just moved is halfway
+     down it. Remember where each was and put it back. */
+  const keep = new Map();
+  for (const pn of BUILDING.panels) {
+    const sec = $(`#panel-${pn.id}`);
+    if (sec) keep.set(pn.id, sec.scrollTop);
+  }
+  for (const pn of BUILDING.panels) {
+    const sec = $(`#panel-${pn.id}`);
+    /* A panel that costs something to draw — a sheet of drawings — renders
+       only while you are looking at it, and is marked stale otherwise, so
+       switching to it can draw it then. */
+    if (pn.lazy && pn.id !== state.tab) { if (sec) sec.dataset.stale = '1'; continue; }
+    if (sec) delete sec.dataset.stale;
+    pn.render();
+    if (sec) sec.scrollTop = keep.get(pn.id) || 0;
+  }
   renderLegend();
   renderStages();
   for (const b of document.querySelectorAll('.tabs button')) {

@@ -3,7 +3,7 @@
    that used to ship in the page as presets. They live here now — they are
    regression material, not something a user should have to scroll past. */
 
-export const api = ['trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
+export const api = ['auditBuilding', 'trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
   'leanToDesign', 'leanToDrift', 'seismicShear', 'windPressure',
   'SOIL', 'REBAR', 'wallLineLoads', 'footingDesign', 'slabDesign', 'postFooting',
   'anchorSchedule'];
@@ -227,6 +227,34 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
       + `of ${sl.asReq.toFixed(3)} in²/ft, ${sl.bar.psf.toFixed(2)} lb/sf · `
       + `also fit: ${sl.barOptions.filter((o) => o.size !== sl.bar.size).map((o) => `${o.size}@${o.at}"`).join(', ')}`);
 
+    /* Naming a bar overrides the rule, including a bar that cannot make the
+       area — the point is to be told what the choice costs, not overruled. */
+    for (const size of ['#3', '#4', '#5', '#6']) {
+      const o = A.slabDesign({ ...spec, slabBar: size });
+      if (o.bar.size !== size) fail(`naming ${size} got ${o.bar.size}`);
+      if (o.barChosen !== 'named') fail(`naming ${size} did not read as named`);
+      if (o.barShort !== !o.bar.ok) fail(`${size}: barShort disagrees with the bar's own ok`);
+      if (o.spacing < 12 || o.spacing > 18) fail(`${size} named landed at ${o.spacing}" o.c.`);
+      /* Whatever is named, the model has to draw that and the takeoff count it. */
+      const m = A.buildModel({ ...spec, slabBar: size }, openings);
+      const b = m.parts.find((q) => q.sys === 'rebar' && q.kind.includes('slab'));
+      if (!b || b.steel !== `rebar${size}`) fail(`naming ${size} still drew ${b && b.steel}`);
+    }
+    if (A.slabDesign({ ...spec, slabBar: 'auto' }).bar.size !== sl.auto.size) {
+      fail('auto did not come back to the rule');
+    }
+    /* A bar too small to make the area on a thick slab has to be caught, not
+       quietly re-spaced to something nobody places. */
+    {
+      const thin = A.slabDesign({ ...spec, slabThickness: 8, slabBar: '#3' });
+      if (!thin.barShort) fail('#3 on an 8" slab was not flagged short');
+      if (thin.spacing !== 12) fail(`a short bar reported ${thin.spacing}" rather than the 12" floor`);
+      const notes = A.auditBuilding({ ...spec, slabThickness: 8, slabBar: '#3' }, openings);
+      if (!notes.some((n) => n.level === 'crit' && /does not make the shrinkage steel/.test(n.title))) {
+        fail('a short named bar produced no critical note');
+      }
+    }
+
     /* Joints. Panels inside the maximum, and square enough to behave. */
     if (sl.joints.panelX > sl.joints.max + 0.001 || sl.joints.panelZ > sl.joints.max + 0.001) {
       fail(`panels ${sl.joints.panelX} × ${sl.joints.panelZ} exceed the ${sl.joints.max} ft maximum`);
@@ -287,6 +315,35 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
       if (pf.worstPad.side < pf.endPad.side) fail('the pad under the heavier post came out smaller');
       if (pf.worstPad.side % 6) fail(`pad side ${pf.worstPad.side}" is not a 6" increment`);
       if (pf.depth < spec.frostDepth) fail('the pad does not reach the frost line');
+      /* A named pad size overrides the sizing, and an inadequate one is
+         reported rather than silently grown. */
+      for (const side of [12, 24, 48]) {
+        const o = A.postFooting({ ...spec, leanTo: true, postPad: side });
+        if (o.worstPad.side !== side || o.endPad.side !== side) fail(`naming ${side}" pads got something else`);
+        if (o.padChosen !== 'named') fail(`naming ${side}" did not read as named`);
+        if (o.padOK !== (o.worstPad.pressure <= o.soil.q)) fail(`${side}": padOK disagrees with the pressure`);
+        const m = A.buildModel({ ...spec, leanTo: true, postPad: side }, openings);
+        const drawn = m.parts.filter((q) => q.kind.startsWith('Lean-to pad'));
+        if (drawn.some((q) => Math.abs(q.geom.s[0] - side) > 0.01)) fail(`naming ${side}" drew a different pad`);
+      }
+      {
+        const tiny = A.postFooting({ ...spec, leanTo: true, postPad: 12 });
+        if (tiny.padOK) fail('12" pads passed under 3,700 lb on clay, which they should not');
+        const notes = A.auditBuilding({ ...spec, leanTo: true, postPad: 12 }, openings);
+        if (!notes.some((n) => n.level === 'crit' && /over the bearing/.test(n.title))) {
+          fail('an overloaded named pad produced no critical note');
+        }
+      }
+      /* Pressure has to fall as the pad grows, or the table is nonsense. */
+      for (let i = 1; i < pf.padOptions.length; i++) {
+        if (pf.padOptions[i].pressure >= pf.padOptions[i - 1].pressure) {
+          fail('a bigger pad did not lower the pressure');
+        }
+      }
+      if (A.postFooting({ ...spec, leanTo: true, postPad: 0 }).padChosen !== 'auto') {
+        fail('a zero pad size did not come back to the sizing');
+      }
+
       /* Softer soil needs a bigger pad. */
       const onSand = A.postFooting({ ...spec, leanTo: true, soil: 'gravel' });
       if (!(onSand.worstPad.side <= pf.worstPad.side)) fail('gravel wanted a bigger pad than clay');
@@ -323,6 +380,8 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
     { soil: 'sand', jointTransfer: 'none', slabReinf: 'mesh', slabThickness: 4 },
     { wheelLoad: 12000, tirePressure: 110, slabThickness: 8, slabInsulation: 'under' },
     { slabReinf: 'fibre', turndownWidth: 12, turndownDepth: 18, gravelDepth: 4 },
+    { slabBar: '#6', postPad: 36, leanTo: true },
+    { slabBar: '#3', slabThickness: 8, postPad: 12, leanTo: true },
   ]) permute(p);
 
   /* The racking fixtures: a layout that clears every wall line, and three
