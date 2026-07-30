@@ -357,6 +357,271 @@ function renderReview() {
   }
 }
 
+/* ---- electrical ----
+   The rough-in, as a list you can edit. Every row is one box: where it is,
+   how big, what is in it and which circuit it lands on — and under each of
+   them the box fill, because that is the number that decides whether what you
+   have asked for actually goes in the box you have asked for. */
+function renderElectrical() {
+  const p = $('#panel-electrical');
+  p.textContent = '';
+  const spec = state.spec;
+  const devs = currentDevices(spec);
+  const owned = !!(state.extra && state.extra.devices && state.extra.devices.length);
+
+  p.append(note('Drag a box across its wall in the model, or set it here. Ceiling boxes '
+    + 'drag on the ceiling plane — look down into the building to grab one. Arrow keys '
+    + 'nudge the selected box a half inch, shift-arrow six inches.'));
+  if (!owned) {
+    p.append(note('This is the rough-in the tool generates: a perimeter circuit at bench '
+      + 'height, three rows of lights, a switch at each man door. Change anything and it '
+      + 'becomes yours — the generated one stops applying and the layout code starts '
+      + 'carrying the boxes.'));
+  }
+
+  /* ---- the panel schedule, first, because it is the answer ---- */
+  const cl = circuitLoads(devs, spec);
+  p.append(el('h3', null, 'Panel schedule'));
+  p.append(table(['Ckt', 'Serves', 'Load', 'Amps', 'Breaker'],
+    cl.rows.map((r) => [
+      String(r.ckt),
+      [r.outlets ? `${r.outlets} outlet${r.outlets === 1 ? '' : 's'}` : null,
+        r.fixtures ? `${r.fixtures} fixture${r.fixtures === 1 ? '' : 's'}` : null]
+        .filter(Boolean).join(', ') || '—',
+      `${fmtN(r.design)} VA`,
+      `${fmtN(r.amps, 1)} A${r.ok && r.outletsOK ? '' : ' ✕'}`,
+      r.general ? `20 A, 12 AWG` : `${r.breaker} A, ${r.wire.replace(' AWG', '')} AWG`,
+    ]), [true, false, true, true, true]));
+  p.append(note(`${fmtN(cl.totalVA)} VA connected against a ${spec.service} A sub-panel — `
+    + `${fmtN(cl.amps, 1)} A if everything ran at once, which it never does. Lighting is `
+    + 'counted at 125% because a breaker is sized that way for anything that runs three '
+    + 'hours. This is a tally, not a design: an electrician decides the circuits.'));
+
+  /* ---- box fill, as a run of bars ---- */
+  const fills = devs.map((d) => ({ d, f: boxFill(d) })).filter((x) => x.f);
+  const over = fills.filter((x) => !x.f.ok || !x.f.gangsOK);
+  p.append(el('h3', null, `Box fill — ${fills.length} boxes, ${over.length} over`));
+  p.append(note('NEC 314.16: two conductor allowances for every yoke, one for every '
+    + 'conductor coming in, one for all the grounds together and one for the clamps if '
+    + 'the box has them. 2.25 cu in each at 12 AWG. The grounds and the clamps are the '
+    + 'two everybody forgets.'));
+  if (over.length) {
+    for (const { d, f } of over) {
+      const row = el('div', 'meter-row');
+      const top = el('div', 'meter-top');
+      const r = el('span', null, `${fmtN(f.need, 1)} / ${fmtN(f.have, 1)}`);
+      r.style.cssText = 'font-family:var(--f-mono);font-weight:700;color:var(--keel)';
+      top.append(el('span', null, `${deviceLabel(d)} — ${d.wall === 'C' ? 'ceiling' : WALLS[d.wall].label}`), r);
+      const m = el('div', 'meter short');
+      const fill = el('i');
+      fill.style.width = `${Math.min(100, f.have / f.need * 100)}%`;
+      m.append(fill);
+      const sub = el('div', 'meter-sub');
+      sub.textContent = f.smallest
+        ? `A ${f.smallest.label.toLowerCase()} is the smallest that holds it.`
+        : 'Nothing on the list holds it — split the run.';
+      row.append(top, m, sub);
+      p.append(row);
+    }
+  } else {
+    const okLine = note(`Every box has room. The tightest is `
+      + `${fmtN(Math.min(...fills.map((x) => x.f.spare)), 1)} cu in spare.`);
+    okLine.style.color = 'var(--ok)';
+    p.append(okLine);
+  }
+
+  /* ---- the boxes ---- */
+  p.append(el('h3', null, 'Boxes'));
+  const list = el('div');
+  const walls = ['N', 'E', 'S', 'W', 'C'];
+  for (const wall of walls) {
+    const on = devs.filter((d) => d.wall === wall)
+      .sort((a, b) => a.u - b.u);
+    if (!on.length) continue;
+    list.append(el('h4', null, wall === 'C' ? 'Ceiling' : `${WALLS[wall].label} wall`));
+    for (const d of on) list.append(deviceCard(d, spec));
+  }
+  p.append(list);
+
+  /* ---- adding ---- */
+  p.append(el('h3', null, 'Add a box'));
+  const add = el('div', 'btn-row');
+  for (const [items, box, label] of [
+    [['duplex'], '1g18', '+ Receptacle'],
+    [['gfci'], '1g18', '+ GFCI'],
+    [['sw1'], '1g18', '+ Switch'],
+    [['duplex', 'duplex'], '2g32', '+ 2-gang'],
+    [['r240'], '2g32', '+ 240 V'],
+    [['light'], 'oct15', '+ Light'],
+    [[], '1g18', '+ Empty box'],
+  ]) {
+    const b = el('button', 'btn', label);
+    b.addEventListener('click', () => {
+      const l = ownDevices(spec);
+      const ceiling = items.includes('light');
+      l.push({
+        id: 'x' + Math.round(performance.now() * 1000).toString(36),
+        wall: ceiling ? 'C' : 'N',
+        u: ceiling ? spec.width / 2 : spec.width / 2,
+        v: ceiling ? spec.depth / 2 : 48,
+        box, items: items.slice(), feeds: 2,
+        ckt: ceiling ? (Math.max(1, ...l.map((x) => x.ckt || 0))) : 1,
+      });
+      state.selected = l[l.length - 1].id;
+      scheduleRebuild();
+    });
+    add.append(b);
+  }
+  p.append(add);
+  if (owned) {
+    const back = el('button', 'btn danger', 'Back to the generated rough-in');
+    back.style.marginTop = '12px';
+    back.addEventListener('click', () => {
+      state.extra.devices = null;
+      state.selected = null;
+      scheduleRebuild();
+    });
+    p.append(back);
+  }
+}
+
+function deviceCard(d, spec) {
+  const f = boxFill(d);
+  const card = el('div', 'op' + (state.selected === d.id ? ' sel' : ''));
+  card.tabIndex = 0;
+  card.addEventListener('click', () => {
+    state.selected = d.id;
+    showItemReadout({ id: d.id, readout: () => deviceReadout(d, spec) });
+    renderPanels();
+  });
+
+  const head = el('div', 'op-head');
+  head.append(el('span', 'op-name', deviceLabel(d)));
+  if (f) {
+    const tag = el('span', 'tag ' + (f.ok && f.gangsOK ? 'left' : 'over'),
+      `${fmtN(f.need, 1)} / ${fmtN(f.have, 1)} cu in`);
+    head.append(tag);
+  }
+  card.append(head);
+  if (d.panel) {
+    const m = el('div', 'op-meta');
+    m.textContent = `${fmtFt(d.u)} from the ${WALLS[d.wall].from}, middle at ${fmtFt(d.v)}. `
+      + 'Drag it like anything else.';
+    card.append(m);
+    return card;
+  }
+
+  const fields = el('div', 'op-fields');
+  fields.append(
+    numField(d.wall === 'C' ? 'From the west wall' : `From the ${WALLS[d.wall].from}`,
+      d.u, (v) => moveDevice(d, v, d.v)),
+    numField(d.wall === 'C' ? 'From the north wall' : 'Above the slab',
+      d.v, (v) => moveDevice(d, d.u, v)),
+  );
+  card.append(fields);
+
+  /* box, circuit, feeds */
+  const row = el('div', 'op-fields');
+  row.append(
+    pickField('Box', d.box, Object.entries(EBOX)
+      .filter(([, b]) => !!b.ceiling === (d.wall === 'C'))
+      .map(([k, b]) => [k, b.label]),
+    (v) => { editDevice(d, (x) => { x.box = v; }); }),
+    pickField('Cables in', String(d.feeds || 2),
+      [['1', '1 — end of run'], ['2', '2 — through'], ['3', '3 — junction'], ['4', '4']],
+      (v) => { editDevice(d, (x) => { x.feeds = Number(v); }); }),
+    numField('Circuit', d.ckt || 1, (v) => { editDevice(d, (x) => { x.ckt = Math.max(1, Math.round(v)); }); }),
+  );
+  card.append(row);
+
+  /* what is in it */
+  const items = el('div', 'dev-items');
+  (d.items || []).forEach((k, i) => {
+    const line = el('div', 'dev-item');
+    const sel = document.createElement('select');
+    for (const [dk, dv] of Object.entries(EDEVICE)) {
+      if ((dv.kind === 'fixture') !== (d.wall === 'C')) continue;
+      const o = document.createElement('option');
+      o.value = dk; o.textContent = dv.label;
+      if (dk === k) o.selected = true;
+      sel.append(o);
+    }
+    if (!sel.querySelector('option[selected]') && !sel.value) sel.value = k;
+    sel.setAttribute('aria-label', `What is in the box, position ${i + 1}`);
+    sel.addEventListener('change', () => editDevice(d, (x) => { x.items[i] = sel.value; }));
+    const rm = el('button', 'btn danger', '×');
+    rm.title = 'Take it out';
+    rm.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      editDevice(d, (x) => { x.items.splice(i, 1); });
+    });
+    line.append(sel, rm);
+    items.append(line);
+  });
+  const addRow = el('div', 'btn-row');
+  const more = el('button', 'btn', '+ Another device in this box');
+  more.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    editDevice(d, (x) => { x.items.push(d.wall === 'C' ? 'light' : 'duplex'); });
+  });
+  const rmBox = el('button', 'btn danger', 'Remove the box');
+  rmBox.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const l = ownDevices(state.spec);
+    const i = l.findIndex((x) => x.id === d.id);
+    if (i >= 0) l.splice(i, 1);
+    if (state.selected === d.id) state.selected = null;
+    scheduleRebuild();
+  });
+  addRow.append(more, rmBox);
+  card.append(items, addRow);
+
+  if (f) {
+    const meta = el('div', 'op-meta');
+    meta.textContent = `${f.conductors} conductors + 1 ground`
+      + `${f.clamps ? ' + 1 clamps' : ''} + ${f.yokes * 2} for ${f.yokes} yoke`
+      + `${f.yokes === 1 ? '' : 's'} = ${f.count} × 2.25 = ${fmtN(f.need, 1)} cu in. `
+      + (f.ok && f.gangsOK
+        ? `${fmtN(f.spare, 1)} cu in spare.`
+        : (f.smallest ? `Smallest that holds it: ${f.smallest.label}.`
+          : 'Nothing on the list holds it.'));
+    if (!f.ok || !f.gangsOK) meta.style.color = 'var(--keel)';
+    card.append(meta);
+  }
+  return card;
+}
+
+/* Editing anything about a box has to go through the owned copy, or the change
+   lands on the generated list and disappears on the next rebuild. */
+function editDevice(d, fn) {
+  const l = ownDevices(state.spec);
+  const live = l.find((x) => x.id === d.id);
+  if (!live) return;
+  if (!live.items) live.items = [];
+  fn(live);
+  state.selected = live.id;
+  scheduleRebuild();
+}
+
+/* A labelled dropdown, the same shape numField makes for a number. */
+function pickField(label, value, opts, onChange) {
+  const f = el('div', 'field');
+  const id = 'p' + Math.random().toString(36).slice(2, 8);
+  const l = el('label', null, label); l.htmlFor = id;
+  const sel = document.createElement('select');
+  sel.id = id;
+  for (const [v, t] of opts) {
+    const o = document.createElement('option');
+    o.value = String(v); o.textContent = t;
+    if (String(value) === String(v)) o.selected = true;
+    sel.append(o);
+  }
+  sel.addEventListener('click', (e) => e.stopPropagation());
+  sel.addEventListener('change', () => onChange(sel.value));
+  f.append(l, sel);
+  return f;
+}
+
 /* ---- foundation ----
    Two questions that have nothing to do with each other, which is the point of
    putting them on one panel. The footing is asked what the building weighs and

@@ -11,6 +11,10 @@
 const state = {
   spec: null,        // filled from BUILDING.defaults() at boot
   openings: [],
+  /* Anything else a building lets you edit. The shell never looks inside it —
+     it carries it into build() and audit(), puts it in the share code through
+     the building's own packer, and otherwise leaves it alone. */
+  extra: {},
   stage: 0,
   stack: true,
   cutaway: 2,
@@ -61,9 +65,9 @@ function footprint(spec) {
 
 /* ---- rebuild ---- */
 function rebuild() {
-  model = BUILDING.build(state.spec, state.openings);
+  model = BUILDING.build(state.spec, state.openings, state.extra);
   take = takeoff(model, state.spec);
-  findings = BUILDING.audit(state.spec, state.openings);
+  findings = BUILDING.audit(state.spec, state.openings, state.extra);
 
   const fp = footprint(state.spec);
   const groups = new Map();
@@ -168,6 +172,62 @@ function wallPlanes() {
     { wall: 'S', axis: 2, val: fp[1], n: [0, 0, 1] },
   ];
 }
+/* Every face you can put something on. Walls come from the footprint; a
+   building with a ceiling worth hanging things from adds it. `both` skips the
+   back-face cull, which a ceiling needs — you grab a light from above, looking
+   down into the building, and from there the ray is going the wrong way. */
+function pickPlanes() {
+  const fp = footprint(state.spec);
+  const ps = [
+    { id: 'W', axis: 0, val: 0, n: [-1, 0, 0], uAxis: 2, vAxis: 1 },
+    { id: 'E', axis: 0, val: fp[0], n: [1, 0, 0], uAxis: 2, vAxis: 1 },
+    { id: 'N', axis: 2, val: 0, n: [0, 0, -1], uAxis: 0, vAxis: 1 },
+    { id: 'S', axis: 2, val: fp[1], n: [0, 0, 1], uAxis: 0, vAxis: 1 },
+  ];
+  if (BUILDING.extraPlanes) for (const p of BUILDING.extraPlanes(state.spec)) ps.push(p);
+  return ps;
+}
+
+/* Anything the building says can be dragged on one of those faces. Openings
+   keep their own path below because they slide along a wall and nothing else;
+   these are free on their plane, which is what an electrical box wants. */
+function pickDraggable(px, py) {
+  if (!BUILDING.draggables) return null;
+  const items = BUILDING.draggables(state.spec);
+  if (!items || !items.length) return null;
+  const r = vp.ray(px, py);
+  let best = null;
+  for (const pl of pickPlanes()) {
+    const dn = r.d[0] * pl.n[0] + r.d[1] * pl.n[1] + r.d[2] * pl.n[2];
+    if (!pl.both && dn > -0.02) continue;
+    if (Math.abs(r.d[pl.axis]) < 1e-6) continue;
+    const t = (pl.val - r.o[pl.axis]) / r.d[pl.axis];
+    if (t < 0) continue;
+    const hit = [r.o[0] + r.d[0] * t, r.o[1] + r.d[1] * t, r.o[2] + r.d[2] * t];
+    const u = hit[pl.uAxis], v = hit[pl.vAxis];
+    for (const it of items) {
+      if (it.plane !== pl.id) continue;
+      /* A generous grab. A 4" box is a handful of pixels at a normal zoom and
+         nobody can hit a handful of pixels; the openings it sits in front of
+         are five feet across, so there is no contest to lose. */
+      const hw = Math.max(it.hw, 5), hh = Math.max(it.hh, 5);
+      if (Math.abs(u - it.u) <= hw && Math.abs(v - it.v) <= hh) {
+        if (!best || t < best.t) best = { t, it, gu: u - it.u, gv: v - it.v };
+      }
+    }
+  }
+  return best;
+}
+function dragDraggableTo(d, px, py) {
+  const r = vp.ray(px, py);
+  const pl = pickPlanes().find((p) => p.id === d.it.plane);
+  if (!pl || Math.abs(r.d[pl.axis]) < 1e-6) return;
+  const t = (pl.val - r.o[pl.axis]) / r.d[pl.axis];
+  if (t <= 0) return;
+  const hit = [r.o[0] + r.d[0] * t, r.o[1] + r.d[1] * t, r.o[2] + r.d[2] * t];
+  d.it.move(hit[pl.uAxis] - d.gu, hit[pl.vAxis] - d.gv);
+}
+
 function pickOpening(px, py) {
   const r = vp.ray(px, py);
   let best = null;
@@ -198,8 +258,17 @@ function initInput() {
   cv.addEventListener('pointerdown', (e) => {
     cv.setPointerCapture(e.pointerId);
     last = { x: e.clientX, y: e.clientY };
-    const hit = (e.button === 0 && !e.shiftKey) ? pickOpening(e.clientX, e.clientY) : null;
-    if (hit) {
+    const live = e.button === 0 && !e.shiftKey;
+    /* A box on a wall is a much tighter target than the opening behind it, so
+       when both are under the pointer the small thing wins. */
+    const item = live ? pickDraggable(e.clientX, e.clientY) : null;
+    const hit = live && !item ? pickOpening(e.clientX, e.clientY) : null;
+    if (item) {
+      mode = 'item'; drag = item;
+      state.selected = item.it.id;
+      renderPanels();
+      showItemReadout(item.it);
+    } else if (hit) {
       mode = 'opening'; drag = hit;
       state.selected = hit.o.id;
       renderPanels(); showReadout(hit.o);
@@ -211,8 +280,8 @@ function initInput() {
 
   cv.addEventListener('pointermove', (e) => {
     if (!mode) {
-      const hit = pickOpening(e.clientX, e.clientY);
-      cv.classList.toggle('over-opening', !!hit);
+      const over = pickDraggable(e.clientX, e.clientY) || pickOpening(e.clientX, e.clientY);
+      cv.classList.toggle('over-opening', !!over);
       return;
     }
     const dx = e.clientX - last.x, dy = e.clientY - last.y;
@@ -238,6 +307,8 @@ function initInput() {
         const u = pl.axis === 0 ? hit[2] : hit[0];
         moveOpening(drag.o, u - drag.grab);
       }
+    } else if (mode === 'item') {
+      dragDraggableTo(drag, e.clientX, e.clientY);
     }
   });
 
@@ -256,7 +327,19 @@ function initInput() {
     if (!state.selected) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     const o = state.openings.find((x) => x.id === state.selected);
-    if (!o) return;
+    if (!o) {
+      /* Nudging works on anything selected, not just an opening — the arrow
+         keys are how a box gets landed on a stud rather than near one. */
+      const items = BUILDING.draggables ? BUILDING.draggables(state.spec) : [];
+      const it = (items || []).find((x) => x.id === state.selected);
+      if (!it) return;
+      const k = e.shiftKey ? 6 : 0.5;
+      if (e.key === 'ArrowLeft') { it.move(it.u - k, it.v); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { it.move(it.u + k, it.v); e.preventDefault(); }
+      if (e.key === 'ArrowUp') { it.move(it.u, it.v + (it.plane === 'C' ? -k : k)); e.preventDefault(); }
+      if (e.key === 'ArrowDown') { it.move(it.u, it.v + (it.plane === 'C' ? k : -k)); e.preventDefault(); }
+      return;
+    }
     const step = e.shiftKey ? 12 : 1;
     if (e.key === 'ArrowLeft') { moveOpening(o, o.off - step); e.preventDefault(); }
     if (e.key === 'ArrowRight') { moveOpening(o, o.off + step); e.preventDefault(); }
@@ -295,6 +378,14 @@ function showReadout(o) {
         + `${fmtFt(e.u1 - (o.off + st.w))} to the far end  ·  `
         + `head ${fmtFt(o.head)}  ·  sill ${fmtFt(o.head - st.h)}`,
     };
+  $('#roTitle').textContent = r.title;
+  $('#roBody').textContent = r.body;
+}
+
+/* The same floating panel, for anything else the building lets you drag. */
+function showItemReadout(it) {
+  const r = it.readout ? it.readout() : { title: it.label || 'Item', body: '' };
+  $('#readout').classList.add('on');
   $('#roTitle').textContent = r.title;
   $('#roBody').textContent = r.body;
 }
@@ -393,7 +484,8 @@ function renderControlsPanel() {
   reset.style.marginTop = '14px';
   reset.addEventListener('click', () => {
     const d = BUILDING.defaults();
-    state.spec = d.spec; state.openings = d.openings; state.selected = null;
+    state.spec = d.spec; state.openings = d.openings; state.extra = d.extra || {};
+    state.selected = null;
     scheduleRebuild();
   });
   p.append(reset);

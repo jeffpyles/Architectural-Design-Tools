@@ -412,7 +412,7 @@ function ventilation(spec) {
 
 /* ---- warnings ----
    Everything here is derived, so it re-evaluates the moment an opening moves. */
-function auditBuilding(spec, openings) {
+function auditBuilding(spec, openings, extra) {
   const out = [];
   const add = (level, title, body) => out.push({ level, title, body });
   const tr = trussGeometry(spec);
@@ -748,6 +748,11 @@ function auditBuilding(spec, openings) {
       + 'part that matters and the part you cannot add later. Two inches of foam against the inside '
       + 'face of the turndown, two feet down, is a few hundred dollars now and a slab-edge '
       + 'demolition later. Under-slab foam is the decision that can wait until you know.');
+  }
+
+  /* ---- electrical ---- */
+  for (const n of electricalReview(spec, openings, deviceList(spec, openings, extra && extra.devices))) {
+    out.push(n);
   }
 
   return out;
@@ -1089,4 +1094,171 @@ function anchorSchedule(spec, openings) {
     governs: byShear > byCode(longest) ? 'shear' : 'the code minimum',
     total: byCode(spec.width) * 2 + byCode(spec.depth) * 2,
   };
+}
+
+/* ============================================================
+   Electrical.
+
+   Two calculations worth having and neither of them designs anything. Box fill
+   says whether what you have put in a box fits in it, which is NEC 314.16 and
+   is the thing an owner-builder gets wrong. Circuit loading says what is on
+   each circuit against what the breaker will hold, which is NEC 210 and 220
+   and is the thing that shows up as a nuisance trip two years later.
+
+   An electrician still decides the circuits. This counts them.
+   ============================================================ */
+
+/* 12 AWG is the shop default: 20 A circuits, 2.25 cubic inches per conductor
+   allowance out of NEC Table 314.16(B). */
+const WIRE_ALLOW = 2.25;
+const WIRE = { 12: { amps: 20, label: '12 AWG' }, 10: { amps: 30, label: '10 AWG' },
+  8: { amps: 40, label: '8 AWG' }, 6: { amps: 55, label: '6 AWG' } };
+
+/* NEC 314.16(B), counted the way the section counts:
+   — every conductor entering and terminating in the box: one each
+   — all the equipment grounds together: one, total
+   — internal cable clamps: one, total, however many
+   — every yoke or strap: two
+   The grounds and the clamps are the two everybody forgets. */
+function boxFill(d) {
+  const box = EBOX[d.box];
+  if (!box || d.panel) return null;
+  const cables = Math.max(1, d.feeds || 2);
+  const items = (d.items || []).map((k) => EDEVICE[k]).filter(Boolean);
+  const yokes = items.reduce((a, i) => a + i.yokes, 0);
+  const extra = items.reduce((a, i) => a + (i.wires || 0), 0);
+  const conductors = cables * 2 + extra;
+  const grounds = 1;
+  const clamps = box.clamps ? 1 : 0;
+  const count = conductors + grounds + clamps + yokes * 2;
+  const need = count * WIRE_ALLOW;
+  /* The smallest box on the list that holds it and has the gangs for it. */
+  const fits = Object.entries(EBOX)
+    .filter(([, b]) => b.cuin >= need - 1e-9 && b.gangs >= Math.max(1, yokes)
+      && (!!b.ceiling === (d.wall === 'C')))
+    .sort((a, b) => a[1].cuin - b[1].cuin)[0];
+  return {
+    box, cables, yokes, extra, conductors, grounds, clamps, count, need,
+    have: box.cuin, ok: need <= box.cuin + 1e-9,
+    spare: box.cuin - need,
+    gangsOK: yokes <= box.gangs,
+    smallest: fits ? { key: fits[0], ...fits[1] } : null,
+  };
+}
+
+/* What is on each circuit, and whether the breaker holds it. Continuous loads
+   — lighting, mostly — are counted at 125% because NEC 210.20(A) sizes the
+   breaker for them that way, which is the same thing as saying a 20 A circuit
+   carries 16 A of anything that runs for three hours. */
+function circuitLoads(devs, spec) {
+  const by = new Map();
+  for (const d of devs) {
+    if (d.panel) continue;
+    for (const key of d.items || []) {
+      const dev = EDEVICE[key];
+      if (!dev || !dev.va) continue;
+      const n = d.ckt || 1;
+      const e = by.get(n) || { ckt: n, va: 0, cont: 0, volts: 120, outlets: 0, fixtures: 0 };
+      e.va += dev.va;
+      if (dev.kind === 'fixture') { e.cont += dev.va; e.fixtures++; } else e.outlets++;
+      if (dev.volts === 240) e.volts = 240;
+      by.set(n, e);
+    }
+  }
+  const rows = [...by.values()].sort((a, b) => a.ckt - b.ckt).map((e) => {
+    const design = e.va - e.cont + e.cont * 1.25;
+    const amps = design / e.volts;
+    const gauge = [12, 10, 8, 6].find((g) => WIRE[g].amps >= amps) || 6;
+    const breaker = WIRE[gauge].amps;
+    /* A general-purpose 120 V circuit in a shop is 20 A on 12 AWG, and if
+       what you have put on one needs more than that, the answer is another
+       circuit rather than a bigger wire. Upsizing silently would turn a
+       layout mistake into an expensive-looking design decision. */
+    const general = e.volts === 120;
+    return { ...e, design, amps, gauge, breaker, wire: WIRE[gauge].label,
+      general, overStandard: general && breaker > 20,
+      /* "ok" means it holds on the circuit it is supposed to be, which for a
+         general-purpose 120 V run is 20 A and not whatever wire would carry
+         the load. */
+      ok: general ? amps <= 20 : amps <= breaker,
+      use: amps / (general ? 20 : breaker),
+      /* Thirteen 180 VA outlets is a 20 A circuit's worth. No 80% derate on
+         top: the 180 VA in NEC 220.14(I) is already the load allowance, and a
+         receptacle outlet is not a continuous load. */
+      outletsOK: e.outlets <= Math.floor((general ? 20 : breaker) * e.volts / 180) };
+  });
+  const totalVA = rows.reduce((a, r) => a + r.design, 0);
+  return {
+    rows, totalVA,
+    /* A sub-panel feeder is sized on the calculated load, and a shop is a
+       non-continuous mix, so this is the honest connected figure rather than
+       a demand-factored one. */
+    amps: totalVA / 240,
+    service: spec.service,
+    serviceOK: totalVA / 240 <= spec.service * 0.8,
+  };
+}
+
+function electricalReview(spec, openings, devs) {
+  const out = [];
+  const list = devs || deviceList(spec, openings, null);
+  const over = [];
+  for (const d of list) {
+    const f = boxFill(d);
+    if (!f) continue;
+    if (!f.ok || !f.gangsOK) over.push({ d, f });
+  }
+  for (const { d, f } of over.slice(0, 6)) {
+    out.push({ level: 'crit',
+      title: !f.gangsOK
+        ? `${deviceLabel(d)} will not fit a ${f.box.gangs}-gang box`
+        : `${deviceLabel(d)} is over the box fill`,
+      body: !f.gangsOK
+        ? `${f.yokes} yokes in a ${f.box.gangs}-gang ${f.box.label.toLowerCase()}. `
+          + `${f.smallest ? `A ${f.smallest.label.toLowerCase()} takes them.` : 'Split it into two boxes.'}`
+        : `${fmtN(f.need, 1)} cu in of allowance in a ${fmtN(f.have, 1)} cu in box: `
+          + `${f.conductors} conductors, ${f.grounds} for the grounds, `
+          + `${f.clamps ? '1 for the clamps, ' : ''}${f.yokes * 2} for ${f.yokes} yoke`
+          + `${f.yokes === 1 ? '' : 's'}. `
+          + `${f.smallest ? `A ${f.smallest.label.toLowerCase()} is the smallest that holds it.`
+            : 'Nothing on the list holds it — split the run.'}`,
+    });
+  }
+  if (over.length > 6) {
+    out.push({ level: 'warn', title: `${over.length - 6} more boxes are over the fill`,
+      body: 'Same story as the ones above — see the Electrical tab for the whole list.' });
+  }
+
+  const cl = circuitLoads(list, spec);
+  for (const r of cl.rows) {
+    if (r.overStandard) {
+      out.push({ level: 'crit', title: `Circuit ${r.ckt} is over what a 20 A circuit holds`,
+        body: `${fmtN(r.design)} VA design load is ${fmtN(r.amps, 1)} A, and a general-purpose `
+          + `120 V circuit in a shop is 20 A on 12 AWG. Carrying it would take a `
+          + `${r.breaker} A breaker and ${r.wire}, which is not what a receptacle circuit is. `
+          + 'Split it across another circuit.' });
+    } else if (!r.outletsOK) {
+      out.push({ level: 'warn', title: `Circuit ${r.ckt} has ${r.outlets} outlets on it`,
+        body: `At 180 VA an outlet, ${Math.floor((r.general ? 20 : r.breaker) * r.volts / 180)} `
+          + `is what a ${r.general ? 20 : r.breaker} A circuit is worth. It does not fail the calculation, because the `
+          + 'calculation assumes they are not all in use — but it is the circuit that trips '
+          + 'the day two things get plugged in at once.' });
+    }
+  }
+  if (!cl.serviceOK) {
+    out.push({ level: 'warn', title: 'The sub-panel is smaller than what is on it',
+      body: `${fmtN(cl.totalVA)} VA connected is ${fmtN(cl.amps, 1)} A against a `
+        + `${spec.service} A panel. Connected load is not calculated load — a shop never runs `
+        + 'everything at once — but it is worth a demand calculation before the feeder is sized.' });
+  }
+  /* The two things a shop gets cited for. */
+  const wet = list.filter((d) => !d.panel && (d.items || []).some((k) => (EDEVICE[k] || {}).kind === 'recep'));
+  const gfci = wet.filter((d) => (d.items || []).includes('gfci')).length;
+  if (wet.length && gfci === 0) {
+    out.push({ level: 'warn', title: 'No GFCI anywhere in the shop',
+      body: `${wet.length} receptacle outlets and not one of them GFCI protected. A 125 V, `
+        + '15 or 20 A receptacle serving a garage or an accessory building floor area needs it — '
+        + 'either GFCI devices or a GFCI breaker at the head of the circuit.' });
+  }
+  return out;
 }

@@ -12,6 +12,7 @@ buildings/<id>/
   src/20-engineering.js  loads, member sizing, the checks worth failing on
   src/30-model.js        spec + openings → a flat list of parts
   src/40-panels.js       the panels particular to this building
+  src/45-plans.js        printable drawing sheets, if it has any
   src/50-building.js     the BUILDING object (no DOM — the headless check reads it)
   checks.mjs             assertions only true of this building (optional)
   docs/                  sketches, notes, anything worth keeping
@@ -45,10 +46,10 @@ Declared in `src/50-building.js`. Everything the shell asks of a building:
 |---|---|
 | `id` | must match the directory name |
 | `name`, `title`, `codePrefix` | as above |
-| `defaults()` | `{ spec, openings }` — fresh copies, called on reset and to diff share codes |
+| `defaults()` | `{ spec, openings, extra }` — fresh copies, called on reset and to diff share codes |
 | `stages` | `[{ key, name, blurb }]` — the build stages in the bottom rail |
-| `build(spec, openings)` | returns `{ parts, … }` — see below |
-| `audit(spec, openings)` | returns `[{ level, title, body }]` for the Review panel |
+| `build(spec, openings, extra)` | returns `{ parts, … }` — see below |
+| `audit(spec, openings, extra)` | returns `[{ level, title, body }]` for the Review panel |
 | `controls` | the fields in the Structure panel — see below |
 | `controlsNote`, `resetLabel` | wording around those controls |
 | `subtitle(spec)` | the line under the heading |
@@ -56,6 +57,9 @@ Declared in `src/50-building.js`. Everything the shell asks of a building:
 | `panels` | `[{ id, label, render }]` — the inspector tabs, in order |
 | `footprint(spec)` | `[x, z]` in inches. Optional; defaults to `[spec.width, spec.depth]`. The shell uses it to aim the camera and to sort the cutaway, and nothing else. |
 | `readout(o, spec)` | `{ title, body }` for the floating panel over the viewport when an opening is picked. Optional; the default states the offset, the head and the sill. |
+| `extraPlanes(spec)` | more faces things can sit on, beyond the four walls — a ceiling, say. Optional. |
+| `draggables(spec)` | `[{ id, plane, u, v, hw, hh, move(u, v), readout() }]` — anything besides an opening you can grab in the model. Optional. |
+| `packExtra` / `unpackExtra` | how `state.extra` goes into a share code and comes back. Optional; without them the code carries only the spec and the openings. |
 
 `50-building.js` must not touch the DOM at load time. `tools/check.mjs` runs the
 model and the engineering in a bare VM with no `document`, so panel renderers are
@@ -170,6 +174,10 @@ Set the frame rather than wrapping it in local helpers. A section wants heights 
 lands somewhere else on the sheet, because they all go through `s.my()`. Pass
 `{ flipY: true }` and let the frame own the direction.
 
+Each sheet gets its own **Print this sheet** button beside its caption, and the panel
+gets one for the set. Printing one sheet is a class on the container, not a rebuild —
+`printSheets(holder)`.
+
 `s.callout()` takes a `width` and wraps to it. Use it — an unwrapped note beside a
 detail is a line of type running off the edge of the sheet, and at 5-point type it takes
 a screenshot to notice.
@@ -195,6 +203,40 @@ with `visibility` leaves their boxes in the flow and you get a stack of blank pa
 its true page size, so printing at 100% gives a drawing a scale rule reads correctly.
 `tools/interact-check.mjs` asserts every sheet has content, a stated scale and its title
 block; the print path itself is checked by taking a PDF and counting the pages.
+
+## Editing something that is not an opening
+
+Openings are built into the shell because every building has them. Anything *else* a
+building lets you edit lives in `state.extra`, which the shell carries around and never
+looks inside: it passes it to `build(spec, openings, extra)` and `audit(spec, openings,
+extra)`, hands it to the building's own packer for the share code, and otherwise leaves
+it alone.
+
+Three things make a collection editable:
+
+```js
+extraPlanes: (spec) => [{ id: 'C', axis: 1, val: ceilingY, n: [0, -1, 0],
+                          uAxis: 0, vAxis: 2, both: true }],
+draggables: (spec) => devices.map((d) => ({
+  id: d.id, plane: d.wall, u: d.u, v: d.v, hw: 2, hh: 2,
+  move: (u, v) => moveDevice(d, u, v),
+  readout: () => ({ title: …, body: … }),
+})),
+packExtra: (extra) => extra.devices ? pack(extra.devices) : null,
+unpackExtra: (x) => ({ devices: unpack(x) }),
+```
+
+`plane` names one of the wall ids or something `extraPlanes` added. `both: true` skips
+the back-face cull, which a ceiling needs — you grab a light from above, and from there
+the ray is going the wrong way. The shell tries draggables before openings, because a
+4" box is a much tighter target than the five-foot window behind it.
+
+Two things worth copying from the shop's electrical rough-in. **Generate a default and
+only materialise it when somebody edits**: `packExtra` returning `null` keeps the share
+code the length it has always been for everyone who never opened that tab. And **route
+every edit through the owned copy** — a change written to the generated list lands
+nowhere and vanishes on the next rebuild, which is a bug that looks like a rendering
+problem.
 
 ## Controls inside a panel
 

@@ -116,6 +116,10 @@ const BUILDING = {
   defaults: () => ({
     spec: { ...DEFAULT_SPEC },
     openings: DEFAULT_OPENINGS.map((o) => ({ ...o })),
+    /* Empty means "use the rough-in the tool generates". It stays empty until
+       somebody moves a box, which is what keeps a share code the length it
+       has always been for anyone who never opened the Electrical tab. */
+    extra: {},
   }),
 
   stages: STAGES,
@@ -150,6 +154,30 @@ const BUILDING = {
     return facts;
   },
 
+  /* The ceiling is a face you can put something on, so picking has to know
+     about it. `both` because you grab a light from above, looking down. */
+  extraPlanes: (spec) => [{
+    id: 'C', axis: 1, val: trussGeometry(spec).bcBot, n: [0, -1, 0],
+    uAxis: 0, vAxis: 2, both: true,
+  }],
+
+  /* Everything you can drag that is not an opening. */
+  draggables: (spec) => currentDevices(spec).map((d) => {
+    const box = EBOX[d.box] || { w: 4, h: 4 };
+    return {
+      id: d.id, plane: d.wall,
+      u: d.u, v: d.v,
+      hw: (d.panel ? 20 : box.w) / 2, hh: (d.panel ? 30 : box.h) / 2,
+      label: deviceLabel(d),
+      move: (u, v) => moveDevice(d, u, v),
+      readout: () => deviceReadout(d, spec),
+    };
+  }),
+
+  packExtra: (extra) => (extra && extra.devices && extra.devices.length
+    ? packDevices(extra.devices) : null),
+  unpackExtra: (x) => ({ devices: unpackDevices(x) }),
+
   readout: (o, spec) => {
     const st = stockFor(o);
     const e = wallExtent(o.wall, spec);
@@ -166,6 +194,7 @@ const BUILDING = {
     { id: 'openings', label: 'Openings', render: () => renderOpenings() },
     { id: 'structure', label: 'Structure', render: () => renderControlsPanel() },
     { id: 'review', label: 'Review', render: () => renderReview() },
+    { id: 'electrical', label: 'Electrical', render: () => renderElectrical() },
     { id: 'foundation', label: 'Foundation', render: () => renderFoundation() },
     /* Lazy: six sheets of SVG is not something to redraw on every drag. */
     { id: 'plans', label: 'Plans', render: () => renderShopPlans(), lazy: true },

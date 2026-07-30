@@ -130,6 +130,65 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
   }
 }
 
+/* 3b. Anything else the building lets you drag has to drag too. The electrical
+   boxes are the case this was written for: they are small, they sit on the
+   same wall planes as the openings, and they broke the first time because the
+   opening pick ran first and swallowed the click. */
+{
+  const before = errors.length;
+  const hasItems = await page.evaluate(() => !!document.querySelector('.tabs button[data-tab="electrical"]'));
+  if (hasItems) {
+    await page.click('.tabs button[data-tab="electrical"]');
+    await page.waitForTimeout(400);
+    const fields = () => page.$$eval('#panel-electrical .op', (cards) => cards.map((c) => {
+      const i = c.querySelector('.op-fields input[type=text]');
+      return `${c.querySelector('.op-name').textContent}=${i ? i.value : '-'}`;
+    }));
+    const n = (await fields()).length;
+    if (n < 4) fail(`only ${n} boxes in the electrical panel`);
+    const box = await page.locator('#cv').boundingBox();
+    let picked = null;
+    outer2:
+    for (let fy = 0.26; fy <= 0.84 && !picked; fy += 0.014) {
+      for (let fx = 0.10; fx <= 0.90; fx += 0.011) {
+        const x = box.x + box.width * fx, y = box.y + box.height * fy;
+        await page.evaluate(() => document.getElementById('readout').classList.remove('on'));
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        const r = await page.evaluate(() => ({
+          on: document.getElementById('readout').classList.contains('on'),
+          t: document.getElementById('roTitle').textContent,
+        }));
+        await page.mouse.up();
+        if (r.on && /duplex|switch|GFCI|LED|sub-panel|box/i.test(r.t)) { picked = { x, y, t: r.t }; break outer2; }
+      }
+    }
+    if (!picked) {
+      fail('found no electrical box to drag anywhere in the viewport');
+    } else {
+      const b0 = await fields();
+      await page.mouse.move(picked.x, picked.y);
+      await page.mouse.down();
+      for (let i = 1; i <= 8; i++) {
+        await page.mouse.move(picked.x + i * 7, picked.y + i * 2);
+        await page.waitForTimeout(20);
+      }
+      await page.mouse.up();
+      await page.waitForTimeout(500);
+      const b1 = await fields();
+      if (errors.length > before) fail(`dragging a box threw: ${errors[before]}`);
+      if (b0.join() === b1.join()) fail(`dragging ${picked.t} moved nothing`);
+      else console.log(`  ok  dragging an electrical box moves it (${picked.t})`);
+      /* Once edited, the layout code has to carry the boxes. */
+      await page.click('.tabs button[data-tab="layouts"]');
+      await page.waitForTimeout(400);
+      const code = await page.$eval('#panel-layouts .code-box', (t) => t.value);
+      if (code.length < 600) fail(`the code is ${code.length} chars — the boxes are not in it`);
+      else console.log(`  ok  the layout code carries them (${code.length} chars)`);
+    }
+  }
+}
+
 /* 4. Every tab renders without throwing. A drawing sheet catches its own
    errors so one bad sheet does not take the set down, which means a throw
    turns into a line of text rather than a page error — so look for that too. */

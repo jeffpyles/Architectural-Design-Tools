@@ -163,11 +163,12 @@ a plan of.
 | **S1.1** | Foundation details | A — turndown at a bearing wall · B — lean-to post footing · C — slab at a contraction joint |
 | **S2.0** | Framing plan | wall poché, openings with swings and sills, braced panels in red, opening schedule with every header |
 | **S2.1** | Wall section | footing to eave in one cut, broken through the middle of the wall so it draws at 1/2" instead of 1/4" |
+| **S2.2** | Building section | the transverse cut: both bearing walls, the truss across them, the lean-to if it is on a wall this cut runs through |
 | **S3.0** | Roof framing plan | every truss, ridge, purlins, roof-plane bracing bays |
 | **S3.1** | Truss shop drawing | the truss at scale, every member length and cut angle, gussets drawn at cut size, heel/peak/panel-point joints blown up to nail from |
 | **A2.0** | Elevations | all four, openings tagged to the schedule |
 | **A6.0** | Door & window schedule | every opening with its rough opening, head, sill and header, plus head, jamb and sill details drawn from the wall build-up you have selected |
-| **E1.0** | Electrical plan | receptacles, switches, strip lights, sub-panel, with a legend drawn by the same routine as the symbols |
+| **E1.0** | Electrical plan | every box in the rough-in with its circuit number, a legend drawn by the same routine as the symbols, and the panel schedule |
 
 The schedule and the details share a sheet on purpose: the head detail is only true if
 the header in the schedule is the header that gets cut, and both come off the same
@@ -177,7 +178,9 @@ drawing of the old assembly on the sheet — and a check asserts the drawn exten
 own trim in all four combinations, which is the bug that first put a 1x4 outside the edge
 of the detail.
 
-Print at **100%** — no "fit to page" — and a scale rule reads them. Paper is selectable
+Print at **100%** — no "fit to page" — and a scale rule reads them. Each sheet has its
+own **Print this sheet** button, because most of the time you are walking out to the job
+with one drawing rather than the set. Paper is selectable
 (letter, tabloid, A4, A3) and every sheet picks the largest architectural scale that
 still fits it, so on letter the plans come out at 3/16" = 1'-0" and on tabloid at 1/4".
 
@@ -191,6 +194,40 @@ with the model is the classic failure of a hand-drawn set; here it is a test.
 
 The title block says **not for construction** on every page, because nothing here is
 stamped.
+
+## Electrical rough-in
+
+The **Electrical** tab is the rough-in as a list you can edit. Drag a box across its wall
+in the model, or set it in the panel; ceiling boxes drag on the ceiling plane, so look
+down into the building to grab one. Arrow keys nudge the selected box a half inch,
+shift-arrow six.
+
+Each box carries a size, how many cables come into it, which circuit it is on, and what
+is in it — receptacles, GFCIs, switches, three-ways, dimmers, 240 V, data, blanks,
+fixtures. Two calculations follow, and neither of them designs anything:
+
+**Box fill**, NEC 314.16, counted the way the section counts: one allowance for every
+conductor coming in, one for all the equipment grounds together, one for the clamps if
+the box has them, and **two for every yoke**. 2.25 cu in each at 12 AWG. The grounds and
+the clamps are the two everybody forgets, and two yokes in a one-gang box is the mistake
+that ends with a box cut out of finished drywall. Every box shows its fill against its
+volume, and anything over says what the smallest box that holds it is.
+
+**Circuit loading**, NEC 210 and 220: 180 VA per general-purpose receptacle outlet,
+fixtures at their wattage, lighting counted at 125% because that is how a breaker is
+sized for anything running three hours. A general-purpose 120 V circuit is 20 A on 12
+AWG and stays that way — if what you have put on one needs more, the tool says so rather
+than silently upsizing the wire, because the answer is another circuit. Thirteen outlets
+is what a 20 A circuit is worth at 180 VA each, and that is checked too.
+
+The tool starts you with a rough-in — a perimeter circuit at bench height, three rows of
+lights, a switch beside each man door, the opener on its own so a stuck door does not
+take the lights out. It stays generated until you touch something, at which point it
+becomes yours and the layout code starts carrying the boxes (about 350 characters →
+about 1,300). There is a button to hand it back.
+
+One device list feeds the viewport, the panel, the box-fill check, the review notes and
+E1.0, so none of them can disagree with another.
 
 ## The racking problem
 

@@ -476,7 +476,20 @@ function schedule(s, x, y, w, heading, cols, rows) {
    `visibility` leaves their boxes in the flow and you get a stack of blank
    pages. So the sheets are lifted out to a container hanging straight off
    <body> for the duration of the print and put back afterwards. One listener,
-   registered once. */
+   registered once.
+
+   `printSheets(holder)` prints one sheet; `printSheets(null)` prints the set.
+   The choice is a class on the container rather than a rebuild, so printing
+   one sheet does not redraw anything. */
+function printSheets(holder) {
+  const wrap = document.getElementById('sheets');
+  if (!wrap) return;
+  for (const h of wrap.querySelectorAll('.sheet-holder')) h.classList.remove('only');
+  if (holder) { holder.classList.add('only'); wrap.dataset.only = '1'; }
+  else delete wrap.dataset.only;
+  window.print();
+}
+
 let printWired = false;
 function wirePrint() {
   if (printWired) return;
@@ -499,6 +512,11 @@ function wirePrint() {
   };
   const drop = () => {
     document.documentElement.classList.remove('printing');
+    const wrap = document.getElementById('sheets');
+    if (wrap) {
+      delete wrap.dataset.only;
+      for (const h of wrap.querySelectorAll('.sheet-holder')) h.classList.remove('only');
+    }
     const sheets = document.getElementById('sheets');
     if (sheets && marker && marker.parentNode) {
       marker.parentNode.insertBefore(sheets, marker);
@@ -540,8 +558,8 @@ function renderPlans(panelId, sheets, info) {
     + 'step with the tool that made it.'));
 
   const bar = el('div', 'btn-row');
-  const printer = el('button', 'btn', 'Print all sheets');
-  printer.addEventListener('click', () => window.print());
+  const printer = el('button', 'btn', `Print all ${sheets.length} sheets`);
+  printer.addEventListener('click', () => printSheets(null));
   bar.append(printer);
 
   const pageSel = el('div', 'field');
@@ -588,8 +606,15 @@ function renderPlans(panelId, sheets, info) {
     holder.style.setProperty('--sheet-w', `${page.w}in`);
     holder.style.setProperty('--sheet-h', `${page.h}in`);
     holder.append(s.svg);
+    holder.dataset.sheet = def.number;
     const cap = el('div', 'sheet-cap');
     cap.append(el('b', null, def.number), document.createTextNode('  ' + def.title));
+    /* One sheet on its own, because most of the time you are walking out to
+       the job with one drawing and not with the set. */
+    const one = el('button', 'cap-print', 'Print this sheet');
+    one.title = `Print ${def.number} on its own`;
+    one.addEventListener('click', () => printSheets(holder));
+    cap.append(one);
     wrap.append(cap, holder);
   }
   p.append(wrap);

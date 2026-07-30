@@ -24,7 +24,7 @@ function wallBox(wall, spec, u, uLen, y, yLen, v, vLen) {
 
 /* ---------------------------------------------------------------- */
 
-function buildModel(spec, openings) {
+function buildModel(spec, openings, extra) {
   const parts = [];
   let seq = 0;
   const add = (stage, sys, mat, kind, geom, extra) => {
@@ -683,51 +683,70 @@ function buildModel(spec, openings) {
       { pick: o.id, lb: 2 * ((st.w + 5) + (st.h + 5)) * 4 * 0.75 * 0.0185 });
   }
 
-  /* ---------- 7. Electrical ---------- */
-  // Sub-panel goes on the east wall by the man door — shortest feeder to the house
-  const panelU = 96, panelY = 54;
-  add('elec', 'panel', 'panel', `${spec.service} A sub-panel`,
-    wallBox('E', spec, panelU, 20, panelY, 30, T - 4, 4), { note: 'Fed from the house' });
-  add('elec', 'wire', 'conduit', 'Feeder to house',
-    wallBox('E', spec, panelU + 8, 2, panelY + 30, H - panelY - 33, T - 3, 2));
-
-  // Perimeter receptacle circuit at 48" — shop height, above a bench
-  const recepY = 48;
-  for (const wall of ['N', 'S', 'W', 'E']) {
-    const e = wallExtent(wall, spec);
-    add('elec', 'wire', 'conduit', '12/2 home run',
-      wallBox(wall, spec, e.u0, e.u1 - e.u0, recepY + 2, 1, 1.5, 1),
-      { len: e.u1 - e.u0 });
-    for (let u = e.u0 + 36; u < e.u1 - 24; u += 96) {
-      const blocked = openingsOn(wall, openings).some((o) => {
-        const st = stockFor(o);
-        return u > o.off - 6 && u < o.off + st.w + 6 && (o.head - st.h) < recepY + 6;
-      });
-      if (blocked) continue;
-      add('elec', 'device', 'box', '20 A receptacle',
-        wallBox(wall, spec, u, 4, recepY, 4.5, 1.5, 2.5), { note: `${WALLS[wall].label} wall` });
+  /* ---------- 7. Electrical ----------
+     Drawn from the device list rather than generated here, so what the
+     viewport shows, what the Electrical tab lists, what the box-fill check
+     reads and what E1.0 prints are all one thing. */
+  const devs = deviceList(spec, openings, extra && extra.devices);
+  for (const d of devs) {
+    const p = devicePos(d, spec);
+    if (d.panel) {
+      add('elec', 'panel', 'panel', `${spec.service} A sub-panel`,
+        wallBox('E', spec, d.u - 10, 20, d.v - 15, 30, T - 4, 4),
+        { pick: d.id, note: 'Fed from the house' });
+      add('elec', 'wire', 'conduit', 'Feeder to house',
+        wallBox('E', spec, d.u - 2, 2, d.v + 15, H - d.v - 18, T - 3, 2));
+      continue;
+    }
+    const box = EBOX[d.box] || EBOX['1g18'];
+    const items = (d.items || []).map((k) => EDEVICE[k]).filter(Boolean);
+    const fixture = items.some((i) => i.kind === 'fixture');
+    if (d.wall === 'C') {
+      if (fixture) {
+        const long = (d.items || []).includes('hilight') ? 96 : 48;
+        add('elec', 'fixture', 'fixture', deviceLabel(d),
+          boxPart([p.x, p.y - 1.5, p.z], [long, 3, 5]), { pick: d.id });
+      }
+      add('elec', 'device', 'box', `${box.label} box`,
+        boxPart([p.x, p.y + box.d / 2, p.z], [box.w, box.d, box.h]), { pick: d.id });
+    } else {
+      add('elec', 'device', 'box', `${box.label} box`,
+        wallBox(d.wall, spec, d.u - box.w / 2, box.w, d.v - box.h / 2, box.h,
+          T - box.d - 0.5, box.d),
+        { pick: d.id, note: deviceLabel(d) });
+      /* The face of what is in it, so a switch reads as a switch from across
+         the room and not as another grey box. */
+      if (items.length) {
+        add('elec', 'device', 'panel', deviceLabel(d),
+          wallBox(d.wall, spec, d.u - box.w / 2 + 0.4, box.w - 0.8,
+            d.v - box.h / 2 + 0.4, box.h - 0.8, T - 0.6, 0.6),
+          { pick: d.id });
+      }
     }
   }
-
-  // Lights on the bottom chords, switches at each door
-  const rows = [D / 4, D / 2, D * 3 / 4];
-  for (const z of rows) {
-    add('elec', 'wire', 'conduit', '12/2 lighting run',
-      boxPart([W / 2, tr.bcBot - 1, z], [W - 12, 1, 1]), { len: W - 12 });
-    for (let x = 36; x < W - 24; x += 72) {
-      add('elec', 'fixture', 'fixture', '4\' LED strip light',
-        boxPart([x + 24, tr.bcBot - 3, z], [48, 3, 5]));
+  /* One home run per wall at box height, and one per light row — indicative,
+     because how a circuit is actually routed is the electrician's. */
+  {
+    const heights = new Map();
+    for (const d of devs) {
+      if (d.panel || d.wall === 'C') continue;
+      const k = `${d.wall}|${Math.round(d.v)}`;
+      heights.set(k, (heights.get(k) || 0) + 1);
+    }
+    for (const [k, n] of heights) {
+      if (n < 2) continue;
+      const [wall, v] = k.split('|');
+      const e = wallExtent(wall, spec);
+      add('elec', 'wire', 'conduit', '12/2 home run',
+        wallBox(wall, spec, e.u0, e.u1 - e.u0, Number(v) + 3, 1, 1.5, 1),
+        { len: e.u1 - e.u0 });
+    }
+    const rows = new Set(devs.filter((d) => d.wall === 'C').map((d) => Math.round(d.v)));
+    for (const z of rows) {
+      add('elec', 'wire', 'conduit', '12/2 lighting run',
+        boxPart([W / 2, tr.bcBot - 1, z], [W - 12, 1, 1]), { len: W - 12 });
     }
   }
-  for (const o of openings) {
-    if (o.kind === 'overhead') continue;
-    const st = stockFor(o);
-    const e = wallExtent(o.wall, spec);
-    const u = o.off + st.w + 6 < e.u1 ? o.off + st.w + 6 : o.off - 10;
-    add('elec', 'device', 'box', 'Switch', wallBox(o.wall, spec, u, 4, 46, 4.5, 1.5, 2.5));
-  }
-  add('elec', 'device', 'box', 'Opener receptacle (ceiling)',
-    boxPart([W / 2, tr.bcBot - 2, D - 120], [4, 4, 4]));
 
   /* ---------- 8. Insulation & drywall ---------- */
   if (spec.insulation) {

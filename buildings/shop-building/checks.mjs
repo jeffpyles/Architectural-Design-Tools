@@ -3,7 +3,9 @@
    that used to ship in the page as presets. They live here now — they are
    regression material, not something a user should have to scroll past. */
 
-export const api = ['wallLayers', 'LUMBER', 'partVolume', 'buildModel', 'aabb',
+export const api = ['WIRE', 'clearOnWall', 'EBOX', 'EDEVICE', 'boxFill', 'circuitLoads', 'electricalReview',
+  'defaultDevices', 'deviceList', 'devicePos', 'deviceLabel', 'packDevices', 'unpackDevices',
+  'wallLayers', 'LUMBER', 'partVolume', 'buildModel', 'aabb',
   'cylinderPart', 'SONOTUBE', 'evalMember', 'leanToUnder', 'gussetPlan', 'anchorBoltPlan', 'leanToPostPlan', 'planExtent', 'openingTag', 'PLANS',
   'auditBuilding', 'trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
   'leanToDesign', 'leanToDrift', 'seismicShear', 'windPressure',
@@ -547,6 +549,7 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
     { slabBar: '#3', slabThickness: 8, postPad: 12, leanTo: true },
     { leanTo: true, leanToFraming: 'flush', leanToRafter: '2x12', leanToSpacing: 12 },
     { leanTo: true, postForm: 'tube', postTube: 30, leanToFraming: 'flush' },
+    { leanTo: true, leanToWall: 'S', service: 200, wallDrywall: false },
   ]) permute(p);
 
   /* ---- the drawings ----
@@ -636,6 +639,166 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
       if (!d.title) fail(`sheet ${d.number} has no title`);
     }
     log(`  ok  ${A.PLANS.length} sheets: ${nums.join(', ')}`);
+  }
+
+  /* ---- electrical rough-in ----
+     Box fill is the calculation an owner-builder gets wrong, so it gets
+     checked the way it is written: against the section, term by term. */
+  {
+    const devs = A.deviceList(spec, openings, null);
+    log(`electrical: ${devs.length} boxes`);
+    if (devs.length < 8) fail(`only ${devs.length} devices in the generated rough-in`);
+    if (devs.filter((d) => d.panel).length !== 1) fail('there is not exactly one sub-panel');
+
+    for (const d of devs) {
+      const p = A.devicePos(d, spec);
+      if (![p.x, p.y, p.z].every(Number.isFinite)) fail(`${A.deviceLabel(d)} has no position`);
+      if (d.wall === 'C') {
+        if (p.x < 0 || p.x > spec.width || p.z < 0 || p.z > spec.depth) {
+          fail(`a ceiling box is outside the building at ${p.x}, ${p.z}`);
+        }
+      } else {
+        const e = A.wallExtent(d.wall, spec);
+        if (d.u < e.u0 - 1 || d.u > e.u1 + 1) fail(`a box on the ${d.wall} wall is off the end`);
+        if (d.v < 0 || d.v > spec.wallHeight) fail(`a box is at ${d.v}" on a ${spec.wallHeight}" wall`);
+      }
+      /* Nothing may sit inside an opening — that is a box in mid-air. */
+      if (d.wall !== 'C' && !d.panel) {
+        for (const o of openings.filter((x) => x.wall === d.wall)) {
+          const st = A.stockFor(o);
+          const inU = d.u > o.off && d.u < o.off + st.w;
+          const inV = d.v > o.head - st.h && d.v < o.head;
+          if (inU && inV) fail(`${A.deviceLabel(d)} sits inside the ${A.openingTag(o, openings)} opening`);
+        }
+      }
+    }
+
+    /* NEC 314.16(B), counted out by hand for the case the tool starts with:
+       a 1-gang box, one duplex, a cable in and a cable out, no clamps. */
+    {
+      const d = { wall: 'N', u: 36, v: 48, box: '1g18', items: ['duplex'], feeds: 2 };
+      const f = A.boxFill(d);
+      const want = (2 * 2 + 1 + 0 + 2) * 2.25;         // 4 conductors, 1 ground, 1 yoke
+      if (Math.abs(f.need - want) > 1e-9) fail(`1-gang duplex fill is ${f.need}, not ${want}`);
+      if (!f.ok) fail('a duplex in an 18 cu in box came out over the fill');
+      /* Same box with clamps has to cost one more allowance. */
+      const g = A.boxFill({ ...d, box: 'sq21' });
+      if (Math.abs(g.need - (want + 2.25)) > 1e-9) fail('a clamped box did not cost an allowance');
+      /* A three-way switch carries travellers, which is another conductor. */
+      const h = A.boxFill({ ...d, items: ['sw3'] });
+      if (Math.abs(h.need - (want + 2.25)) > 1e-9) fail('a 3-way did not count its traveller');
+      /* Every extra yoke is two more. */
+      const two = A.boxFill({ ...d, box: '2g32', items: ['duplex', 'duplex'] });
+      if (Math.abs(two.need - (want + 4.5)) > 1e-9) fail('a second yoke did not cost two allowances');
+      if (two.ok !== (two.need <= 32)) fail('ok disagrees with the numbers it comes from');
+      log(`  ok  fill: 1-gang duplex ${f.need.toFixed(2)} of ${f.have}, `
+        + `2-gang two duplex ${two.need.toFixed(2)} of ${two.have}`);
+    }
+    /* More yokes than gangs is a different failure from too little volume, and
+       has to read as one. */
+    {
+      const f = A.boxFill({ wall: 'N', u: 36, v: 48, box: '1g22',
+        items: ['sw1', 'sw1', 'sw1'], feeds: 3 });
+      if (f.gangsOK) fail('three switches passed a 1-gang box');
+      if (!f.smallest || f.smallest.gangs < 3) fail('the suggested box has too few gangs');
+    }
+    /* Anything the tool generates has to fit the box the tool chose. */
+    for (const d of devs) {
+      const f = A.boxFill(d);
+      if (!f) continue;
+      if (!f.ok || !f.gangsOK) {
+        fail(`the generated rough-in put ${A.deviceLabel(d)} in a box it does not fit: `
+          + `${f.need.toFixed(1)} of ${f.have}`);
+      }
+    }
+
+    /* Circuits: the load has to be the sum of what is on them, lighting at
+       125%, and the breaker has to hold it. */
+    const cl = A.circuitLoads(devs, spec);
+    for (const r of cl.rows) {
+      const onIt = devs.filter((d) => (d.ckt || 1) === r.ckt);
+      const raw = onIt.reduce((a, d) => a
+        + (d.items || []).reduce((b, k) => b + ((A.EDEVICE[k] || {}).va || 0), 0), 0);
+      if (Math.abs(r.va - raw) > 0.01) fail(`circuit ${r.ckt} totals ${r.va}, not ${raw}`);
+      if (r.cont > 0 && Math.abs(r.design - (r.va - r.cont + r.cont * 1.25)) > 0.01) {
+        fail(`circuit ${r.ckt} did not count its continuous load at 125%`);
+      }
+      if (!r.ok) fail(`the generated rough-in overloads circuit ${r.ckt}`);
+      if (r.overStandard) fail(`the generated rough-in needs more than 20 A on circuit ${r.ckt}`);
+      if (A.WIRE[r.gauge].amps !== r.breaker) fail(`circuit ${r.ckt}: wire and breaker disagree`);
+    }
+    log(`  ok  ${cl.rows.length} circuits, ${cl.totalVA.toFixed(0)} VA connected on `
+      + `${spec.service} A`);
+    /* Loading one circuit to breaking point has to be caught. */
+    {
+      /* Twenty duplex outlets on one circuit: 3,600 VA, 30 A, over on both
+         the amps and the outlet count. At 180 VA an outlet those two limits
+         land in the same place, which is why the code picked that figure. */
+      const many = Array.from({ length: 20 }, (_, i) => ({
+        id: `m${i}`, wall: 'N', u: 12 + i * 12, v: 48, box: '1g18',
+        items: ['duplex'], ckt: 1, feeds: 2,
+      }));
+      const one = A.circuitLoads(many, spec).rows[0];
+      if (one.ok) fail(`${one.amps.toFixed(1)} A on a 20 A circuit still passed`);
+      if (!one.overStandard) fail('20 outlets on one circuit did not read as over a 20 A run');
+      if (one.outletsOK) fail(`${one.outlets} outlets on one 20 A circuit read as fine`);
+      const notes = A.electricalReview(spec, openings, many);
+      if (!notes.some((n) => n.level === 'crit' && /20 A circuit holds/.test(n.title))) {
+        fail('an overloaded circuit produced no critical note');
+      }
+      /* Thirteen is the most a 20 A circuit is worth at 180 VA each. */
+      const okRow = A.circuitLoads(many.slice(0, 13), spec).rows[0];
+      if (!okRow.ok || !okRow.outletsOK) {
+        fail(`13 outlets on a 20 A circuit came out as ${okRow.amps.toFixed(1)} A and failed`);
+      }
+      /* A 240 V circuit legitimately wants a bigger breaker and must not be
+         flagged for it. */
+      const big = A.circuitLoads([{ wall: 'N', u: 24, v: 48, box: '2g32',
+        items: ['r250'], ckt: 9, feeds: 1 }], spec);
+      if (big.rows[0].overStandard) fail('a 240 V range circuit was flagged for being over 20 A');
+      if (big.rows[0].breaker < 50) fail(`a 12 kVA 240 V load sized to a ${big.rows[0].breaker} A breaker`);
+    }
+    /* And so does a box somebody has overfilled. */
+    {
+      const stuffed = devs.map((d) => (d.panel || d.wall === 'C' ? d
+        : { ...d, box: '1g18', items: ['duplex', 'duplex', 'duplex'], feeds: 3 }));
+      const notes = A.electricalReview(spec, openings, stuffed);
+      if (!notes.some((n) => n.level === 'crit')) fail('overstuffed boxes produced no critical note');
+    }
+
+    /* The share code has to carry a box back exactly, or a layout somebody
+       emails is a different building. */
+    {
+      const packed = A.packDevices(devs);
+      const back = A.unpackDevices(packed);
+      if (back.length !== devs.length) fail(`${devs.length} boxes packed, ${back.length} came back`);
+      for (let i = 0; i < devs.length; i++) {
+        const a = devs[i], b = back[i];
+        if (a.wall !== b.wall) fail(`box ${i} came back on the ${b.wall} wall, not the ${a.wall}`);
+        if (Math.abs(a.u - b.u) > 0.26 || Math.abs(a.v - b.v) > 0.26) {
+          fail(`box ${i} moved ${(a.u - b.u).toFixed(2)}, ${(a.v - b.v).toFixed(2)} in the code`);
+        }
+        if ((a.items || []).join() !== (b.items || []).join()) {
+          fail(`box ${i} came back holding ${b.items} instead of ${a.items}`);
+        }
+        if (!a.panel && a.box !== b.box) fail(`box ${i} changed size in the code`);
+        if ((a.ckt || 0) !== (b.ckt || 0)) fail(`box ${i} changed circuit in the code`);
+      }
+      log(`  ok  ${devs.length} boxes survive the share code`);
+    }
+
+    /* And the model has to draw what the list says. */
+    {
+      const drawn = model.parts.filter((q) => q.stage === 'elec' && q.sys === 'device'
+        && q.kind.endsWith(' box'));
+      if (drawn.length !== devs.filter((d) => !d.panel).length) {
+        fail(`${drawn.length} boxes drawn for ${devs.filter((d) => !d.panel).length} in the list`);
+      }
+      const edited = devs.map((d) => (d.panel ? d : { ...d, box: 'sq30' }));
+      const m2 = A.buildModel(spec, openings, { devices: edited });
+      const big = m2.parts.filter((q) => q.kind.startsWith('4" square × 2⅛"'));
+      if (!big.length) fail('changing every box size changed nothing in the model');
+    }
   }
 
   /* The racking fixtures: a layout that clears every wall line, and three

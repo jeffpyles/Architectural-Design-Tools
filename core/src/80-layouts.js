@@ -42,7 +42,7 @@ async function loadSharedLayouts() {
   if (openedFromLink === false && !touched && Array.isArray(sharedLayouts)) {
     const def = sharedLayouts.find((r) => r.default);
     if (def) {
-      try { const d = decodeLayout(def.code); applyLayout(d.spec, d.openings, true); }
+      try { const d = decodeLayout(def.code); applyLayout(d.spec, d.openings, true, d.extra); }
       catch (e) { /* fall back to whatever was baked in */ }
     }
   }
@@ -91,7 +91,7 @@ function b64urlDecode(str) {
   const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
-function encodeLayout(spec, openings) {
+function encodeLayout(spec, openings, extra) {
   const base = BUILDING.defaults().spec;
   const diff = {};
   for (const k of Object.keys(base)) {
@@ -99,7 +99,15 @@ function encodeLayout(spec, openings) {
   }
   const ops = openings.map((o) => [o.wall, o.stock, o.kind, o.off, o.head,
     o.w == null ? 0 : o.w, o.h == null ? 0 : o.h]);
-  return CODE_PREFIX() + b64urlEncode(JSON.stringify({ v: 1, s: diff, o: ops }));
+  const body = { v: 1, s: diff, o: ops };
+  /* Whatever else the building lets you edit, packed by the building — the
+     shell has no idea what is in there and does not need one. A building that
+     packs to nothing keeps the code the length it always was. */
+  if (BUILDING.packExtra) {
+    const x = BUILDING.packExtra(extra || {}, spec, openings);
+    if (x != null) body.x = x;
+  }
+  return CODE_PREFIX() + b64urlEncode(JSON.stringify(body));
 }
 function decodeLayout(code) {
   const raw = String(code).trim().replace(/\s+/g, '');
@@ -117,7 +125,9 @@ function decodeLayout(code) {
     id: `l${i}`, wall: a[0], stock: a[1], kind: a[2], off: a[3], head: a[4],
     ...(a[5] ? { w: a[5] } : {}), ...(a[6] ? { h: a[6] } : {}),
   }));
-  return { spec, openings };
+  const extra = data.x != null && BUILDING.unpackExtra
+    ? BUILDING.unpackExtra(data.x, spec, openings) : {};
+  return { spec, openings, extra };
 }
 
 /* ---- this browser's saved layouts ---- */
@@ -160,7 +170,7 @@ function layoutSummary(spec, openings) {
         + (l.braced === 0 ? `  (widest run only ${fmtFt(l.widest)})` : ''));
     }
   }
-  const notes = BUILDING.audit(spec, openings).filter((n) => n.level !== 'info');
+  const notes = BUILDING.audit(spec, openings, {}).filter((n) => n.level !== 'info');
   if (notes.length) {
     L.push('');
     L.push('THINGS TO SORT OUT');
@@ -168,7 +178,7 @@ function layoutSummary(spec, openings) {
   }
   L.push('');
   L.push('Layout code (paste this into the model to see it):');
-  L.push(encodeLayout(spec, openings));
+  L.push(encodeLayout(spec, openings, extra));
   return L.join('\n');
 }
 
@@ -191,10 +201,11 @@ async function copyText(text, sourceEl) {
 /* ---- panel ---- */
 /* `quiet` applies a layout as a starting point rather than a choice, so a
    later-arriving library default can still replace it. */
-function applyLayout(spec, openings, quiet) {
+function applyLayout(spec, openings, quiet, extra) {
   if (!quiet) touched = true;
   state.spec = { ...spec };
   state.openings = openings.map((o, i) => ({ ...o, id: o.id || `k${i}` }));
+  state.extra = extra || {};
   state.selected = null;
   document.getElementById('readout').classList.remove('on');
   scheduleRebuild();
@@ -203,7 +214,7 @@ function renderLayouts() {
   const p = $('#panel-layouts');
   if (!p) return;
   p.textContent = '';
-  const code = encodeLayout(state.spec, state.openings);
+  const code = encodeLayout(state.spec, state.openings, state.extra);
 
   p.append(note('A layout is the whole building — sizes, openings, everything on the '
     + 'Structure tab. Copy the code below into an email and whoever pastes it back in '
@@ -284,8 +295,8 @@ function renderLayouts() {
   const bLoad = el('button', 'btn', 'Load it');
   bLoad.addEventListener('click', () => {
     try {
-      const { spec, openings } = decodeLayout(inp.value);
-      applyLayout(spec, openings);
+      const { spec, openings, extra } = decodeLayout(inp.value);
+      applyLayout(spec, openings, false, extra);
       loadMsg.textContent = 'Loaded';
     } catch (err) {
       loadMsg.textContent = err.message;
@@ -312,10 +323,10 @@ function renderLayouts() {
         const row = el('div', 'saved-row');
         const meta = el('div');
         meta.append(el('b', null, item.name || 'Untitled'));
-        let tagTxt = '', tagCls = 'left', spec = null, openings = null;
+        let tagTxt = '', tagCls = 'left', spec = null, openings = null, extra = null;
         try {
           const d = decodeLayout(item.code);
-          spec = d.spec; openings = d.openings;
+          spec = d.spec; openings = d.openings; extra = d.extra;
           const worst = Math.min(...bracingCheck(spec, openings).flatMap((x) => x.lines.map((l) => l.ratio)));
           tagTxt = worst >= 1 ? 'bracing ok' : `worst ${worst.toFixed(2)}`;
           tagCls = worst >= 1 ? 'used' : 'over';
@@ -325,7 +336,7 @@ function renderLayouts() {
         meta.append(sub);
         const b = el('button', 'btn', 'Load');
         b.disabled = !spec;
-        b.addEventListener('click', () => applyLayout(spec, openings));
+        b.addEventListener('click', () => applyLayout(spec, openings, false, extra));
         row.append(meta, el('span', 'tag ' + tagCls, tagTxt), b);
         p.append(row);
       }
@@ -376,7 +387,7 @@ function renderLayouts() {
     meta.append(sub);
     const bL = el('button', 'btn', 'Load');
     bL.addEventListener('click', () => {
-      try { const d = decodeLayout(item.code); applyLayout(d.spec, d.openings); }
+      try { const d = decodeLayout(item.code); applyLayout(d.spec, d.openings, false, d.extra); }
       catch (e) { /* nothing to load */ }
     });
     const bD = el('button', 'btn danger', 'Delete');

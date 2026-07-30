@@ -888,6 +888,187 @@ function drawWallSection(s) {
 }
 
 /* ================================================================
+   S2.2 — Building section
+
+   The transverse cut: through both bearing walls, across the truss, with the
+   lean-to if there is one. Where the wall section says how the assembly is put
+   together, this says how big the room is.
+   ================================================================ */
+function drawBuildingSection(s) {
+  const spec = state.spec, ops = state.openings;
+  const area = sheetArea(s, { noteWidth: 156 });
+  const tr = trussGeometry(spec);
+  const T = LUMBER[spec.studSize].d;
+  const D = spec.depth;                          // the truss spans this way
+  const eo = spec.eaveOverhang;
+  const L = wallLayers(spec);
+  const lt = leanToDesign(spec);
+  /* Only a lean-to on a wall this section actually cuts through shows up. */
+  const ltHere = lt && !lt.impossible && (lt.wall === 'N' || lt.wall === 'S') ? lt : null;
+
+  const reach = ltHere ? ltHere.projection + 18 : 0;
+  const uLo = (ltHere && ltHere.wall === 'N' ? -reach : 0) - eo - 26;
+  const uHi = D + (ltHere && ltHere.wall === 'S' ? reach : 0) + eo + 26;
+  const vHi = tr.overallHeight + 26, vLo = -(spec.turndownDepth + 10);
+  const key = s.pickScale(uHi - uLo, vHi - vLo, area.w - 40, area.h - 30);
+  const f = SCALES.find((z) => z.k === key).f * PT;
+  const x0 = area.x + (area.w - (uHi - uLo) * f) / 2;
+  const y0 = area.y + 14 + Math.max(0, (area.h - 44 - (vHi - vLo) * f) / 2);
+  const { X, Y } = sectionFrame(s, x0, y0, key, uLo, uHi, vHi);
+  const Lp = (v) => s.mlen(v);
+
+  /* ---- ground, slab, turndown ---- */
+  const st = spec.slabThickness, td = spec.turndownDepth, tw = spec.turndownWidth;
+  s.hatch(X(uLo), Y(-st), Lp(-uLo), Lp(td), 'earth');
+  s.hatch(X(D), Y(-st), Lp(uHi - D), Lp(td), 'earth');
+  s.hatch(X(tw), Y(-st), Lp(D - tw * 2), Lp(spec.gravelDepth), 'gravel');
+  s.hatch(X(0), Y(0), Lp(D), Lp(st), 'concrete');
+  s.hatch(X(0), Y(-st), Lp(tw), Lp(td - st), 'concrete');
+  s.hatch(X(D - tw), Y(-st), Lp(tw), Lp(td - st), 'concrete');
+  /* One outline: a slab with a leg down at each end, which is exactly what
+     these ten edges are. */
+  s.path(`M${fx(X(0))},${fx(Y(0))} L${fx(X(D))},${fx(Y(0))} L${fx(X(D))},${fx(Y(-st))} `
+    + `L${fx(X(D))},${fx(Y(-st))} L${fx(X(D))},${fx(Y(-td))} L${fx(X(D - tw))},${fx(Y(-td))} `
+    + `L${fx(X(D - tw))},${fx(Y(-st))} L${fx(X(tw))},${fx(Y(-st))} L${fx(X(tw))},${fx(Y(-td))} `
+    + `L${fx(X(0))},${fx(Y(-td))} Z`, LW.cut);
+  s.line(X(uLo), Y(-st), X(0), Y(-st), LW.medium, { stroke: 'var(--ink-2)' });
+  s.line(X(D), Y(-st), X(uHi), Y(-st), LW.medium, { stroke: 'var(--ink-2)' });
+
+  /* ---- the two bearing walls, cut ---- */
+  for (const [u0, side] of [[0, 'N'], [D - T, 'S']]) {
+    s.rect(X(u0), Y(spec.wallHeight), Lp(T), Lp(spec.wallHeight), LW.cut);
+    s.hatch(X(u0), Y(spec.wallHeight), Lp(T), Lp(spec.wallHeight), 'wood');
+    if (spec.insulation) s.hatch(X(u0), Y(spec.wallHeight), Lp(T), Lp(spec.wallHeight), 'insul');
+    /* skin outside, drywall inside */
+    const out = side === 'N' ? -1 : 1;
+    const face = side === 'N' ? u0 : u0 + T;
+    s.rect(X(face + out * L.out), Y(spec.wallHeight), Lp(L.out), Lp(spec.wallHeight), LW.medium);
+    if (L.inner) {
+      s.rect(X(face - out * L.inner), Y(spec.wallHeight), Lp(L.inner), Lp(spec.wallHeight),
+        LW.light);
+    }
+    /* openings on this wall, seen beyond the cut */
+    for (const o of openingsOn(side, ops)) {
+      const so = stockFor(o);
+      s.rect(X(u0), Y(o.head), Lp(T), Lp(so.h), LW.thin,
+        { stroke: 'var(--ink-3)', dash: '4 2.5' });
+    }
+  }
+
+  /* ---- the truss ---- */
+  const chordBand = (a, b, depth) => s.poly([[X(a[0]), Y(a[1])], [X(b[0]), Y(b[1])],
+    [X(b[0]), Y(b[1] - depth)], [X(a[0]), Y(a[1] - depth)]], LW.heavy);
+  chordBand([0, tr.bcTop], [D, tr.bcTop], tr.chord.d);
+  const eaveY = tr.bcTop - eo * tr.slope;
+  chordBand([-eo, eaveY + tr.perp], [D / 2, tr.peakY + tr.perp], tr.perp);
+  chordBand([D + eo, eaveY + tr.perp], [D / 2, tr.peakY + tr.perp], tr.perp);
+  for (const w of tr.webs) s.line(X(w.a[0]), Y(w.a[1]), X(w.b[0]), Y(w.b[1]), LW.medium);
+  /* the roof surface over it */
+  const deck = spec.roofDeck === 'osb' ? 1.1 : 1.8;
+  s.line(X(-eo), Y(eaveY + tr.perp + deck), X(D / 2), Y(tr.peakY + tr.perp + deck), LW.cut);
+  s.line(X(D + eo), Y(eaveY + tr.perp + deck), X(D / 2), Y(tr.peakY + tr.perp + deck), LW.cut);
+  for (const u of [-eo, D + eo]) {
+    s.rect(X(u - (u < 0 ? 0 : 1.5)), Y(eaveY + tr.perp), Lp(1.5), Lp(7.25), LW.medium);
+  }
+
+  /* ---- the lid ---- */
+  if (spec.ceilingDrywall) {
+    s.rect(X(T), Y(tr.bcBot), Lp(D - T * 2), Lp(0.625), LW.medium);
+    s.hatch(X(T), Y(tr.bcBot + spec.ceilingInsulation), Lp(D - T * 2),
+      Lp(spec.ceilingInsulation), 'insul');
+  }
+
+  /* ---- the lean-to, if this cut runs through it ---- */
+  if (ltHere) {
+    const out = ltHere.wall === 'S' ? 1 : -1;
+    const wallFace = ltHere.wall === 'S' ? D : 0;
+    const at = (p) => wallFace + out * p;
+    const P = ltHere.projection;
+    const rd = LUMBER[ltHere.rafter.size].d / Math.cos(ltHere.angle);
+    /* rafter, from the ledger down to the beam */
+    const rr = ltHere.rafterRun == null ? P : ltHere.rafterRun;
+    s.poly([[X(at(0)), Y(spec.wallHeight)], [X(at(rr)), Y(spec.wallHeight - rr * ltHere.slope)],
+      [X(at(rr)), Y(spec.wallHeight - rr * ltHere.slope - rd)],
+      [X(at(0)), Y(spec.wallHeight - rd)]], LW.heavy);
+    /* beam and post */
+    s.rect(X(at(P) - (out > 0 ? ltHere.beam.thickness : 0)), Y(ltHere.beamTop),
+      Lp(ltHere.beam.thickness), Lp(ltHere.beam.depth), LW.cut);
+    s.hatch(X(at(P) - (out > 0 ? ltHere.beam.thickness : 0)), Y(ltHere.beamTop),
+      Lp(ltHere.beam.thickness), Lp(ltHere.beam.depth), 'wood');
+    const px = at(P - ltHere.beam.thickness / 2);
+    s.rect(X(px - 2.75), Y(ltHere.beamBot), Lp(5.5), Lp(ltHere.beamBot), LW.medium);
+    /* the footing under it */
+    const pf = postFooting(spec);
+    if (pf) {
+      if (pf.form === 'tube') {
+        s.hatch(X(px - pf.worstPad.d / 2), Y(0), Lp(pf.worstPad.d), Lp(pf.depth), 'concrete');
+        s.rect(X(px - pf.worstPad.d / 2), Y(0), Lp(pf.worstPad.d), Lp(pf.depth), LW.cut);
+      } else {
+        const sd = pf.worstPad.side;
+        s.hatch(X(px - sd / 2), Y(-(pf.depth - pf.thickness)), Lp(sd), Lp(pf.thickness), 'concrete');
+        s.rect(X(px - sd / 2), Y(-(pf.depth - pf.thickness)), Lp(sd), Lp(pf.thickness), LW.cut);
+        s.rect(X(px - 6), Y(0), Lp(12), Lp(pf.depth - pf.thickness), LW.cut);
+      }
+    }
+    /* roof over the rafters */
+    s.line(X(at(0)), Y(spec.wallHeight + 1.8), X(at(P)), Y(spec.wallHeight - P * ltHere.slope + 1.8),
+      LW.cut);
+    s.dimLine(X(px), Y(ltHere.beamBot) + 14, X(px), Y(0) + 14, fmtFt(ltHere.beamBot));
+    s.callout(at(P / 2), spec.wallHeight - (P / 2) * ltHere.slope - rd, 0, 40,
+      `LEAN-TO — ${fmtFt(P)}, ${ltHere.rafter.label} AT ${fmtIn(spec.leanToSpacing)} O.C. `
+      + `${ltHere.flush ? 'HUNG OFF THE BEAM FACE' : 'ON THE BEAM'}`,
+      { size: 5.4, width: 120 });
+  }
+
+  /* ---- heights, which is what a building section is for ---- */
+  const offA = 34 / f, offB = 58 / f;
+  s.dimV(0, spec.wallHeight, -eo - offA, null, 0);
+  /* A raised heel is the only thing that puts the bottom chord anywhere other
+     than the top plate, so it is the only time that second string says
+     anything the first one did not. */
+  if (spec.heelHeight > 0) s.dimV(0, tr.bcBot, -eo - offB, null, 0);
+  s.dimV(0, tr.overallHeight, D + eo + offA, null, D);
+  s.dimH(0, D, -offA, null, 0);
+  s.dimH(-eo, D + eo, -offB, null, -eo);
+  s.line(X(D / 2), Y(vLo), X(D / 2), Y(vHi - 4), LW.thin,
+    { stroke: 'var(--ink-3)', dash: '9 2.5 1.5 2.5' });
+  s.text(X(D / 2), Y(vHi - 4) - 4, 'RIDGE', { size: 5.4, fill: 'var(--ink-3)' });
+
+  s.callout(D * 0.5, tr.bcBot + 1, 0, -34,
+    `${tr.count} TRUSSES AT ${fmtIn(spec.trussSpacing)} O.C. — SEE S3.1`,
+    { size: 5.4, width: 120 });
+  s.callout(D * 0.28, tr.bcBot - 8, -20, 34,
+    spec.ceilingDrywall
+      ? `${fmtFt(tr.bcBot)} CLEAR TO THE CEILING`
+      : `${fmtFt(tr.bcBot)} CLEAR TO THE BOTTOM CHORD`,
+    { size: 5.4, width: 120 });
+
+  let cy = sheetNotes(s, area.noteX, area.y + 8, area.noteW, 'Heights', [
+    `Top of slab is 0'-0" on every sheet. Top plate ${fmtFt(spec.wallHeight)}, `
+    + `bottom chord ${fmtFt(tr.bcBot)}, peak ${fmtFt(tr.overallHeight)}.`,
+    `Clear under the trusses is ${fmtFt(tr.bcBot)}. The tallest opening is `
+    + `${fmtFt(Math.max(...ops.map((o) => o.head)))} to its head, which leaves `
+    + `${fmtIn(spec.wallHeight - Math.max(...ops.map((o) => o.head)))} of wall above it.`,
+    ltHere ? `Lean-to beam bottom ${fmtFt(ltHere.beamBot)} — clear enough for `
+      + `${ltHere.beamBot >= 84 ? 'a vehicle' : 'walking under, not for driving under'}.`
+      : (lt && !lt.impossible
+        ? `The lean-to is on the ${WALLS[lt.wall].label.toLowerCase()} wall, which runs `
+          + 'parallel to this cut, so it is not in this view. It is on the plans and the '
+          + 'wall section.'
+        : 'No lean-to.'),
+  ]);
+  cy = sheetNotes(s, area.noteX, cy + 12, area.noteW, 'What this cut shows', [
+    'Looking north, cut across the middle of the building, so the trusses span left to '
+    + 'right and the bearing walls are the two you can see.',
+    'Openings on the cut walls are shown dashed — they are beyond the cut, not in it.',
+    'The wall assembly itself is on S2.1; this sheet is about how big the room is.',
+  ]);
+
+  s.viewTitle(area.x + 10, area.bottom - 6, 'Building section', key, '1');
+  s.scale = SCALES.find((z) => z.k === key);
+}
+
+/* ================================================================
    S3.0 — Roof framing plan
    ================================================================ */
 function drawRoofPlan(s) {
@@ -999,6 +1180,47 @@ function trussCutRows(tr) {
     rows.push([String(n), `Web, ${tr.chordSize}`, fmtFt(len)]);
   }
   return rows;
+}
+
+/* One symbol routine for the plan and the legend, so a symbol on the drawing
+   and the same symbol in the key cannot drift apart. */
+function elecSymbol(s, x, y, d, over) {
+  const key = (d.items || [])[0];
+  const dev = EDEVICE[key];
+  const col = over ? 'var(--keel)' : 'var(--ink)';
+  const lw = over ? LW.heavy : LW.medium;
+  if (!dev) {
+    s.circle(x, y, 3.1, lw, { fill: 'var(--surface)', stroke: col });
+    return;
+  }
+  if (dev.kind === 'fixture') {
+    const long = key === 'hilight' ? 11 : 7;
+    s.rect(x - long, y - 2, long * 2, 4, lw, { stroke: col });
+    s.line(x - long, y, x + long, y, LW.thin, { stroke: 'var(--ink-3)' });
+    return;
+  }
+  if (dev.kind === 'switch') {
+    s.circle(x, y, 3.1, lw, { fill: 'var(--surface)', stroke: col });
+    s.text(x, y + 2, key === 'sw3' ? '3' : key === 'dim' ? 'D' : 'S',
+      { size: 5.2, weight: 700, fill: col });
+    return;
+  }
+  if (dev.kind === 'data' || dev.kind === 'blank') {
+    s.circle(x, y, 3.1, lw, { fill: 'var(--surface)', stroke: col });
+    s.text(x, y + 2, dev.kind === 'data' ? 'T' : '—', { size: 5.2, fill: col });
+    return;
+  }
+  /* A receptacle: the half circle with its prongs. Two circles for 240 V,
+     because that is the one you do not want to plug the wrong thing into. */
+  s.circle(x, y, 3.1, lw, { fill: 'var(--surface)', stroke: col });
+  s.line(x - 3.1, y, x + 3.1, y, lw, { stroke: col });
+  s.line(x - 1.4, y, x - 1.4, y - 2.6, LW.thin, { stroke: col });
+  s.line(x + 1.4, y, x + 1.4, y - 2.6, LW.thin, { stroke: col });
+  if (key === 'gfci') s.text(x, y + 6.4, 'GFCI', { size: 4, weight: 700, fill: col });
+  if (dev.volts === 240) {
+    s.circle(x, y, 4.6, LW.thin, { stroke: col });
+    s.text(x, y + 8.4, '240 V', { size: 4, weight: 700, fill: col });
+  }
 }
 
 /* ================================================================
@@ -1258,38 +1480,29 @@ function drawElectricalPlan(s) {
   }
   s.rect(X(0), Y(0), s.mlen(W), s.mlen(D), LW.medium);
 
-  /* Everything electrical is already in the model, so the plan reads it off
-     rather than inventing a second layout that could disagree. */
-  const parts = model.parts.filter((p) => p.stage === 'elec');
-  const at = (p) => { const c = aabb(p.geom).c; return { x: c[0], z: c[2], y: c[1] }; };
-
-  for (const p of parts) {
-    const c = at(p);
-    if (p.sys === 'fixture') {
-      const b = aabb(p.geom);
-      const lw = b.mx[0] - b.mn[0], ld = b.mx[2] - b.mn[2];
-      s.rect(X(b.mn[0]), Y(c.z - 2), s.mlen(lw), s.mlen(4), LW.medium);
-      s.line(X(b.mn[0]), Y(c.z), X(b.mx[0]), Y(c.z), LW.thin, { stroke: 'var(--ink-3)' });
-    } else if (p.sys === 'panel') {
-      s.rect(X(c.x - 10), Y(c.z - 3), s.mlen(20), s.mlen(6), LW.heavy, { fill: 'var(--surface-2)' });
-      s.callout(c.x, c.z, -30, -18, `${spec.service} A SUB-PANEL`, { size: 5.6, weight: 700 });
-    } else if (p.sys === 'device') {
-      if (p.kind === 'Switch') {
-        s.circle(X(c.x), Y(c.z), 3.1, LW.medium, { fill: 'var(--surface)' });
-        s.text(X(c.x), Y(c.z) + 2, 'S', { size: 5.4, weight: 700 });
-      } else {
-        /* Duplex receptacle: the half circle with two prongs. */
-        s.circle(X(c.x), Y(c.z), 3.1, LW.medium, { fill: 'var(--surface)' });
-        s.line(X(c.x) - 3.1, Y(c.z), X(c.x) + 3.1, Y(c.z), LW.medium);
-        s.line(X(c.x) - 1.4, Y(c.z), X(c.x) - 1.4, Y(c.z) - 2.6, LW.thin);
-        s.line(X(c.x) + 1.4, Y(c.z), X(c.x) + 1.4, Y(c.z) - 2.6, LW.thin);
-      }
+  /* One device list: the viewport, the Electrical tab, the box-fill check and
+     this sheet all read it, so none of them can disagree with another. */
+  const devs = currentDevices(spec);
+  for (const d of devs) {
+    const p = devicePos(d, spec);
+    if (d.panel) {
+      s.rect(X(p.x - 10), Y(p.z - 3), s.mlen(20), s.mlen(6), LW.heavy, { fill: 'var(--surface-2)' });
+      s.callout(p.x, p.z, -34, -20, `${spec.service} A SUB-PANEL`, { size: 5.6, weight: 700 });
+      continue;
+    }
+    const f = boxFill(d);
+    const over = f && (!f.ok || !f.gangsOK);
+    elecSymbol(s, X(p.x), Y(p.z), d, over);
+    /* The circuit number beside it, because that is what the sheet is for. */
+    if (d.ckt) {
+      s.text(X(p.x) + 5.5, Y(p.z) - 4, String(d.ckt),
+        { size: 4.8, anchor: 'start', fill: over ? 'var(--keel)' : 'var(--ink-3)', mono: true });
     }
   }
-  /* Circuit runs, drawn as the arcs an electrical plan uses so they do not
-     read as walls. */
-  for (const p of parts.filter((q) => q.sys === 'wire')) {
-    const b = aabb(p.geom);
+  /* Circuit runs, drawn as the light dashes an electrical plan uses so they do
+     not read as walls. */
+  for (const q of model.parts.filter((r) => r.stage === 'elec' && r.sys === 'wire')) {
+    const b = aabb(q.geom);
     const horiz = (b.mx[0] - b.mn[0]) > (b.mx[2] - b.mn[2]);
     if (horiz) {
       s.line(X(b.mn[0]), Y((b.mn[2] + b.mx[2]) / 2), X(b.mx[0]), Y((b.mn[2] + b.mx[2]) / 2),
@@ -1304,62 +1517,59 @@ function drawElectricalPlan(s) {
   s.dimH(0, W, -off * 1.5, null, 0);
   s.dimV(0, D, -off * 1.5, null, 0);
 
-  /* Legend, drawn with the same symbol routine so it cannot drift. */
+  /* Legend and panel schedule, drawn with the same symbol routine so neither
+     can drift from what is on the plan. */
   let ly = area.y + 8;
-  s.text(area.noteX, ly, 'LEGEND',
-    { size: 7, anchor: 'start', weight: 700, track: '0.06em' });
+  s.text(area.noteX, ly, 'LEGEND', { size: 7, anchor: 'start', weight: 700, track: '0.06em' });
   s.line(area.noteX, ly + 2.8, area.noteX + area.noteW, ly + 2.8, LW.medium);
   ly += 16;
-  const legend = [
-    ['recep', `20 A duplex receptacle, ${fmtIn(48)} above the slab`],
-    ['switch', `Single-pole switch, ${fmtIn(46)} above the slab`],
-    ['light', "4' LED strip light on the bottom chords"],
-    ['panel', `${spec.service} A sub-panel, fed from the house`],
-    ['run', 'Circuit run — routing is the electrician\'s, not this drawing\'s'],
-  ];
-  for (const [kind, text] of legend) {
+  const seen = [];
+  for (const d of devs) {
+    if (d.panel) continue;
+    const key = (d.items || [])[0] || 'blank';
+    if (seen.includes(key)) continue;
+    seen.push(key);
     const cx = area.noteX + 8;
     let cy2 = ly;
-    if (kind === 'recep') {
-      s.circle(cx, cy2, 3.1, LW.medium, { fill: 'var(--surface)' });
-      s.line(cx - 3.1, cy2, cx + 3.1, cy2, LW.medium);
-      s.line(cx - 1.4, cy2, cx - 1.4, cy2 - 2.6, LW.thin);
-      s.line(cx + 1.4, cy2, cx + 1.4, cy2 - 2.6, LW.thin);
-    } else if (kind === 'switch') {
-      s.circle(cx, cy2, 3.1, LW.medium, { fill: 'var(--surface)' });
-      s.text(cx, cy2 + 2, 'S', { size: 5.4, weight: 700 });
-    } else if (kind === 'light') {
-      s.rect(cx - 7, cy2 - 2, 14, 4, LW.medium);
-      s.line(cx - 7, cy2, cx + 7, cy2, LW.thin, { stroke: 'var(--ink-3)' });
-    } else if (kind === 'panel') {
-      s.rect(cx - 7, cy2 - 3, 14, 6, LW.heavy, { fill: 'var(--surface-2)' });
-    } else {
-      s.line(cx - 7, cy2, cx + 7, cy2, LW.thin, { stroke: 'var(--ink-3)', dash: '2 2.4' });
-    }
+    elecSymbol(s, cx, cy2, { wall: d.wall, items: [key] }, false);
+    const text = `${(EDEVICE[key] || {}).label || key}`
+      + (d.wall === 'C' ? '' : `, ${fmtIn(d.v)} above the slab`);
     for (const ln of wrapText(text, area.noteW - 24, 5.9)) {
       s.text(area.noteX + 20, cy2 + 2, ln, { size: 5.9, anchor: 'start', fill: 'var(--ink-2)' });
       cy2 += 7.2;
     }
     ly = cy2 + 6.5;
   }
+  {
+    const cx = area.noteX + 8;
+    s.line(cx - 7, ly, cx + 7, ly, LW.thin, { stroke: 'var(--ink-3)', dash: '2 2.4' });
+    s.text(area.noteX + 20, ly + 2, 'Circuit run — indicative, not a route',
+      { size: 5.9, anchor: 'start', fill: 'var(--ink-2)' });
+    ly += 14;
+  }
 
-  const counts = {
-    recep: parts.filter((p) => p.kind.includes('receptacle')).length,
-    sw: parts.filter((p) => p.kind === 'Switch').length,
-    light: parts.filter((p) => p.sys === 'fixture').length,
-  };
-  sheetNotes(s, area.noteX, ly + 8, area.noteW, 'Electrical notes', [
-    `${counts.recep} receptacles, ${counts.sw} switches, ${counts.light} strip lights off a `
-    + `${spec.service} A sub-panel. This is a layout, not a circuit design — an electrician `
-    + 'decides how many circuits and what goes on each.',
-    'Receptacles at 48" work above a bench; that is a choice, not a rule. Anything at 48" in a '
-    + 'shop wants to be 20 A on 12 AWG.',
-    'A garage or shop receptacle serving a floor area needs GFCI protection, and the opener '
-    + 'receptacle in the ceiling is one of them.',
-    'Run everything surface in conduit or keep it inside the studs before the interior face goes '
-    + 'on — with girts and no sheathing there is nowhere to hide a cable afterwards.',
-    'Bond the metal siding and roofing, and drive a ground rod for the sub-panel: a sub-panel in '
-    + 'a separate building takes a four-wire feeder with grounds and neutrals separated.',
+  const cl = circuitLoads(devs, spec);
+  ly = schedule(s, area.noteX, ly + 6, area.noteW, 'Panel schedule',
+    [{ h: 'Ckt', w: 8 }, { h: 'Serves', w: 26 }, { h: 'Load', w: 18, mono: true },
+      { h: 'Bkr', w: 12, mono: true }, { h: 'Wire', w: 16 }],
+    cl.rows.map((r) => [String(r.ckt),
+      [r.outlets ? `${r.outlets} outlet${r.outlets === 1 ? '' : 's'}` : null,
+        r.fixtures ? `${r.fixtures} fixture${r.fixtures === 1 ? '' : 's'}` : null]
+        .filter(Boolean).join(', ') || '—',
+      `${fmtN(r.design)} VA`, r.general ? '20 A' : `${r.breaker} A`,
+      r.general ? '12 AWG' : r.wire]));
+
+  sheetNotes(s, area.noteX, ly + 12, area.noteW, 'Electrical notes', [
+    `${fmtN(cl.totalVA)} VA connected on a ${spec.service} A sub-panel. This is a layout and `
+    + 'a tally, not a circuit design — an electrician decides what goes on what.',
+    'Box fill is NEC 314.16 at 12 AWG: two allowances a yoke, one a conductor, one for all '
+    + 'the grounds and one for the clamps. Boxes over the fill are marked on the plan.',
+    'A 125 V, 15 or 20 A receptacle serving the floor area of a garage or an accessory '
+    + 'building needs GFCI protection — devices or a breaker.',
+    'Run everything in conduit on the surface, or inside the studs before the interior face '
+    + 'goes on: with girts and no sheathing there is nowhere to hide a cable afterwards.',
+    'Bond the metal siding and roofing. A sub-panel in a separate building takes a four-wire '
+    + 'feeder with the grounds and neutrals separated, and its own ground rod.',
   ]);
 
   s.viewTitle(area.x + 12, area.bottom - 6, 'Electrical plan', s.scale.k, '1');
@@ -1655,6 +1865,7 @@ const PLANS = [
     scaleLabel: 'As noted' },
   { id: 'framing', number: 'S2.0', title: 'Framing plan', draw: drawFramingPlan },
   { id: 'wallsec', number: 'S2.1', title: 'Wall section', draw: drawWallSection },
+  { id: 'bldgsec', number: 'S2.2', title: 'Building section', draw: drawBuildingSection },
   { id: 'roof', number: 'S3.0', title: 'Roof framing plan', draw: drawRoofPlan },
   { id: 'truss', number: 'S3.1', title: 'Truss shop drawing', draw: drawTrussShop,
     scaleLabel: 'As noted' },

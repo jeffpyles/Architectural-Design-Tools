@@ -10,6 +10,7 @@ function boot() {
   const d = BUILDING.defaults();
   state.spec = d.spec;
   state.openings = d.openings;
+  state.extra = d.extra || {};
   state.stage = BUILDING.stages.length - 1;
   document.title = BUILDING.title || BUILDING.name;
   buildHeading();
@@ -24,9 +25,9 @@ function boot() {
         + 'The Openings, Truss and Takeoff tabs still work.',
       style: 'padding:24px;color:var(--ink-2);font-size:13px',
     }));
-    model = BUILDING.build(state.spec, state.openings);
+    model = BUILDING.build(state.spec, state.openings, state.extra);
     take = takeoff(model, state.spec);
-    findings = BUILDING.audit(state.spec, state.openings);
+    findings = BUILDING.audit(state.spec, state.openings, state.extra);
     renderPanels();
     wireChrome();
     return;
@@ -38,10 +39,14 @@ function boot() {
      reach the library. */
   const shared = layoutFromHash();
   if (shared) {
-    state.spec = shared.spec; state.openings = shared.openings; openedFromLink = true;
+    state.spec = shared.spec; state.openings = shared.openings;
+    state.extra = shared.extra || {};
+    openedFromLink = true;
   } else if (typeof BAKED_DEFAULT === 'string' && BAKED_DEFAULT) {
-    try { const d = decodeLayout(BAKED_DEFAULT); state.spec = d.spec; state.openings = d.openings; }
-    catch (e) { /* keep BUILDING.defaults() */ }
+    try {
+      const dl = decodeLayout(BAKED_DEFAULT);
+      state.spec = dl.spec; state.openings = dl.openings; state.extra = dl.extra || {};
+    } catch (e) { /* keep BUILDING.defaults() */ }
   }
 
   applyTheme();
