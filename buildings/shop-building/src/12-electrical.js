@@ -165,6 +165,75 @@ function clearOnWall(wall, tries, v, spec, openings, e) {
   return null;
 }
 
+/* ---- circuits ----
+   A circuit is a thing you name and a thing boxes belong to, not a number
+   somebody types into every box and hopes matches. What it is called is worth
+   carrying: "welder" and "compressor" are the two people go looking for at the
+   panel, and neither is obvious from a load figure. */
+function autoCircuitName(n, devs) {
+  const on = devs.filter((d) => !d.panel && (d.ckt || 1) === n);
+  const items = on.flatMap((d) => (d.items || []).map((k) => EDEVICE[k])).filter(Boolean);
+  if (!items.length) return 'Spare';
+  if (items.some((i) => i.volts === 240)) return '240 V';
+  const fixtures = items.filter((i) => i.kind === 'fixture').length;
+  const receps = items.filter((i) => i.kind === 'recep').length;
+  if (fixtures > receps) return 'Lighting';
+  if (receps === 1) return 'Dedicated outlet';
+  return 'Receptacles';
+}
+function defaultCircuits(devs) {
+  const ns = [...new Set(devs.filter((d) => !d.panel).map((d) => d.ckt || 1))]
+    .sort((a, b) => a - b);
+  return (ns.length ? ns : [1]).map((n) => ({ n, name: autoCircuitName(n, devs) }));
+}
+function circuitList(devs, override) {
+  if (override && override.length) return override.slice().sort((a, b) => a.n - b.n);
+  return defaultCircuits(devs);
+}
+function currentCircuits(spec) {
+  return circuitList(currentDevices(spec), state.extra && state.extra.circuits);
+}
+function ownCircuits(spec) {
+  if (!state.extra) state.extra = {};
+  if (!state.extra.circuits || !state.extra.circuits.length) {
+    state.extra.circuits = defaultCircuits(currentDevices(spec)).map((c) => ({ ...c }));
+  }
+  return state.extra.circuits;
+}
+function addCircuit(spec, name) {
+  const list = ownCircuits(spec);
+  ownDevices(spec);                         // adding one takes the list over too
+  const n = Math.max(0, ...list.map((c) => c.n)) + 1;
+  list.push({ n, name: name || 'Spare' });
+  scheduleRebuild();
+  return n;
+}
+/* Deleting a circuit has to say where its boxes went, and the honest answer is
+   the lowest circuit that is left. Refusing to delete the last one is the only
+   way a box always has somewhere to be. */
+function removeCircuit(spec, n) {
+  const list = ownCircuits(spec);
+  if (list.length <= 1) return { ok: false, moved: 0, to: n };
+  const i = list.findIndex((c) => c.n === n);
+  if (i < 0) return { ok: false, moved: 0, to: n };
+  list.splice(i, 1);
+  const to = Math.min(...list.map((c) => c.n));
+  let moved = 0;
+  for (const d of ownDevices(spec)) {
+    if (!d.panel && (d.ckt || 1) === n) { d.ckt = to; moved++; }
+  }
+  scheduleRebuild();
+  return { ok: true, moved, to };
+}
+function renameCircuit(spec, n, name) {
+  const c = ownCircuits(spec).find((x) => x.n === n);
+  if (c) { c.name = name.slice(0, 40); scheduleRebuild(); }
+}
+function circuitName(n, circuits) {
+  const c = (circuits || []).find((x) => x.n === n);
+  return c ? c.name : '';
+}
+
 /* The list in play: whatever has been edited, or the rough-in above. Keeping
    the generated one until somebody touches it is what stops every share code
    carrying thirty boxes that nobody chose. */
@@ -242,6 +311,27 @@ function deviceReadout(d, spec) {
    Packed positionally and rounded to a quarter inch, because a code that
    carries thirty boxes has to stay short enough to paste into an email. */
 const DEV_KEYS = Object.keys(EDEVICE);
+/* The whole electrical layer in one value. Kept as an object rather than a
+   bare array so the next thing that needs carrying has somewhere to go — and
+   an array still decodes, because that is what the first codes carried. */
+function packElectrical(extra) {
+  const devs = extra && extra.devices;
+  const ckts = extra && extra.circuits;
+  if ((!devs || !devs.length) && (!ckts || !ckts.length)) return null;
+  const out = {};
+  if (devs && devs.length) out.d = packDevices(devs);
+  if (ckts && ckts.length) out.c = ckts.map((c) => [c.n, c.name || '']);
+  return out;
+}
+function unpackElectrical(x) {
+  if (Array.isArray(x)) return { devices: unpackDevices(x) };
+  if (!x || typeof x !== 'object') return {};
+  return {
+    devices: x.d ? unpackDevices(x.d) : null,
+    circuits: Array.isArray(x.c) ? x.c.map((a) => ({ n: a[0], name: a[1] || '' })) : null,
+  };
+}
+
 function packDevices(list) {
   return list.map((d) => [
     d.wall, Math.round(d.u * 4) / 4, Math.round(d.v * 4) / 4,

@@ -678,3 +678,20 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--rule); border-bottom: 0
 .dev-item { display: flex; gap: 6px; align-items: center; }
 .dev-item select { flex: 1; min-width: 0; }
 .dev-item .btn { flex: none; padding: 3px 9px; }
+
+/* One circuit: its number, what it is called, what is on it, and a way out. */
+.ckt-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px 0; border-bottom: 1px solid var(--rule-soft);
+}
+.ckt-row .ckt-n {
+  flex: none; width: 22px; text-align: center;
+  font-family: var(--f-mono); font-size: 12px; font-weight: 700; color: var(--ink-2);
+}
+.ckt-row .field { flex: 1; min-width: 0; margin: 0; }
+.ckt-row .field label { display: none; }
+.ckt-row .ckt-meta {
+  flex: none; font-size: 11px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ckt-row .btn { flex: none; padding: 3px 9px; font-size: 11px; }

@@ -65,6 +65,10 @@ Declared in `src/50-building.js`. Everything the shell asks of a building:
 model and the engineering in a bare VM with no `document`, so panel renderers are
 referenced lazily (`render: () => renderOpenings()`) rather than called.
 
+`numField` is a **length** field despite the name — it reads and writes feet and inches
+through `fmtFt`/`parseFeetInches`. Anything that is not a length wants `textField` or a
+dropdown, or a circuit number comes back as `0'-3"`.
+
 ### Controls
 
 Each entry is `{ g, k, label, type }` where `g` groups it under a heading and `k`

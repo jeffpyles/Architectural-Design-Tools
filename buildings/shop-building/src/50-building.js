@@ -174,9 +174,8 @@ const BUILDING = {
     };
   }),
 
-  packExtra: (extra) => (extra && extra.devices && extra.devices.length
-    ? packDevices(extra.devices) : null),
-  unpackExtra: (x) => ({ devices: unpackDevices(x) }),
+  packExtra: (extra) => packElectrical(extra),
+  unpackExtra: (x) => unpackElectrical(x),
 
   readout: (o, spec) => {
     const st = stockFor(o);

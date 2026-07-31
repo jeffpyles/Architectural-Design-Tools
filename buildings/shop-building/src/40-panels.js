@@ -367,7 +367,8 @@ function renderElectrical() {
   p.textContent = '';
   const spec = state.spec;
   const devs = currentDevices(spec);
-  const owned = !!(state.extra && state.extra.devices && state.extra.devices.length);
+  const owned = !!(state.extra && ((state.extra.devices && state.extra.devices.length)
+    || (state.extra.circuits && state.extra.circuits.length)));
 
   p.append(note('Drag a box across its wall in the model, or set it here. Ceiling boxes '
     + 'drag on the ceiling plane — look down into the building to grab one. Arrow keys '
@@ -379,19 +380,63 @@ function renderElectrical() {
       + 'carrying the boxes.'));
   }
 
-  /* ---- the panel schedule, first, because it is the answer ---- */
+  /* ---- circuits ---- */
+  const ckts = currentCircuits(spec);
   const cl = circuitLoads(devs, spec);
+  p.append(el('h3', null, `Circuits — ${ckts.length}`));
+  p.append(note('Name them for what you go looking for at the panel. Deleting one moves '
+    + 'its boxes to the lowest circuit left, and says how many it moved.'));
+  for (const c of ckts) {
+    const r = cl.rows.find((x) => x.ckt === c.n);
+    const on = devs.filter((d) => !d.panel && (d.ckt || 1) === c.n).length;
+    const row = el('div', 'ckt-row');
+    row.append(el('span', 'ckt-n', String(c.n)));
+    row.append(textField('', c.name, (v) => renameCircuit(spec, c.n, v),
+      { placeholder: autoCircuitName(c.n, devs) }));
+    const meta = el('span', 'ckt-meta');
+    meta.textContent = r
+      ? `${on} box${on === 1 ? '' : 'es'} · ${fmtN(r.design)} VA · ${fmtN(r.amps, 1)} A`
+      : `${on} box${on === 1 ? '' : 'es'} · nothing on it`;
+    if (r && (!r.ok || !r.outletsOK)) meta.style.color = 'var(--keel)';
+    row.append(meta);
+    const rm = el('button', 'btn danger', 'Delete');
+    rm.disabled = ckts.length <= 1;
+    rm.title = ckts.length <= 1 ? 'A box has to be on something' : `Delete circuit ${c.n}`;
+    rm.addEventListener('click', () => {
+      const res = removeCircuit(spec, c.n);
+      if (res.ok && res.moved) {
+        window.setTimeout(() => {
+          const el2 = document.getElementById('cktMsg');
+          if (el2) el2.textContent = `Moved ${res.moved} box${res.moved === 1 ? '' : 'es'} `
+            + `to circuit ${res.to}.`;
+        }, 0);
+      }
+    });
+    row.append(rm);
+    p.append(row);
+  }
+  const cktMsg = el('p', 'note'); cktMsg.id = 'cktMsg';
+  p.append(cktMsg);
+  const cktAdd = el('div', 'btn-row');
+  const bAdd = el('button', 'btn', '+ Add a circuit');
+  bAdd.addEventListener('click', () => addCircuit(spec));
+  cktAdd.append(bAdd);
+  p.append(cktAdd);
+
+  /* ---- the panel schedule ---- */
+  /* Four columns, because the loads are already spelled out above — this is
+     the strip that goes on the panel door. */
   p.append(el('h3', null, 'Panel schedule'));
-  p.append(table(['Ckt', 'Serves', 'Load', 'Amps', 'Breaker'],
+  p.append(table(['Ckt', 'Serves', 'Amps', 'Breaker'],
     cl.rows.map((r) => [
       String(r.ckt),
-      [r.outlets ? `${r.outlets} outlet${r.outlets === 1 ? '' : 's'}` : null,
-        r.fixtures ? `${r.fixtures} fixture${r.fixtures === 1 ? '' : 's'}` : null]
-        .filter(Boolean).join(', ') || '—',
-      `${fmtN(r.design)} VA`,
+      `${circuitName(r.ckt, ckts) || autoCircuitName(r.ckt, devs)} — `
+        + ([r.outlets ? `${r.outlets} outlet${r.outlets === 1 ? '' : 's'}` : null,
+          r.fixtures ? `${r.fixtures} fixture${r.fixtures === 1 ? '' : 's'}` : null]
+          .filter(Boolean).join(', ') || 'nothing on it'),
       `${fmtN(r.amps, 1)} A${r.ok && r.outletsOK ? '' : ' ✕'}`,
-      r.general ? `20 A, 12 AWG` : `${r.breaker} A, ${r.wire.replace(' AWG', '')} AWG`,
-    ]), [true, false, true, true, true]));
+      r.general ? '20 A / 12' : `${r.breaker} A / ${r.gauge}`,
+    ]), [true, false, true, true]));
   p.append(note(`${fmtN(cl.totalVA)} VA connected against a ${spec.service} A sub-panel — `
     + `${fmtN(cl.amps, 1)} A if everything ran at once, which it never does. Lighting is `
     + 'counted at 125% because a breaker is sized that way for anything that runs three '
@@ -465,7 +510,10 @@ function renderElectrical() {
         u: ceiling ? spec.width / 2 : spec.width / 2,
         v: ceiling ? spec.depth / 2 : 48,
         box, items: items.slice(), feeds: 2,
-        ckt: ceiling ? (Math.max(1, ...l.map((x) => x.ckt || 0))) : 1,
+        /* Onto whatever is selected if a box is selected, or the first
+           circuit — never onto a circuit that does not exist. */
+        ckt: (l.find((x) => x.id === state.selected) || {}).ckt
+          || Math.min(...currentCircuits(spec).map((c) => c.n)),
       });
       state.selected = l[l.length - 1].id;
       scheduleRebuild();
@@ -478,6 +526,7 @@ function renderElectrical() {
     back.style.marginTop = '12px';
     back.addEventListener('click', () => {
       state.extra.devices = null;
+      state.extra.circuits = null;
       state.selected = null;
       scheduleRebuild();
     });
@@ -530,7 +579,12 @@ function deviceCard(d, spec) {
     pickField('Cables in', String(d.feeds || 2),
       [['1', '1 — end of run'], ['2', '2 — through'], ['3', '3 — junction'], ['4', '4']],
       (v) => { editDevice(d, (x) => { x.feeds = Number(v); }); }),
-    numField('Circuit', d.ckt || 1, (v) => { editDevice(d, (x) => { x.ckt = Math.max(1, Math.round(v)); }); }),
+    /* A circuit is picked from the ones that exist, not typed. It used to be a
+       numField, which is a LENGTH field despite the name — so circuit 3 read
+       back as 0'-3". */
+    pickField('Circuit', String(d.ckt || 1),
+      currentCircuits(state.spec).map((c) => [String(c.n), `${c.n} — ${c.name}`]),
+      (v) => { editDevice(d, (x) => { x.ckt = Number(v); }); }),
   );
   card.append(row);
 

@@ -179,6 +179,36 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
       if (errors.length > before) fail(`dragging a box threw: ${errors[before]}`);
       if (b0.join() === b1.join()) fail(`dragging ${picked.t} moved nothing`);
       else console.log(`  ok  dragging an electrical box moves it (${picked.t})`);
+      /* Circuits: add one, name it, delete it. And the circuit field on a box
+         has to be a picker — it was a numField once, which is a LENGTH field
+         despite the name, so circuit 3 read back as 0'-3". */
+      await page.click('.tabs button[data-tab="electrical"]');
+      await page.waitForTimeout(400);
+      const cktRows = () => page.$$eval('#panel-electrical .ckt-row', (rs) => rs.map((r) =>
+        `${r.querySelector('.ckt-n').textContent}:${r.querySelector('input').value}`));
+      const kind = await page.$$eval('#panel-electrical .op .field', (fs) => fs
+        .filter((f) => f.querySelector('label') && /^circuit$/i.test(f.querySelector('label').textContent))
+        .map((f) => f.lastElementChild.tagName)[0] || 'none');
+      if (kind !== 'SELECT') fail(`the circuit field on a box is a ${kind}, not a picker`);
+      const c0 = await cktRows();
+      if (!c0.length) fail('no circuits listed');
+      await page.click('#panel-electrical button:has-text("Add a circuit")');
+      await page.waitForTimeout(400);
+      const c1 = await cktRows();
+      if (c1.length !== c0.length + 1) fail(`adding a circuit went ${c0.length} → ${c1.length}`);
+      const ins = await page.$$('#panel-electrical .ckt-row input');
+      await ins[ins.length - 1].fill('Welder');
+      await ins[ins.length - 1].press('Enter');
+      await page.waitForTimeout(400);
+      const c2 = await cktRows();
+      if (!c2[c2.length - 1].endsWith(':Welder')) fail(`renaming gave ${c2[c2.length - 1]}`);
+      const dels = await page.$$('#panel-electrical .ckt-row button');
+      await dels[dels.length - 1].click();
+      await page.waitForTimeout(400);
+      const c3 = await cktRows();
+      if (c3.length !== c0.length) fail(`deleting a circuit went ${c2.length} → ${c3.length}`);
+      console.log(`  ok  circuits add, rename and delete (${c3.length} left)`);
+
       /* Once edited, the layout code has to carry the boxes. */
       await page.click('.tabs button[data-tab="layouts"]');
       await page.waitForTimeout(400);

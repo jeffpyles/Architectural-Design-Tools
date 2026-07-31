@@ -1549,15 +1549,14 @@ function drawElectricalPlan(s) {
   }
 
   const cl = circuitLoads(devs, spec);
+  const ckts = currentCircuits(spec);
   ly = schedule(s, area.noteX, ly + 6, area.noteW, 'Panel schedule',
-    [{ h: 'Ckt', w: 8 }, { h: 'Serves', w: 26 }, { h: 'Load', w: 18, mono: true },
-      { h: 'Bkr', w: 12, mono: true }, { h: 'Wire', w: 16 }],
+    [{ h: 'Ckt', w: 8 }, { h: 'Serves', w: 30 }, { h: 'Load', w: 18, mono: true },
+      { h: 'Bkr', w: 14, mono: true }, { h: 'Wire', w: 14 }],
     cl.rows.map((r) => [String(r.ckt),
-      [r.outlets ? `${r.outlets} outlet${r.outlets === 1 ? '' : 's'}` : null,
-        r.fixtures ? `${r.fixtures} fixture${r.fixtures === 1 ? '' : 's'}` : null]
-        .filter(Boolean).join(', ') || '—',
+      circuitName(r.ckt, ckts) || autoCircuitName(r.ckt, devs),
       `${fmtN(r.design)} VA`, r.general ? '20 A' : `${r.breaker} A`,
-      r.general ? '12 AWG' : r.wire]));
+      r.general ? '12 AWG' : r.wire.replace(' AWG', '')]));
 
   sheetNotes(s, area.noteX, ly + 12, area.noteW, 'Electrical notes', [
     `${fmtN(cl.totalVA)} VA connected on a ${spec.service} A sub-panel. This is a layout and `

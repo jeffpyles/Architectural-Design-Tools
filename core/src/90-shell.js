@@ -491,6 +491,23 @@ function renderControlsPanel() {
   p.append(reset);
 }
 
+/* A plain text field. numField is a LENGTH field despite the name — it reads
+   and writes feet and inches — so anything that is not a length wants this
+   one, or a circuit number comes back as 0'-3". */
+function textField(label, value, onChange, opts) {
+  const o = opts || {};
+  const f = el('div', 'field');
+  const id = 'x' + Math.random().toString(36).slice(2, 8);
+  const l = el('label', null, label); l.htmlFor = id;
+  const i = document.createElement('input');
+  i.type = 'text'; i.id = id; i.value = value == null ? '' : String(value);
+  if (o.placeholder) i.placeholder = o.placeholder;
+  i.addEventListener('click', (e) => e.stopPropagation());
+  i.addEventListener('change', () => onChange(i.value));
+  f.append(l, i);
+  return f;
+}
+
 function numField(label, value, onChange) {
   const f = el('div', 'field');
   const id = 'f' + Math.random().toString(36).slice(2, 8);

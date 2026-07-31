@@ -3,7 +3,8 @@
    that used to ship in the page as presets. They live here now — they are
    regression material, not something a user should have to scroll past. */
 
-export const api = ['WIRE', 'clearOnWall', 'EBOX', 'EDEVICE', 'boxFill', 'circuitLoads', 'electricalReview',
+export const api = ['defaultCircuits', 'circuitList', 'autoCircuitName',
+  'packElectrical', 'unpackElectrical', 'WIRE', 'clearOnWall', 'EBOX', 'EDEVICE', 'boxFill', 'circuitLoads', 'electricalReview',
   'defaultDevices', 'deviceList', 'devicePos', 'deviceLabel', 'packDevices', 'unpackDevices',
   'wallLayers', 'LUMBER', 'partVolume', 'buildModel', 'aabb',
   'cylinderPart', 'SONOTUBE', 'evalMember', 'leanToUnder', 'gussetPlan', 'anchorBoltPlan', 'leanToPostPlan', 'planExtent', 'openingTag', 'PLANS',
@@ -766,6 +767,37 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
       if (!notes.some((n) => n.level === 'crit')) fail('overstuffed boxes produced no critical note');
     }
 
+    /* ---- circuits ----
+       A circuit is a thing boxes belong to, so there has to be one for every
+       circuit a box claims, and a name for each. */
+    {
+      const ckts = A.defaultCircuits(devs);
+      const used = [...new Set(devs.filter((d) => !d.panel).map((d) => d.ckt || 1))];
+      if (ckts.length !== used.length) {
+        fail(`${used.length} circuits in use, ${ckts.length} in the list`);
+      }
+      for (const n of used) {
+        if (!ckts.some((c) => c.n === n)) fail(`a box claims circuit ${n} and there is no such circuit`);
+      }
+      for (const c of ckts) {
+        if (!c.name) fail(`circuit ${c.n} has no name`);
+      }
+      /* The names have to come off what is on them, not off a counter. */
+      const lightN = devs.find((d) => (d.items || []).includes('light')).ckt;
+      if (A.autoCircuitName(lightN, devs) !== 'Lighting') {
+        fail(`the circuit with the lights on it is called "${A.autoCircuitName(lightN, devs)}"`);
+      }
+      const dedicated = A.autoCircuitName(99, [{ ckt: 99, items: ['duplex'] }]);
+      if (dedicated !== 'Dedicated outlet') fail(`one outlet on its own is called "${dedicated}"`);
+      const heavy = A.autoCircuitName(99, [{ ckt: 99, items: ['r250'] }]);
+      if (heavy !== '240 V') fail(`a 14-50 circuit is called "${heavy}"`);
+      /* A named list wins over the derived one. */
+      const mine = [{ n: 1, name: 'Welder' }, { n: 2, name: 'Compressor' }];
+      const back = A.circuitList(devs, mine);
+      if (back.length !== 2 || back[0].name !== 'Welder') fail('a named circuit list did not take');
+      log(`  ok  ${ckts.length} circuits: ${ckts.map((c) => `${c.n} ${c.name}`).join(', ')}`);
+    }
+
     /* The share code has to carry a box back exactly, or a layout somebody
        emails is a different building. */
     {
@@ -785,6 +817,27 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
         if ((a.ckt || 0) !== (b.ckt || 0)) fail(`box ${i} changed circuit in the code`);
       }
       log(`  ok  ${devs.length} boxes survive the share code`);
+
+      /* Circuits go in the same value and come back with their names. An
+         empty electrical layer has to pack to nothing, or every share code
+         grows for people who never opened the tab. */
+      const ckts = [{ n: 1, name: 'Welder' }, { n: 4, name: 'Compressor' }];
+      const x = A.packElectrical({ devices: devs, circuits: ckts });
+      const got = A.unpackElectrical(x);
+      if (got.circuits.length !== 2) fail('circuits did not survive the code');
+      if (got.circuits[1].name !== 'Compressor' || got.circuits[1].n !== 4) {
+        fail(`a circuit came back as ${JSON.stringify(got.circuits[1])}`);
+      }
+      if (got.devices.length !== devs.length) fail('boxes went missing alongside the circuits');
+      if (A.packElectrical({}) !== null) fail('an untouched electrical layer packed to something');
+      if (A.packElectrical({ devices: [], circuits: [] }) !== null) {
+        fail('an empty electrical layer packed to something');
+      }
+      /* The first codes carried a bare array of boxes; those still decode. */
+      const oldShape = A.unpackElectrical(A.packDevices(devs));
+      if (!oldShape.devices || oldShape.devices.length !== devs.length) {
+        fail('a code from the first shape no longer decodes');
+      }
     }
 
     /* And the model has to draw what the list says. */

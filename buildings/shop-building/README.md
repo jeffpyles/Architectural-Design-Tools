@@ -204,7 +204,15 @@ shift-arrow six.
 
 Each box carries a size, how many cables come into it, which circuit it is on, and what
 is in it — receptacles, GFCIs, switches, three-ways, dimmers, 240 V, data, blanks,
-fixtures. Two calculations follow, and neither of them designs anything:
+fixtures.
+
+**Circuits** are things you make and name, not numbers you type into every box and hope
+match. Add one, call it what you will go looking for at the panel — *welder*,
+*compressor* — and pick it from a list on each box. Deleting one moves its boxes to the
+lowest circuit left and tells you how many it moved; the last one cannot be deleted,
+because a box has to be on something. Unnamed circuits get a name off what is on them:
+lights make a **Lighting** circuit, a lone outlet a **Dedicated outlet**, a 14-50 a
+**240 V**. Two calculations follow, and neither of them designs anything:
 
 **Box fill**, NEC 314.16, counted the way the section counts: one allowance for every
 conductor coming in, one for all the equipment grounds together, one for the clamps if
