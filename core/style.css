@@ -409,6 +409,14 @@ main[data-inspector="closed"] .collapse { transform: translateX(-100%) rotate(18
 .name-input:focus { outline: 2px solid var(--chalk); outline-offset: -1px; }
 .copy-status { font-size: 11.5px; color: var(--ok); align-self: center; }
 .copy-status.bad { color: var(--keel); }
+.drop {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center;
+  padding: 14px 12px; margin: 4px 0 2px;
+  border: 1px dashed var(--rule); border-radius: 3px; background: var(--paper);
+  text-align: center;
+}
+.drop b { font-family: var(--f-body); font-size: 12.5px; font-weight: 400; color: var(--ink-3); }
+.drop.over { border-style: solid; border-color: var(--chalk); background: var(--surface-2); }
 .saved-row {
   display: grid; grid-template-columns: 1fr auto auto; gap: 9px; align-items: center;
   padding: 7px 9px; margin-bottom: 6px;

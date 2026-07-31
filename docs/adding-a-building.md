@@ -60,6 +60,7 @@ Declared in `src/50-building.js`. Everything the shell asks of a building:
 | `extraPlanes(spec)` | more faces things can sit on, beyond the four walls — a ceiling, say. Optional. |
 | `draggables(spec)` | `[{ id, plane, u, v, hw, hh, move(u, v), readout() }]` — anything besides an opening you can grab in the model. Optional. |
 | `packExtra` / `unpackExtra` | how `state.extra` goes into a share code and comes back. Optional; without them the code carries only the spec and the openings. |
+| `layoutFacts(spec, openings, extra)` | `{ line, tag, level, summary }` — how a saved layout describes itself in a list, and what the written summary says past the openings. Optional; without it a layout is described by its opening count. See below. |
 
 `50-building.js` must not touch the DOM at load time. `tools/check.mjs` runs the
 model and the engineering in a bare VM with no `document`, so panel renderers are
@@ -236,6 +237,49 @@ hand* is a claim about a specific size, so count a unit as placed only while not
 resized it. And anything derived from *not knowing* a size — the tiny house flags four
 windows `measured: false` — has to notice when somebody types one in: typing both
 dimensions is what measuring a window looks like from in here.
+
+## Saving a layout
+
+A layout is the spec's diff from the defaults, the openings, and whatever `packExtra`
+adds. `core/src/80-layouts.js` puts it four places, all off the same `encodeLayout`
+string: a **file**, **this browser**, the **shared library**, and the **code**.
+
+The code came first, when a layout was a dozen numbers. It is now carrying an electrical
+rough-in as well and runs past 1,400 characters, which is past what a code is good for —
+so the file is the primary way to hand a layout over and the panel states the code's
+length rather than letting somebody find out in a mail client.
+
+`layoutFile()` writes the code plus the building id, the name, the date and a dozen
+lines of plain description, so a folder of them is readable without loading any.
+`readLayoutFile()` takes four shapes back — one of ours, a library entry, the whole
+published `index.json`, or a text file with nothing in it but a code — and refuses a
+file from another building **by name**. Everything derived is regenerated on save, so
+the description beside a code can never drift away from it.
+
+Adding a field to the file is safe; `readLayoutFile` reads `code` and nothing else.
+
+### `layoutFacts`
+
+The one thing the shell cannot work out for itself is whether a layout is any *good*.
+The shop calls that bracing, the tiny house calls it racking, and the shell has no
+business knowing either word:
+
+```js
+layoutFacts: (spec, openings, extra) => ({
+  line: `${fmtFt(spec.wallHeight)} walls · ${openings.length} openings · worst racking 1.63`,
+  tag: 'racking ok',            // the chip on the row
+  level: 'used',                // 'used' | 'over' | 'left' — how the chip is coloured
+  summary: [['RACKING  (1.00 or better is passing)', ['N     1.82  8'-0" of panel, …']]],
+})
+```
+
+Leave it out and a layout is described by its opening count, which is true of every
+building there will ever be. This hook exists because the shell used to call
+`bracingCheck` directly: on the shop it worked, and on the tiny house — which has no
+such function — every saved layout in a list read *unreadable* and "Copy written
+summary" threw inside its click handler. A shared panel reaching for one building's
+function is the same bug as `showReadout` calling the shop's `sizeHeader`, and it will
+keep being the same bug. Add a hook.
 
 ## Editing something that is not an opening
 

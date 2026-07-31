@@ -36,6 +36,7 @@ const bChecksPath = join(bDir, '..', 'checks.mjs');
 const bChecks = existsSync(bChecksPath) ? await import(pathToFileURL(bChecksPath)) : null;
 const WANT = ['buildModel', 'takeoff', 'auditBuilding', 'DEFAULT_SPEC', 'DEFAULT_OPENINGS', 'STAGES',
   'BUILDING', 'encodeLayout', 'decodeLayout', 'layoutSummary', 'fmtFt', 'fmtIn', 'fmtN',
+  'layoutFile', 'readLayoutFile', 'layoutFacts',
   'stockFor', 'wallExtent', 'WALLS', 'pickMember', 'openingsOn', 'solidSegments', 'partWeight',
   ...(bChecks && bChecks.api ? bChecks.api : [])];
 vm.runInContext(`${src}
@@ -153,6 +154,72 @@ for (const n of notes) {
   const badCode = (() => { try { A.decodeLayout('not-a-code'); return false; } catch (e) { return true; } })();
   if (!badCode) fail('a bad layout code should be rejected');
   else console.log('  ok  bad codes are rejected');
+}
+
+/* 7b. A layout also travels as a file, and the file is what somebody still has
+   in six months. Everything it claims about itself has to be true, everything
+   we can be handed has to load, and the things that are not this building's
+   have to be refused by name rather than by "unreadable". */
+{
+  const code = A.encodeLayout(spec, openings, {});
+  const file = A.layoutFile('Test layout', 'a note', code, spec, openings, {});
+  if (file.tool !== building) fail(`the file says its tool is "${file.tool}"`);
+  if (file.code !== code) fail('the file does not carry the code it was given');
+  if (!file.describes.length) fail('the file describes itself as nothing');
+  const junk = JSON.stringify(file).match(/undefined|NaN|\[object/);
+  if (junk) fail(`the layout file says "${junk[0]}"`);
+
+  const forms = [
+    ['our own file', JSON.stringify(file)],
+    ['a library entry', JSON.stringify({ tool: building, name: 'x', note: '', code })],
+    ['the published index', JSON.stringify([{ tool: 'another-building', code: 'X' },
+      { tool: building, name: 'y', code }])],
+    ['an index object', JSON.stringify({ layouts: [{ tool: building, code }] })],
+    ['a bare code in a text file', `  ${code}\n`],
+  ];
+  for (const [what, text] of forms) {
+    let got;
+    try { got = A.readLayoutFile(text, 'layout.json'); }
+    catch (e) { fail(`${what} would not load: ${e.message}`); continue; }
+    if (got.code !== code) fail(`${what} came back as a different code`);
+    const d = A.decodeLayout(got.code);
+    if (d.openings.length !== openings.length) fail(`${what} lost openings on the way in`);
+  }
+
+  const refuses = (text) => {
+    try { A.readLayoutFile(text, 'x.json'); return ''; } catch (e) { return e.message; }
+  };
+  const wrong = refuses(JSON.stringify({ tool: 'another-building', code }));
+  if (!wrong) fail('a file from another building loaded anyway');
+  else if (!wrong.includes('another-building')) fail(`the refusal does not name it: ${wrong}`);
+  if (!refuses('   ')) fail('an empty file loaded anyway');
+  if (!refuses('{"name":"no code in here"}')) fail('a file with no code in it loaded anyway');
+  /* And the code itself: another building's prefix is a different message from
+     a mangled one, because they want different things done about them. */
+  const other = (() => { try { A.decodeLayout('XYZ9-abc'); return ''; } catch (e) { return e.message; } })();
+  if (!/XYZ9/.test(other)) fail(`another tool's code is not named as one: ${other}`);
+  console.log(`  ok  the layout file round-trips in ${forms.length} shapes and refuses four more`);
+}
+
+/* 7c. What a building says about its own layout. The shell used to work this
+   out itself by calling bracingCheck, which only the shop has — so every
+   tiny-house layout in a list quietly read "unreadable". */
+{
+  const f = A.layoutFacts(spec, openings, {});
+  if (!f.line) fail('a layout describes itself as nothing');
+  if (/undefined|NaN/.test(f.line + f.tag)) fail(`a layout describes itself as "${f.line}"`);
+  if (!['used', 'over', 'left'].includes(f.level)) fail(`a layout tag has level "${f.level}"`);
+  for (const [head, lines] of f.summary) {
+    if (!head || !Array.isArray(lines) || !lines.length) fail(`summary section "${head}" is empty`);
+  }
+  const text = A.layoutSummary(spec, openings, {});
+  const bad = text.match(/^.*(undefined|NaN|\[object).*$/m);
+  if (bad) fail(`the written summary says "${bad[0].trim()}"`);
+  if (!text.includes(A.encodeLayout(spec, openings, {}))) {
+    fail('the written summary does not carry the code');
+  }
+  console.log(`  ok  layout reads "${f.line}"${f.tag ? ` — ${f.tag}` : ''}, `
+    + `written summary ${text.split('\n').length} lines`);
 }
 
 /* 8. Whatever the library flags as the default is what the page opens with,

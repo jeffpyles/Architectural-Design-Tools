@@ -309,11 +309,23 @@ not a structural question:
 
 Deeper rafters buy reach and spend headroom. Which of those you want is up to you.
 
-## Sharing a layout
+## Saving and sharing a layout
 
-The Layouts tab turns the whole building — spec and openings — into a ~350 character
-`SHOP1-` code that survives an email and loads back exactly, and into a `?c=` link that
-opens the same building directly. Layouts also save to the browser under a name.
+A layout is the whole building — spec, openings, and the electrical rough-in. The
+Layouts tab names it once and saves it four ways: **a file** on this computer, **this
+browser**, **the shared library** on GitHub, and **a code** to paste.
+
+The file is the one to reach for. It is JSON holding the code plus the building id, the
+name, the date and a dozen lines of plain description, so a folder of them is readable
+without loading any of them. Drop one back on the panel, or pick it with the button —
+and a file saved from the tiny house is refused by name rather than half-loaded.
+
+The `SHOP1-` code is still there for a quick paste, and the `?c=` link still opens the
+building directly. But the code was designed when a layout was a dozen numbers; it now
+carries the openings and the electrical rough-in and runs past 1,400 characters, so the
+panel states its length and says plainly when a file would travel better. Pasting copes
+with the wrapping mail will do to it — `decodeLayout` strips whitespace — but a
+1,400-character line is not something to make somebody hand-carry.
 
 Served from GitHub Pages, the tab additionally reads the shared library at
 `../layouts/index.json` and offers to publish the current layout back through GitHub's

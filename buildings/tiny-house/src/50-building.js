@@ -103,6 +103,25 @@ const BUILDING = {
     return facts;
   },
 
+  /* How a saved layout describes itself in a list, and what the written
+     summary says past the openings. This building calls it racking rather
+     than bracing, which is exactly why the shell has to ask instead of
+     reaching for a function only one building has. */
+  layoutFacts: (spec, openings) => {
+    const lines = lateralCheck(spec, openings).flatMap((d) => d.lines);
+    const worst = Math.min(...lines.map((l) => l.ratio));
+    return {
+      line: `${fmtFt(spec.wallHeight)} walls · ${openings.length} openings · `
+        + `worst racking ${worst.toFixed(2)}`,
+      tag: worst >= 1 ? 'racking ok' : `worst ${worst.toFixed(2)}`,
+      level: worst >= 1 ? 'used' : 'over',
+      summary: [['RACKING  (1.00 or better is passing)', lines.map((l) =>
+        `${WALLS[l.wall].label.padEnd(5)} ${l.ratio.toFixed(2)}  `
+        + `${fmtFt(l.braced)} of panel, needs ${l.required === Infinity ? '—' : fmtFt(l.required)}`
+        + (l.braced === 0 ? `  (widest run only ${fmtFt(l.widest)})` : ''))]],
+    };
+  },
+
   readout: (o, spec) => {
     const st = stockFor(o);
     const ro = roughOf(o);

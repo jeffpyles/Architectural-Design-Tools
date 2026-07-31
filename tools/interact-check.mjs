@@ -11,8 +11,9 @@
    usage: node tools/interact-check.mjs [building-id] */
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -247,7 +248,7 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
       /* Once edited, the layout code has to carry the boxes. */
       await page.click('.tabs button[data-tab="layouts"]');
       await page.waitForTimeout(400);
-      const code = await page.$eval('#panel-layouts .code-box', (t) => t.value);
+      const code = await page.$eval('#panel-layouts textarea[readonly]', (t) => t.value);
       if (code.length < 600) fail(`the code is ${code.length} chars — the boxes are not in it`);
       else console.log(`  ok  the layout code carries them (${code.length} chars)`);
     }
@@ -287,6 +288,104 @@ console.log('  ok  every tab renders');
     }
     console.log(`  ok  ${sheets.length} drawing sheets, all dimensioned and stamped`);
   }
+}
+
+/* 6. The save system, end to end: a layout goes out as a file and comes back
+   in as one. Downloading was always there and loading a file never was, so
+   the file the tool wrote was a file nothing could read. */
+{
+  const before = errors.length;
+  const tmp = mkdtempSync(join(tmpdir(), 'layout-'));
+  await page.click('.tabs button[data-tab="layouts"]');
+  await page.waitForTimeout(400);
+  const shownCode = () => page.$eval('#panel-layouts textarea[readonly]', (t) => t.value);
+  const status = () => page.$$eval('#panel-layouts .copy-status',
+    (ss) => ss.map((s) => `${s.classList.contains('bad') ? '!' : ''}${s.textContent}`)
+      .filter((s) => s.length > 1).join(' | '));
+
+  const nameI = page.locator('#panel-layouts input.name-input').first();
+  await nameI.fill('Interaction test');
+  const saved = await shownCode();
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#panel-layouts button:has-text("Save to a file")'),
+  ]);
+  const file = join(tmp, download.suggestedFilename());
+  await download.saveAs(file);
+  let doc = null;
+  try { doc = JSON.parse(readFileSync(file, 'utf8')); }
+  catch (e) { fail(`the saved file is not JSON: ${e.message}`); }
+  if (doc) {
+    if (doc.tool !== building) fail(`the saved file says tool "${doc.tool}"`);
+    if (doc.name !== 'Interaction test') fail(`the saved file is named "${doc.name}"`);
+    if (doc.code !== saved) fail('the saved file does not hold the code on screen');
+    if (!Array.isArray(doc.describes) || !doc.describes.length) fail('the saved file describes nothing');
+    if (!download.suggestedFilename().startsWith(building)) {
+      fail(`the file is called ${download.suggestedFilename()} — it does not say which building`);
+    }
+    console.log(`  ok  saved ${download.suggestedFilename()}, ${doc.describes.length} facts in it`);
+  }
+
+  /* Change the building, then load the file and watch it come back. */
+  await page.click('.tabs button[data-tab="openings"]');
+  await page.waitForTimeout(300);
+  const off = page.locator(OFFSET).first();
+  await off.fill(`2'-6"`);
+  await off.press('Enter');
+  await page.waitForTimeout(450);
+  await page.click('.tabs button[data-tab="layouts"]');
+  await page.waitForTimeout(400);
+  if (await shownCode() === saved) fail('moving an opening did not change the layout code');
+
+  await page.setInputFiles('#panel-layouts input[type=file]', file);
+  await page.waitForTimeout(600);
+  if (errors.length > before) fail(`loading a layout file threw: ${errors[before]}`);
+  if (await shownCode() !== saved) fail(`loading the file did not restore the layout — ${await status()}`);
+  else console.log(`  ok  the file loads back (${await status()})`);
+
+  /* Dropping one on the panel is the same path, and the one people will use. */
+  await page.click('.tabs button[data-tab="openings"]');
+  await page.waitForTimeout(300);
+  await off.fill(`3'-6"`);
+  await off.press('Enter');
+  await page.waitForTimeout(450);
+  await page.click('.tabs button[data-tab="layouts"]');
+  await page.waitForTimeout(400);
+  const dropped = await page.evaluate((text) => {
+    const zone = document.querySelector('#panel-layouts .drop');
+    if (!zone) return 'no drop zone';
+    const dt = new DataTransfer();
+    dt.items.add(new File([text], 'dropped.json', { type: 'application/json' }));
+    zone.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    return '';
+  }, readFileSync(file, 'utf8'));
+  if (dropped) fail(dropped);
+  await page.waitForTimeout(600);
+  if (await shownCode() !== saved) fail('dropping the file on the panel did not load it');
+  else console.log('  ok  dropping a file on the panel loads it');
+
+  /* And a file from the other building has to be refused by name, not by
+     silently loading somebody else's shop. */
+  const alien = join(tmp, 'alien.json');
+  writeFileSync(alien, JSON.stringify({ tool: 'some-other-building', name: 'Not yours', code: saved }));
+  await page.setInputFiles('#panel-layouts input[type=file]', alien);
+  await page.waitForTimeout(500);
+  const msg = await status();
+  if (!/some-other-building/.test(msg)) fail(`a foreign layout file was answered with "${msg}"`);
+  else console.log('  ok  a file from another building is refused by name');
+
+  /* The written summary is the one button that used to throw on any building
+     without bracingCheck, and it threw inside a click handler. */
+  await page.click('#panel-layouts button:has-text("Copy written summary")');
+  await page.waitForTimeout(400);
+  if (errors.length > before) fail(`the written summary threw: ${errors[before]}`);
+  const summary = await shownCode();
+  if (summary.split('\n').length < 12) fail(`the written summary is ${summary.split('\n').length} lines`);
+  if (/undefined|NaN/.test(summary)) fail(`the written summary says "${(summary.match(/.*(undefined|NaN).*/) || [])[0]}"`);
+  console.log(`  ok  the written summary reads (${summary.split('\n').length} lines)`);
+
+  rmSync(tmp, { recursive: true, force: true });
 }
 
 await browser.close();

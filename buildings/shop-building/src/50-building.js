@@ -154,6 +154,25 @@ const BUILDING = {
     return facts;
   },
 
+  /* How a saved layout describes itself in a list, and what the written
+     summary says past the openings. Bracing is the number that decides
+     whether a layout of this building is any good — and it is the shop's
+     word for it, so the shell asks rather than assuming. */
+  layoutFacts: (spec, openings) => {
+    const lines = bracingCheck(spec, openings).flatMap((d) => d.lines);
+    const worst = Math.min(...lines.map((l) => l.ratio));
+    return {
+      line: `${fmtFt(spec.wallHeight)} walls · ${openings.length} openings · `
+        + `worst bracing ${worst.toFixed(2)}`,
+      tag: worst >= 1 ? 'bracing ok' : `worst ${worst.toFixed(2)}`,
+      level: worst >= 1 ? 'used' : 'over',
+      summary: [['BRACING  (1.00 or better is passing)', lines.map((l) =>
+        `${WALLS[l.wall].label.padEnd(5)} ${l.ratio.toFixed(2)}  `
+        + `${fmtFt(l.braced)} of panel, needs ${l.required === Infinity ? '—' : fmtFt(l.required)}`
+        + (l.braced === 0 ? `  (widest run only ${fmtFt(l.widest)})` : ''))]],
+    };
+  },
+
   /* The ceiling is a face you can put something on, so picking has to know
      about it. `both` because you grab a light from above, looking down. */
   extraPlanes: (spec) => [{

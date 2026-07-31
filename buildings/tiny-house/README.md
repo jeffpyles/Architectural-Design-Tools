@@ -221,6 +221,19 @@ At 12'-0" wide, any move is a permitted, pilot-car, daylight-hours job whatever 
 underneath. Which is a good argument for designing it as a building and solving the move
 if it ever comes up.
 
+## Saving a layout
+
+The Layouts tab names the layout once and saves it four ways: **a file** on this
+computer, **this browser**, **the shared library** on GitHub, and a `THOW1-` **code** to
+paste. The file is JSON holding the code plus the building id, the name, the date and a
+dozen lines of plain description — drop one back on the panel or pick it with the button.
+A shop-building file is refused by name rather than half-loaded.
+
+The saved-layout lists and the written summary report **racking**, which is this
+building's word for it. The shell asks the building rather than assuming, which it
+did not always do: it used to call `bracingCheck` — a function only the shop has — so
+every tiny-house layout in a list read *unreadable* and the written summary threw.
+
 ## Layout
 
 ```
