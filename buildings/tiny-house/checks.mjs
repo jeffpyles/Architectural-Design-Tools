@@ -5,7 +5,7 @@
 export const api = ['lateralCheck', 'stabilityCheck', 'upliftCheck', 'windPressure', 'OSB_ALLOW',
   'rafterDesign', 'ridgeDesign', 'loftDesign', 'roofLoads', 'roofPitch',
   'roofY', 'axleCheck', 'axleSizing', 'joistRuns', 'wallRun', 'roughOf', 'WINDOW_STOCK',
-  'DOOR_STOCK', 'STEEL', 'sizeHeader', 'heightCheck', 'headroom', 'frameSection',
+  'DOOR_STOCK', 'stockPlaced', 'STEEL', 'sizeHeader', 'heightCheck', 'headroom', 'frameSection',
   'frameCheck', 'studCheck', 'girtRuns', 'LUMBER'];
 
 export function run({ A, spec, openings, model, take, fail, log, permute }) {
@@ -127,9 +127,80 @@ export function run({ A, spec, openings, model, take, fail, log, permute }) {
     const n = openings.filter((o) => o.stock === s.id).length;
     if (n > 1) fail(`${s.label} is placed ${n} times, and there is only one of it`);
   }
-  const shelf = A.WINDOW_STOCK.filter((s) => !openings.some((o) => o.stock === s.id));
+  const shelf = A.WINDOW_STOCK.filter((s) => !A.stockPlaced(s, openings).length);
   log(`  ok  ${A.WINDOW_STOCK.length - shelf.length} windows placed, ${shelf.length} on the shelf`
     + (shelf.length ? ` (${shelf.map((s) => '#' + s.n).join(', ')})` : ''));
+
+  /* Typing a size on an opening. The salvaged schedule is a list of things
+     that exist, so an opening cut to a different size is no longer that
+     window — and a size somebody typed is a size somebody measured. */
+  {
+    const src = openings.find((o) => A.stockFor(o).measured === false);
+    if (!src) fail('no unmeasured window to resize — this check has nothing to bite on');
+    else {
+      const base = A.stockFor(src);
+      const wider = { ...src, w: base.w + 12, h: base.h + 6 };
+      const st = A.stockFor(wider);
+      if (Math.abs(st.w - (base.w + 12)) > 1e-9 || Math.abs(st.h - (base.h + 6)) > 1e-9) {
+        fail('a typed size did not reach stockFor');
+      }
+      if (!st.resized) fail('an opening cut 12" wider than its unit does not report resized');
+      if (st.measured !== true) fail('typing both dimensions did not count as measuring the window');
+      if (st.label !== base.label) fail('a resized salvage unit lost its name, which the audit reads');
+      /* The hole follows the unit by exactly the shim allowance, both ways. */
+      const ro = A.roughOf(wider), ro0 = A.roughOf(src);
+      if (Math.abs((ro.w - ro0.w) - 12) > 1e-9 || Math.abs((ro.h - ro0.h) - 6) > 1e-9) {
+        fail('the rough opening did not follow the unit size');
+      }
+      /* Only the width was typed, so the height is still a guess. */
+      if (A.stockFor({ ...src, w: base.w + 12 }).measured !== false) {
+        fail('typing only the width should leave the window unmeasured');
+      }
+
+      /* The wall has to lose exactly the width that the opening gained.
+         Measured with the opening on its own, because on the real wall it
+         has neighbours near enough that the holes merge. */
+      const list = openings.map((o) => (o === src ? wider : o));
+      const solidOf = (ops) => A.solidSegments(src.wall, spec, ops)
+        .reduce((a, [x, y]) => a + (y - x), 0);
+      const lost = solidOf([src]) - solidOf([wider]);
+      if (Math.abs(lost - 12) > 0.01) fail(`widening an opening 12" took ${lost.toFixed(2)}" off the wall`);
+
+      /* It is off the shelf while it is that window and back on it once it
+         is not — and the audit stops naming it as a guess. */
+      if (A.stockPlaced({ id: src.stock }, openings).length !== 1) fail('the unmeasured window is not counted as placed');
+      if (A.stockPlaced({ id: src.stock }, list).length !== 0) fail('a resized opening still claims the unit on the shelf');
+      const guessedIn = (ops) => A.auditBuilding(spec, ops).filter((f) => /not measured/.test(f.title))
+        .map((f) => f.title)[0] || '';
+      const before = guessedIn(openings), after = guessedIn(list);
+      if (before === after) fail('measuring a window did not change the not-measured note');
+      log(`  ok  resizing ${base.label.replace(/ .*/, '')} measures it, frees the unit, `
+        + `and takes ${lost.toFixed(0)}" off the wall — "${before}" → "${after || 'gone'}"`);
+    }
+  }
+
+  /* A custom opening: a hole with nothing on the shelf behind it. It has to
+     be sized by what is typed, framed like any other, and survive the code. */
+  {
+    const cw = { id: 'zz', wall: 'N', stock: 'custom', off: 60, head: 96, w: 44, h: 26 };
+    const st = A.stockFor(cw);
+    if (st.w !== 44 || st.h !== 26) fail('a custom opening is not the size it was given');
+    if (st.resized) fail('a custom opening is not a resized anything');
+    if (st.measured === false) fail('a custom opening should not read as an unmeasured salvage unit');
+    const list = [...openings, cw];
+    const hdr = A.sizeHeader(cw, spec);
+    if (hdr.over) fail('a 44" custom opening found no header that works');
+    const m = A.buildModel(spec, list);
+    if (!m.parts.length) fail('a custom opening broke the model');
+    const round = A.decodeLayout(A.encodeLayout(spec, list));
+    const back = round.openings.find((o) => o.stock === 'custom');
+    if (!back) fail('the custom opening did not survive the share code');
+    else if (Math.abs(back.w - 44) > 0.01 || Math.abs(back.h - 26) > 0.01) {
+      fail(`the custom size came back ${back.w} × ${back.h}, not 44 × 26`);
+    }
+    log(`  ok  custom ${st.label}: ${hdr.label} header, `
+      + `${m.parts.length - model.parts.length} parts more than without it, survives the code`);
+  }
 
   /* The road height envelope has to add up out of its own parts, and the
      tallest-wall answer has to be the wall that exactly fills it. */

@@ -152,7 +152,7 @@ end without a formed pad; nothing here models one, so it would want sizing separ
 
 ## Drawings
 
-The **Plans** tab draws six sheets and prints them. They are not pictures of the model —
+The **Plans** tab draws ten sheets and prints them, whole set or one at a time. They are not pictures of the model —
 each one is a flat, dimensioned, annotated view at a real architectural scale, drawn from
 the same model the viewport draws, so a plan cannot get out of step with the thing it is
 a plan of.
@@ -244,9 +244,27 @@ braced panel has to be 4'-0" wide, full height, unbroken — and with the openin
 the sketch puts them, neither wall has a run that long. Every option in **Racking
 resistance**, from OSB everywhere to a steel diaphragm, leaves both walls at 0.00.
 
-Only moving the openings changes it. The Review panel shows the widest unbroken run on
-each wall against the 4'-0" a panel needs, so it is visible while dragging rather than
-after.
+Only moving the openings — or changing their size — changes it. The Review panel shows
+the widest unbroken run on each wall against the 4'-0" a panel needs, so it is visible
+while dragging rather than after.
+
+## Openings
+
+Every opening card carries a **rough width** and **rough height** you can type into. The
+sizes in `10-spec.js` are what the sketch lists; the numbers on the card are what the
+hole actually is, and they win. Change one and the header re-sizes from the new span,
+the cripples and girts re-lay themselves around it, the elevations and the A6.0 schedule
+redraw, and the braced runs on that wall grow or shrink accordingly.
+
+The window list is a count of units sitting in the shop, so an opening resized away from
+its stock size stops being one of them: the inventory hands the unit back and the card
+tags it *resized*. That is deliberate — a 10' overhead door cut down to 9' is a different
+door to buy, not the same one moved.
+
+**+ Custom window**, **+ Custom man door** and **+ Custom overhead** make an opening with
+nothing on the shelf behind it, sized only by what you type. It gets a tag, a header, a
+row in the schedule reading *Not on hand — to buy*, and travels in the share code like
+any other opening.
 
 ## The lean-to
 

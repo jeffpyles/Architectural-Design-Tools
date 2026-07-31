@@ -6,7 +6,7 @@
 export const api = ['defaultCircuits', 'circuitList', 'autoCircuitName',
   'packElectrical', 'unpackElectrical', 'WIRE', 'clearOnWall', 'EBOX', 'EDEVICE', 'boxFill', 'circuitLoads', 'electricalReview',
   'defaultDevices', 'deviceList', 'devicePos', 'deviceLabel', 'packDevices', 'unpackDevices',
-  'wallLayers', 'LUMBER', 'partVolume', 'buildModel', 'aabb',
+  'wallLayers', 'LUMBER', 'partVolume', 'buildModel', 'aabb', 'WINDOW_STOCK', 'DOOR_STOCK',
   'cylinderPart', 'SONOTUBE', 'evalMember', 'leanToUnder', 'gussetPlan', 'anchorBoltPlan', 'leanToPostPlan', 'planExtent', 'openingTag', 'PLANS',
   'auditBuilding', 'trussGeometry', 'bracingCheck', 'sizeHeader', 'roofLoads',
   'leanToDesign', 'leanToDrift', 'seismicShear', 'windPressure',
@@ -43,6 +43,73 @@ export function run({ A, spec, openings, model, take: t, fail, log, permute, fla
     if (Math.abs(total - expect) > 0.01) fail(`${w} wall segments total ${total} but should be ${expect}`);
   }
   log('  ok  solid segments tile every wall');
+
+  /* Openings you type the size of. The inventory is a count of what is
+     actually sitting in the shop, so an opening cut to a different size stops
+     being one of them; a custom opening never was one. */
+  {
+    const oh = openings.find((o) => o.kind === 'overhead');
+    const base = A.stockFor(oh);
+    const small = { ...oh, w: 108, h: 96 };
+    const st = A.stockFor(small);
+    if (st.w !== 108 || st.h !== 96) fail('a typed size did not reach stockFor');
+    if (!st.resized) fail("a 9' door out of a 10' one does not report resized");
+    if (st.label === base.label) fail('a resized opening kept the stock label, which is now a lie');
+    /* A narrower opening can never want more header. Not less deep — the
+       ladder trades plies against depth, and (2) 2x12 is deeper than (3) 2x10
+       while being less wood — but never more section than the wider one. */
+    const hBig = A.sizeHeader(base.w, oh.wall, spec), hSm = A.sizeHeader(st.w, oh.wall, spec);
+    const section = (x) => x.thickness * x.depth;
+    if (hSm.over) fail('a 9-foot opening found no header when the 10-foot one did');
+    else if (section(hSm) > section(hBig) + 1e-9) fail('shrinking the door wanted more header');
+    /* And the wall gets back exactly the width the door gave up. */
+    const solidOf = (o) => A.solidSegments(o.wall, [o], spec).reduce((a, s) => a + s.w, 0);
+    const back = solidOf(small) - solidOf(oh);
+    if (Math.abs(back - (base.w - st.w)) > 0.01) {
+      fail(`shrinking the door ${(base.w - st.w)}" gave the wall back ${back.toFixed(2)}"`);
+    }
+    /* The inventory only counts a window while it is still that window. */
+    const w1 = A.WINDOW_STOCK[0];
+    const onHand = (ops) => ops.filter((o) => o.stock === w1.id && !A.stockFor(o).resized).length;
+    const win = openings.find((o) => o.stock === w1.id);
+    if (!win) fail(`no ${w1.id} in the default layout to resize`);
+    else {
+      const wider = openings.map((o) => (o === win ? { ...o, w: A.stockFor(o).w + 6 } : o));
+      if (onHand(wider) !== onHand(openings) - 1) fail('a resized window still claims a unit on hand');
+    }
+    log(`  ok  ${base.label} resized to ${st.label}: ${hSm.label} header, `
+      + `${back.toFixed(0)}" back on the wall, off the inventory`);
+
+    /* An opening with nothing on the shelf behind it: sized only by what was
+       typed, and otherwise framed, tagged and shared like any other. */
+    const kinds = ['window', 'man', 'overhead'].map((k) => A.stockFor({ stock: 'custom', kind: k }));
+    for (const c of kinds) {
+      if (!(c.w > 0 && c.h > 0)) fail('a custom opening starts with no size');
+      if (c.resized) fail('a custom opening is not a resized anything');
+      if (c.id !== 'custom') fail('a custom opening picked up a stock id');
+    }
+    if (new Set(kinds.map((c) => c.w)).size !== 3) fail('all three custom kinds start the same width');
+    const cw = { id: 'zz', wall: 'E', stock: 'custom', kind: 'window', off: 60, head: 90, w: 40, h: 30 };
+    const cSt = A.stockFor(cw);
+    if (cSt.w !== 40 || cSt.h !== 30) fail('a custom opening is not the size it was given');
+    if (cSt.label !== `${A.fmtFt(40)} × ${A.fmtFt(30)}`) fail(`a custom opening is labelled "${cSt.label}"`);
+    const list = [...openings, cw];
+    const cHdr = A.sizeHeader(cSt.w, cw.wall, spec);
+    if (cHdr.over) fail('a 40" custom opening found no header that works');
+    const tags = list.map((o) => A.openingTag(o, list));
+    if (new Set(tags).size !== tags.length || tags.some((x) => /\?/.test(x))) {
+      fail(`a custom opening broke the tags: ${tags.join(', ')}`);
+    }
+    const m = A.buildModel(spec, list);
+    if (m.parts.length <= model.parts.length) fail('adding a custom opening did not change the model');
+    const rt = A.decodeLayout(A.encodeLayout(spec, list)).openings.find((o) => o.stock === 'custom');
+    if (!rt) fail('the custom opening did not survive the share code');
+    else if (Math.abs(rt.w - 40) > 0.01 || Math.abs(rt.h - 30) > 0.01) {
+      fail(`the custom size came back ${rt.w} × ${rt.h}, not 40 × 30`);
+    }
+    log(`  ok  custom ${cSt.label} on the east wall: tag ${A.openingTag(cw, list)}, `
+      + `${cHdr.label} header, survives the code`);
+  }
 
   /* The racking numbers on screen must reconcile with each other. */
   const br = A.bracingCheck(spec, openings);

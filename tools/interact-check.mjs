@@ -92,6 +92,41 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
   else console.log('  ok  typing an offset moves it');
 }
 
+/* 2b. Typing a size on the card resizes the hole, and the custom button makes
+   an opening with nothing on the shelf behind it. Both buildings put these on
+   the same card, so the same walk covers both. */
+{
+  const before = errors.length;
+  const metas = () => page.$$eval('#panel-openings .op .op-meta', (ms) => ms.map((m) => m.textContent));
+  const cards = () => page.$$eval('#panel-openings .op', (cs) => cs.length);
+  const wf = page.locator('#panel-openings .op').first()
+    .locator('.field').filter({ hasText: /width/i }).locator('input');
+  if (!(await wf.count())) {
+    fail('an opening card has no width field');
+  } else {
+    const m0 = await metas();
+    await wf.first().fill(`4'-6"`);
+    await wf.first().press('Enter');
+    await page.waitForTimeout(450);
+    const m1 = await metas();
+    if (errors.length > before) fail(`typing a width threw: ${errors[before]}`);
+    if (m0.join() === m1.join()) fail('typing a width changed nothing on the card');
+    else console.log('  ok  typing a width resizes the opening');
+  }
+  const n0 = await cards();
+  const custom = page.locator('#panel-openings #addRow button', { hasText: /custom/i }).first();
+  if (!(await custom.count())) {
+    fail('there is no way to add a custom opening');
+  } else {
+    await custom.click();
+    await page.waitForTimeout(500);
+    const n1 = await cards();
+    if (errors.length > before) fail(`adding a custom opening threw: ${errors[before]}`);
+    if (n1 !== n0 + 1) fail(`adding a custom opening went ${n0} → ${n1} cards`);
+    else console.log('  ok  a custom opening can be added');
+  }
+}
+
 /* 3. Dragging in the model moves it. Hunt for a point that picks something
    — the readout opening is the signal — then drag from there and check the
    opening actually travelled. */

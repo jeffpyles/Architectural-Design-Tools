@@ -249,7 +249,7 @@ function auditBuilding(spec, openings) {
       + 'these, so the model is using dimensions scaled off the sketch. Every framing number that '
       + 'depends on them is provisional.');
   }
-  const spare = WINDOW_STOCK.filter((s) => !openings.some((o) => o.stock === s.id));
+  const spare = WINDOW_STOCK.filter((s) => !stockPlaced(s, openings).length);
   if (spare.length) {
     add('info', `${spare.length} window${spare.length > 1 ? 's' : ''} still on the shelf`,
       spare.map((s) => `${s.label} (${fmtIn(s.w)} × ${fmtIn(s.h)})`).join(' · '));

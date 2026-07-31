@@ -52,6 +52,7 @@ function renderOpenings() {
       const head = el('div', 'op-head');
       head.append(el('span', 'op-name', st.label));
       if (st.measured === false) head.append(el('span', 'tag over', 'not measured'));
+      if (st.resized) head.append(el('span', 'tag used', 'resized'));
       card.append(head);
       card.append(wallPicker(o, st));
 
@@ -59,6 +60,15 @@ function renderOpenings() {
       fields.append(
         numField('From the ' + WALLS[wall].from, o.off, (v) => moveOpening(o, v)),
         numField('Head height', o.head, (v) => { o.head = v; scheduleRebuild(); }),
+        /* The unit, not the hole — the rough opening follows it. Type a size
+           here and this opening stops being the unit on the shelf. */
+        numField('Unit width', st.w, (v) => {
+          o.w = Math.max(6, v);
+          const e2 = wallExtent(o.wall, state.spec);
+          o.off = Math.max(e2.u0, Math.min(e2.u1 - roughOf(o).w, o.off));
+          scheduleRebuild();
+        }),
+        numField('Unit height', st.h, (v) => { o.h = Math.max(6, v); scheduleRebuild(); }),
       );
       card.append(fields);
 
@@ -87,7 +97,7 @@ function renderOpenings() {
   const inv = $('#stockList');
   inv.textContent = '';
   for (const s of WINDOW_STOCK) {
-    const placed = state.openings.filter((o) => o.stock === s.id);
+    const placed = stockPlaced(s, state.openings);
     const row = el('div', 'stock-row');
     const name = el('div');
     name.append(el('b', null, s.label));
@@ -109,20 +119,38 @@ function renderOpenings() {
     const isDoor = DOOR_STOCK.includes(s);
     const b = el('button', 'btn', isDoor ? `+ ${s.label}` : `+ #${s.n}`);
     b.title = `${s.label} — ${fmtIn(s.w)} × ${fmtIn(s.h)}`;
-    b.addEventListener('click', () => {
-      const wall = 'S';
-      const e = wallExtent(wall, state.spec);
-      state.openings.push({
-        id: 'x' + Math.round(performance.now() * 1000).toString(36),
-        wall, stock: s.id,
-        ...(isDoor ? { kind: 'door' } : {}),
-        off: Math.max(e.u0 + 12, (e.u0 + e.u1) / 2 - s.w / 2),
-        head: isDoor ? s.h : 78,
-      });
-      scheduleRebuild();
-    });
+    b.addEventListener('click', () => addOpening({ stock: s.id, kind: isDoor ? 'door' : null }));
     add.append(b);
   }
+  /* Nothing on the shelf fits, or the unit is one nobody has listed: start
+     from a hole and type its size on the card. */
+  for (const [label, kind] of [['+ Custom window', null], ['+ Custom door', 'door']]) {
+    const b = el('button', 'btn', label);
+    b.title = 'A hole with no salvaged unit behind it — set its size on the card';
+    b.addEventListener('click', () => addOpening({ stock: 'custom', kind }));
+    add.append(b);
+  }
+}
+
+/* Drop a new opening into the south wall, roughly centred, and select it so
+   its card is the one already open. */
+function addOpening({ stock, kind }) {
+  const wall = 'S';
+  const e = wallExtent(wall, state.spec);
+  const o = {
+    id: 'x' + Math.round(performance.now() * 1000).toString(36),
+    wall, stock,
+    ...(kind ? { kind } : {}),
+    off: 0, head: 78,
+  };
+  const st = stockFor(o);
+  if (stock === 'custom') { o.w = st.w; o.h = st.h; }
+  const ro = roughOf(o);
+  o.off = Math.max(e.u0, Math.min(e.u1 - ro.w, (e.u0 + e.u1) / 2 - ro.w / 2));
+  o.head = kind === 'door' ? ro.h : 78;
+  state.openings.push(o);
+  state.selected = o.id;
+  scheduleRebuild();
 }
 
 /* Four radios, one per wall. Moving an opening keeps its head height and

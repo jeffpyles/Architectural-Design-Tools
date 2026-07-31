@@ -41,6 +41,7 @@ function renderOpenings() {
 
       const head = el('div', 'op-head');
       head.append(el('span', 'op-name', st.label));
+      if (st.resized) head.append(el('span', 'tag used', `${o.stock} resized`));
       card.append(head);
 
       card.append(wallPicker(o, st));
@@ -102,20 +103,38 @@ function renderOpenings() {
   for (const s of [...WINDOW_STOCK, ...DOOR_STOCK]) {
     const b = el('button', 'btn', s.id.startsWith('W') ? `+ ${s.label}` : `+ ${s.label.replace(/ .*/, '')} door`);
     b.title = s.label;
-    b.addEventListener('click', () => {
-      const kind = s.id === 'D2' ? 'overhead' : s.id === 'D1' ? 'man' : 'window';
-      const wall = 'N';
-      const e = wallExtent(wall, state.spec);
-      state.openings.push({
-        id: 'x' + Math.round(performance.now() * 1000).toString(36),
-        wall, stock: s.id, kind,
-        off: Math.max(e.u0 + 12, (e.u0 + e.u1) / 2 - s.w / 2),
-        head: kind === 'window' ? 78.5 : s.h,
-      });
-      scheduleRebuild();
-    });
+    const kind = s.id === 'D2' ? 'overhead' : s.id === 'D1' ? 'man' : 'window';
+    b.addEventListener('click', () => addOpening({ stock: s.id, kind }));
     add.append(b);
   }
+  /* Nothing on the shelf is the right hole: start from one and type its size
+     on the card. */
+  for (const [label, kind] of [
+    ['+ Custom window', 'window'], ['+ Custom man door', 'man'], ['+ Custom overhead', 'overhead'],
+  ]) {
+    const b = el('button', 'btn', label);
+    b.title = 'A rough opening with nothing on the shelf behind it — set its size on the card';
+    b.addEventListener('click', () => addOpening({ stock: 'custom', kind }));
+    add.append(b);
+  }
+}
+
+/* Drop a new opening into the north wall, roughly centred, and select it so
+   its card is the one already open. */
+function addOpening({ stock, kind }) {
+  const wall = 'N';
+  const e = wallExtent(wall, state.spec);
+  const o = {
+    id: 'x' + Math.round(performance.now() * 1000).toString(36),
+    wall, stock, kind, off: 0, head: 0,
+  };
+  const st = stockFor(o);
+  if (stock === 'custom') { o.w = st.w; o.h = st.h; }
+  o.off = Math.max(e.u0, Math.min(e.u1 - st.w, (e.u0 + e.u1) / 2 - st.w / 2));
+  o.head = kind === 'window' ? 78.5 : st.h;
+  state.openings.push(o);
+  state.selected = o.id;
+  scheduleRebuild();
 }
 
 /* Four radios, one per wall. Moving an opening keeps its head height and

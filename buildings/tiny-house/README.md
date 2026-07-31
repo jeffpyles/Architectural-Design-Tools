@@ -84,7 +84,7 @@ way instead of hanging it off two points.
 |---|---|
 | **Which end the tongue is on** | The sketch does not say. The statics do: the wheel wells sit east of the middle, and a trailer only tows with the hitch on the far side of its own centre of gravity from the axles. Hitch at the east end gives a *negative* tongue weight; at the west it comes out near 7%. So the model puts the tongue west. |
 | **Wheel well position** | 17'-7" from the east end to its far face, 6'-8" long, read off the dimension string on the north elevation; scaling the same marks off the photograph gives 10'-0" and 7'-2". The **rear axle at 12'-0" from the east end** is measured, and is what the frame and tongue-weight sums use. |
-| **#1, #2, #3 and #14** | Not in the spreadsheet at all. Sizes are scaled off the sketch and flagged **not measured** everywhere they appear. |
+| **#1, #2, #3 and #14** | Not in the spreadsheet at all. Sizes are scaled off the sketch and flagged **not measured** everywhere they appear — until somebody types both dimensions on the card. See below. |
 | **Which dimension is which** | The spreadsheet gives most windows as two numbers without saying which is width. The sketch settles it: #4 and #9/#10 are drawn wide, so they are landscape; the rest read as written. #12 and #13 say H and W explicitly. |
 | **Rough openings** | Unit size plus ½" a side. Fine for a new window, optimistic for salvage — measure the frames. |
 | ~~Wall build-up~~ | **Settled:** 2×4 at 24" o.c., metal siding on 2×4 girts, no exterior sheathing, batt between the studs, 7/16" OSB on the inside doing the bracing *and* the interior surface. |
@@ -92,6 +92,27 @@ way instead of hanging it off two points.
 | **Loft extents** | East 10'-4", west 5'-7", from the partition lines on the sketch. The heights come from the two horizontal lines on the gable elevations, which do not quite agree with each other; the model uses one number for both. |
 | ~~Snow, wind, seismic~~ | **Settled:** near Drain, same as the shop. 25 psf ground snow, 100 mph basic wind at exposure B, S_DS 0.75. |
 | **Where #12 goes** | Nowhere. It is on the schedule and not on any elevation, so it sits on the shelf. |
+
+## Correcting a window
+
+Every opening card carries a **unit width** and **unit height** you can type into. The
+schedule in `10-spec.js` is what the spreadsheet says; the numbers on the card are what
+the opening actually is, and they win. The rough opening follows by the ½"-a-side shim
+allowance, the header is re-sized from the new width, and the girts move out of the way.
+
+Two things follow from typing a size, and both are the point:
+
+- **Typing both dimensions counts as measuring it.** The four windows flagged *not
+  measured* are flagged because nobody has been out to them with a tape. Once both
+  numbers are typed they stop being guesses, and the Review note drops them.
+- **A resized opening is no longer the unit on the shelf.** #7 cut 6" wider is a hole
+  for something else, so the inventory puts #7 back on the shelf and the audit says so.
+  If the unit really is that size, correcting the schedule entry in `10-spec.js` is the
+  honest fix; the card is for one-offs and for finding out.
+
+**+ Custom window** and **+ Custom door** make an opening with no salvaged unit behind
+it at all — a hole sized from nothing, for something bought rather than found. It frames,
+tags, weighs and shares like any other opening; it just is not on anybody's list.
 
 ## The roof
 

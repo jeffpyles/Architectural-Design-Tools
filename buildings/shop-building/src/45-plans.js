@@ -1267,7 +1267,8 @@ function drawOpeningSchedule(s) {
       fmtFt(o.head),
       fmtFt(o.head - st.h),
       h.over ? 'ENGINEERED' : h.label,
-      st.resized ? 'Resized from stock' : (st.note ? 'From the sketch' : 'Stock unit'),
+      st.id === 'custom' ? 'Not on hand — to buy'
+        : st.resized ? 'Resized from stock' : (st.note ? 'From the sketch' : 'Stock unit'),
     ];
   });
   const schedH = schedule(s, area.x, area.y + 8, area.w, 'Door and window schedule',

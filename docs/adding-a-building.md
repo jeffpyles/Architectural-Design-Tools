@@ -208,6 +208,35 @@ its true page size, so printing at 100% gives a drawing a scale rule reads corre
 `tools/interact-check.mjs` asserts every sheet has content, a stated scale and its title
 block; the print path itself is checked by taking a PDF and counting the pages.
 
+## Openings
+
+An opening is `{ id, wall, stock, off, head, kind }` plus an optional `w` and `h`. The
+building owns `stockFor(o)`, which is the one place the size is decided; the shell, the
+model, the audit and the drawings all go through it and none of them reads `o.w`
+directly. The convention both buildings follow:
+
+```js
+function stockFor(o) {
+  const base = STOCK.find((s) => s.id === o.stock) || customBase(o);
+  const w = o.w != null ? o.w : base.w;
+  const h = o.h != null ? o.h : base.h;
+  const resized = base.id !== 'custom'
+    && (Math.abs(w - base.w) > 0.01 || Math.abs(h - base.h) > 0.01);
+  return { ...base, w, h, resized, label: … };
+}
+```
+
+Putting the override on the opening rather than in a map beside the stock list is what
+makes it free: `w` and `h` are already opening fields, so they go into the share code and
+come back without touching `encodeLayout`, and `stock: 'custom'` needs no new state at
+all — it is an id that nothing in the list matches.
+
+Two consequences worth handling rather than ignoring. A stock list that means *units on
+hand* is a claim about a specific size, so count a unit as placed only while nothing has
+resized it. And anything derived from *not knowing* a size — the tiny house flags four
+windows `measured: false` — has to notice when somebody types one in: typing both
+dimensions is what measuring a window looks like from in here.
+
 ## Editing something that is not an opening
 
 Openings are built into the shell because every building has them. Anything *else* a

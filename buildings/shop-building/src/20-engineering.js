@@ -228,17 +228,26 @@ function trussGeometry(spec) {
 
 /* ---- opening helpers ----
    An opening carries the id of the stock unit it came from, but w and h can
-   be overridden — a 9'-0" overhead door is the same door, resized. */
+   be overridden — a 9'-0" overhead door is the same door, resized.
+
+   `stock: 'custom'` is an opening with nothing on the shelf behind it: a hole
+   sized from scratch, for a unit that gets bought rather than found. */
+function customBase(op) {
+  if (op.kind === 'overhead') return { id: 'custom', w: 108, h: 96, kind: 'overhead' };
+  if (op.kind === 'man') return { id: 'custom', w: 38, h: 82.5, kind: 'man' };
+  return { id: 'custom', w: 36, h: 36 };
+}
 function stockFor(op) {
   const base = WINDOW_STOCK.find((x) => x.id === op.stock)
     || DOOR_STOCK.find((x) => x.id === op.stock)
-    || { w: 36, h: 80, label: 'custom', id: 'custom' };
+    || customBase(op);
   const w = op.w != null ? op.w : base.w;
   const h = op.h != null ? op.h : base.h;
-  const resized = Math.abs(w - base.w) > 0.01 || Math.abs(h - base.h) > 0.01;
+  const resized = base.id !== 'custom'
+    && (Math.abs(w - base.w) > 0.01 || Math.abs(h - base.h) > 0.01);
   return {
     ...base, w, h, resized,
-    label: resized ? `${fmtFt(w)} × ${fmtFt(h)}` : base.label,
+    label: base.id === 'custom' || resized ? `${fmtFt(w)} × ${fmtFt(h)}` : base.label,
   };
 }
 function wallRun(wall, spec) {

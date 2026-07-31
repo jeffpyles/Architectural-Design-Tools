@@ -39,7 +39,41 @@ const DOOR_STOCK = [
 ];
 
 const OPENING_STOCK = [...WINDOW_STOCK, ...DOOR_STOCK];
-function stockFor(o) { return OPENING_STOCK.find((s) => s.id === o.stock) || WINDOW_STOCK[0]; }
+
+/* An opening carries the id of the salvaged unit going into it, but `w` and
+   `h` on the opening itself win. That is how the four unmeasured windows get
+   fixed: go out with a tape, type what the tape says, and the guess is gone.
+   Typing both numbers is measuring it, so `measured` flips on its own.
+
+   `stock: 'custom'` is an opening with no salvaged unit behind it — a hole
+   sized from nothing, for a unit not on the list. */
+function customBase(o) {
+  return o.kind === 'door'
+    ? { id: 'custom', w: 32, h: 80, label: 'custom door' }
+    : { id: 'custom', w: 30, h: 30, label: 'custom window' };
+}
+function stockFor(o) {
+  const base = OPENING_STOCK.find((s) => s.id === o.stock) || customBase(o);
+  const w = o.w != null ? o.w : base.w;
+  const h = o.h != null ? o.h : base.h;
+  /* A custom opening was never any other size, so it is not a resized
+     anything — it is only ever what it says. */
+  const resized = base.id !== 'custom'
+    && (Math.abs(w - base.w) > 0.01 || Math.abs(h - base.h) > 0.01);
+  return {
+    ...base, w, h, resized,
+    measured: base.measured === false ? (o.w != null && o.h != null) : base.measured,
+    /* A salvaged unit keeps its name even when the size is corrected — it is
+       still #5, and the audit reads the number off the front of the label.
+       A custom opening has no name but its size. */
+    label: base.id === 'custom' ? `Custom ${fmtIn(w)} × ${fmtIn(h)}` : base.label,
+  };
+}
+/* A unit is off the shelf only while it is in a wall at the size it actually
+   is; resize an opening and it is a hole for something else. */
+function stockPlaced(s, openings) {
+  return openings.filter((o) => o.stock === s.id && !stockFor(o).resized);
+}
 
 /* Rough openings get shimmed around a salvaged unit, so the hole is the
    unit plus half an inch a side. */
