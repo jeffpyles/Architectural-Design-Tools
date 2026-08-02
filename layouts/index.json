@@ -15,6 +15,13 @@
     "default": true
   },
   {
+    "file": "tiny-house/jo-s-window-changes-august-2.json",
+    "tool": "tiny-house",
+    "name": "Jo's window changes, August 2",
+    "note": "",
+    "code": "THOW1-eyJ2IjoxLCJzIjp7fSwibyI6W1siUyIsIlcxNCIsbnVsbCwxNCwxMjgsMCwyN10sWyJTIiwiRDEiLCJkb29yIiwyNSw4MSwwLDBdLFsiUyIsIlc5IixudWxsLDc5LDEyNSwwLDBdLFsiUyIsIlcxIixudWxsLDk2LDY5LDMxLjc1LDMxLjc1XSxbIkUiLCJXMTEiLG51bGwsNTQsNzgsMCwwXSxbIlMiLCJXMTAiLG51bGwsMjUzLDEyMiwwLDBdLFsiUyIsIlc0IixudWxsLDMwMyw3MSwwLDBdLFsiUyIsIlcyIixudWxsLDIzNy41LDgyLDIzLjUsMjMuNV0sWyJOIiwiVzMiLG51bGwsMjQsNzAsMTMuMjUsMzYuNzVdLFsiTiIsIkQyIiwiZG9vciIsMTUzLDg1LDAsMF0sWyJOIiwiVzUiLG51bGwsMjA3LjUsODEsMCwwXSxbIk4iLCJXNyIsbnVsbCwzMzguNSwxMTMsMCwwXSxbIkUiLCJXMTMiLG51bGwsNDcuNSwxMjQsMCwwXSxbIlciLCJjdXN0b20iLG51bGwsNTcsNjksMjkuNSw0MS41XSxbIk4iLCJjdXN0b20iLG51bGwsMjAuNSwxMTQsMzUuNzUsMjkuNzVdXX0"
+  },
+  {
     "file": "tiny-house/july-28.json",
     "tool": "tiny-house",
     "name": "July 28",
