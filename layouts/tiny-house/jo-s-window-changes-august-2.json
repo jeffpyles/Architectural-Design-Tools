@@ -1,0 +1,20 @@
+{
+  "kind": "architectural-design-tools/layout",
+  "tool": "tiny-house",
+  "toolName": "Tiny House",
+  "name": "Jo's window changes, August 2",
+  "note": "",
+  "saved": "2026-08-02T20:14:44.320Z",
+  "describes": [
+    "Trailer: 12'-0\" × 34'-0\"",
+    "Floor: 408 sf",
+    "Walls: 11'-3\"",
+    "Pitch: 1.5/12",
+    "Ridge: 12'-0\" above the frame",
+    "Studs: 2x4 @ 24\" o.c.",
+    "Lofts: 10'-4\" east · 5'-7\" west",
+    "Snow: 20 psf",
+    "11'-3\" walls · 15 openings · worst racking 1.63"
+  ],
+  "code": "THOW1-eyJ2IjoxLCJzIjp7fSwibyI6W1siUyIsIlcxNCIsbnVsbCwxNCwxMjgsMCwyN10sWyJTIiwiRDEiLCJkb29yIiwyNSw4MSwwLDBdLFsiUyIsIlc5IixudWxsLDc5LDEyNSwwLDBdLFsiUyIsIlcxIixudWxsLDk2LDY5LDMxLjc1LDMxLjc1XSxbIkUiLCJXMTEiLG51bGwsNTQsNzgsMCwwXSxbIlMiLCJXMTAiLG51bGwsMjUzLDEyMiwwLDBdLFsiUyIsIlc0IixudWxsLDMwMyw3MSwwLDBdLFsiUyIsIlcyIixudWxsLDIzNy41LDgyLDIzLjUsMjMuNV0sWyJOIiwiVzMiLG51bGwsMjQsNzAsMTMuMjUsMzYuNzVdLFsiTiIsIkQyIiwiZG9vciIsMTUzLDg1LDAsMF0sWyJOIiwiVzUiLG51bGwsMjA3LjUsODEsMCwwXSxbIk4iLCJXNyIsbnVsbCwzMzguNSwxMTMsMCwwXSxbIkUiLCJXMTMiLG51bGwsNDcuNSwxMjQsMCwwXSxbIlciLCJjdXN0b20iLG51bGwsNTcsNjksMjkuNSw0MS41XSxbIk4iLCJjdXN0b20iLG51bGwsMjAuNSwxMTQsMzUuNzUsMjkuNzVdXX0"
+}
