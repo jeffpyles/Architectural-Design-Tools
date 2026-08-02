@@ -140,6 +140,8 @@ const DEFAULT_SPEC = {
      is the interior face, which is also the interior surface — one layer
      doing three jobs, and the wall stays 3½" thick. */
   wallSkin: 'girts',
+  sheathingPanel: 'osb716',   // only used when wallSkin is 'sheathing'
+  studMaterial: 'wood',
   girtSpacing: 24,
   girtSize: '2x4',
   roofDeck: true,

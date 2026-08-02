@@ -37,6 +37,9 @@ const bChecks = existsSync(bChecksPath) ? await import(pathToFileURL(bChecksPath
 const WANT = ['buildModel', 'takeoff', 'auditBuilding', 'DEFAULT_SPEC', 'DEFAULT_OPENINGS', 'STAGES',
   'BUILDING', 'encodeLayout', 'decodeLayout', 'layoutSummary', 'fmtFt', 'fmtIn', 'fmtN',
   'layoutFile', 'readLayoutFile', 'layoutFacts',
+  'ASSEMBLY', 'assembly', 'assemblyOpts', 'assemblyReview', 'panelShear', 'wallSheet',
+  'priceKey', 'basePrice', 'packPrices', 'unpackPrices', 'PRICED', 'NOT_COSTED',
+  'LUMBER_USD', 'CFS', 'buildCost',
   'stockFor', 'wallExtent', 'WALLS', 'pickMember', 'openingsOn', 'solidSegments', 'partWeight',
   ...(bChecks && bChecks.api ? bChecks.api : [])];
 vm.runInContext(`${src}
@@ -220,6 +223,166 @@ for (const n of notes) {
   }
   console.log(`  ok  layout reads "${f.line}"${f.tag ? ` — ${f.tag}` : ''}, `
     + `written summary ${text.split('\n').length} lines`);
+}
+
+/* 7d. The assembly catalog. Every row is read by the model, the takeoff, the
+   racking check and the Compare panel, so an incomplete row is four wrong
+   answers rather than one — and the whole reason the catalog exists is that
+   the same option used to carry different numbers in different places. */
+{
+  let n = 0;
+  for (const [group, rows] of Object.entries(A.ASSEMBLY)) {
+    for (const [id, raw] of Object.entries(rows)) {
+      n++;
+      const where = `${group}.${id}`;
+      const r = A.assembly(group, id);
+      if (!r) { fail(`${where} does not resolve through assembly()`); continue; }
+      if (!r.label) fail(`${where} has no label`);
+      if (!r.note) fail(`${where} has no note — the Compare panel prints it`);
+      for (const k of ['psf', 'usd', 'hr', 'R', 'shear', 'usdFt']) {
+        const v = raw[k];
+        if (v === undefined) continue;
+        if (!isFinite(v) || v < 0) fail(`${where} has ${k} = ${v}`);
+      }
+      if (raw.usd === undefined && raw.usdFt === undefined) fail(`${where} has no price`);
+      /* A shear value with no spacing it is rated at is a number nobody can
+         use, and the spacing is what caught ⅜" ply on 24" studs. */
+      if (raw.shear && !raw.maxStud) fail(`${where} claims ${raw.shear} plf at no stated spacing`);
+      if (raw.maxStud && !raw.shear) fail(`${where} states a spacing but no shear`);
+      if (r.quoted) fail(`${where} reads as quoted with no override set`);
+    }
+  }
+  /* Options offered are options that exist. A control listing an id the
+     catalog does not have puts the building into a state it cannot build. */
+  for (const group of Object.keys(A.ASSEMBLY)) {
+    for (const [id, label] of A.assemblyOpts(group)) {
+      if (!A.assembly(group, id)) fail(`${group} offers "${id}", which is not in the catalog`);
+      if (!label) fail(`${group}.${id} is offered with no label`);
+    }
+  }
+  for (const c of (A.BUILDING.controls || [])) {
+    const g = ({ siding: 'siding', roofing: 'roofing', interiorFinish: 'interior',
+      sheathingPanel: 'sheathing', studMaterial: 'studMaterial' })[c.k];
+    if (!g || !c.opts) continue;
+    for (const [id] of c.opts) {
+      if (!A.assembly(g, id)) fail(`the ${c.label} control offers "${id}", not in ${g}`);
+    }
+    if (spec[c.k] !== undefined && !A.assembly(g, spec[c.k])) {
+      fail(`the default spec picks ${g}.${spec[c.k]}, which is not in the catalog`);
+    }
+  }
+  console.log(`  ok  ${n} catalog rows, every one complete and offered only where it exists`);
+}
+
+/* 7e. Shear comes off the row, not off a constant. This is the bug the
+   catalog was built to kill: a ¼" lining reporting ⁷⁄₁₆" OSB's capacity. */
+{
+  const cases = [
+    ['interior', 'osb', 24, 240], ['interior', 'ply', 24, 0], ['interior', 'ply38', 16, 220],
+    ['interior', 'ply38', 24, 0], ['interior', 'ply1532', 24, 280], ['interior', 'gyp', 24, 0],
+    ['sheathing', 'osb716', 24, 240], ['sheathing', 'ply38', 24, 0],
+  ];
+  for (const [g, id, at, want] of cases) {
+    const got = A.panelShear(g, id, at);
+    if (got.plf !== want) fail(`${g}.${id} at ${at}" o.c. gives ${got.plf} plf, expected ${want}`);
+    if (!got.why) fail(`${g}.${id} gives no reason for ${got.plf} plf`);
+    if (!got.plf && !/not a rated|rated to/.test(got.why)) {
+      fail(`${g}.${id} says zero without saying why: "${got.why}"`);
+    }
+  }
+  /* A thicker sheet is never worth less, and no sheet is ever worth more
+     than it is rated at. */
+  const ladder = ['ply', 'ply38', 'osb', 'ply1532'];
+  for (let i = 1; i < ladder.length; i++) {
+    const a = A.assembly('interior', ladder[i - 1]), b = A.assembly('interior', ladder[i]);
+    if (b.shear < a.shear) fail(`${b.label} carries less shear than ${a.label}`);
+  }
+  console.log('  ok  shear comes off the panel, and a panel over its rated spacing counts for nothing');
+}
+
+/* 7f. What will not go together has to say so. A tool that lets you compare
+   a wall that cannot be built against one that can is worse than no tool. */
+{
+  const ctx = { pitch: 6, girtSpacing: 24, sheathed: false };
+  const crits = (over, c) => A.assemblyReview({ ...spec, ...over }, { ...ctx, ...c })
+    .filter((f) => f.level === 'crit').map((f) => f.title);
+  if (!crits({ siding: 'cedarShake' }).length) fail('cedar on a girt wall raised nothing');
+  if (crits({ siding: 'cedarShake' }, { sheathed: true }).length) {
+    fail('cedar on a sheathed wall is refused when it should not be');
+  }
+  if (!crits({ roofing: 'comp' }, { pitch: 1.5 }).length) fail('shingles at 1.5/12 raised nothing');
+  if (crits({ roofing: 'comp' }, { pitch: 6 }).length) fail('shingles at 6/12 were refused');
+  if (!crits({ roofing: 'metal' }, { pitch: 1.5 }).length) fail('a lapped panel at 1.5/12 raised nothing');
+  /* Every finding is well formed, whatever it is about. */
+  for (const id of Object.keys(A.ASSEMBLY.siding)) {
+    for (const f of A.assemblyReview({ ...spec, siding: id }, ctx)) {
+      if (!f.title || !f.body) fail(`siding.${id} produced an empty finding`);
+      if (!['crit', 'warn', 'info'].includes(f.level)) fail(`siding.${id} finding level "${f.level}"`);
+      if (/undefined|NaN/.test(f.title + f.body)) fail(`siding.${id}: "${f.title}"`);
+    }
+  }
+  console.log('  ok  cedar wants a substrate, a lapped roof wants a pitch, and both say so');
+}
+
+/* 7g. Cost is counted off the same parts the weight is, and moves the way a
+   price does. If these two ever describe different buildings, every trade on
+   the Compare panel is fiction. */
+{
+  const c = t.cost;
+  if (!c) fail('the takeoff produced no cost');
+  else {
+    const summed = c.rows.reduce((a, r) => a + r.usd, 0);
+    if (Math.abs(summed - c.usd) > 0.01) fail(`cost rows sum to ${summed}, total says ${c.usd}`);
+    if (!(c.usd > 0) || !(c.hr > 0)) fail(`cost is $${c.usd} and ${c.hr} hours`);
+    if (!c.notCosted.length) fail('nothing is listed as uncounted, which cannot be true');
+
+    /* Every part that claims a catalog key has to resolve to one, and has to
+       carry the area the price is charged against. */
+    for (const p of model.parts) {
+      if (!p.asm) continue;
+      const [g, id] = p.asm.split('.');
+      if (!A.assembly(g, id)) fail(`a ${p.kind} claims ${p.asm}, which is not in the catalog`);
+      if (!p.area) fail(`a ${p.kind} claims ${p.asm} but has no area to price`);
+      if (p.psf != null && Math.abs(p.psf - A.assembly(g, id).psf) > 0.001) {
+        fail(`a ${p.kind} weighs ${p.psf} psf and its catalog row says ${A.assembly(g, id).psf}`);
+      }
+    }
+
+    /* Doubling one price raises the total by exactly that row. */
+    const priced = c.rows.filter((r) => r.sf > 0 && r.usd > 0)[0];
+    if (priced) {
+      const [g, id] = priced.key.split('.');
+      const over = { [A.priceKey(g, id)]: A.basePrice(g, id) * 2 };
+      const c2 = A.takeoff(model, spec, over).cost;
+      if (Math.abs((c2.usd - c.usd) - priced.usd) > 0.5) {
+        fail(`doubling ${priced.key} moved the total by ${(c2.usd - c.usd).toFixed(0)}, `
+          + `not the ${priced.usd.toFixed(0)} that row costs`);
+      }
+      if (!c2.quoted) fail('a typed price is not reported as one');
+    }
+
+    /* Prices survive the share code, and only the ones somebody changed go
+       into it. */
+    if (A.packPrices({}) !== null) fail('an untouched price table packs to something');
+    if (A.packPrices({ 'siding.metal': A.basePrice('siding', 'metal') }) !== null) {
+      fail('a price equal to the shipped one still packs');
+    }
+    if (A.packPrices({ 'siding.nonsense': 4 }) !== null) fail('a price for nothing packs');
+    const mine = { 'siding.metal': 3.33 };
+    const codeP = A.encodeLayout(spec, openings, {}, mine);
+    const backP = A.decodeLayout(codeP).prices;
+    if (Math.abs((backP['siding.metal'] || 0) - 3.33) > 0.001) {
+      fail(`a typed price came back as ${backP['siding.metal']}`);
+    }
+    const plain = A.encodeLayout(spec, openings, {});
+    if (codeP.length <= plain.length) fail('prices went into the code without lengthening it');
+    if (A.decodeLayout(plain).prices && Object.keys(A.decodeLayout(plain).prices).length) {
+      fail('a code with no prices decoded some');
+    }
+    console.log(`  ok  $${Math.round(c.usd).toLocaleString()} of material and `
+      + `${Math.round(c.hr)} hours over ${c.rows.length} rows, priced ${c.priced}, `
+      + `and prices survive the code`);
+  }
 }
 
 /* 8. Whatever the library flags as the default is what the page opens with,

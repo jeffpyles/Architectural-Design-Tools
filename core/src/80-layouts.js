@@ -44,7 +44,7 @@ async function loadSharedLayouts() {
   if (openedFromLink === false && !touched && Array.isArray(sharedLayouts)) {
     const def = sharedLayouts.find((r) => r.default);
     if (def) {
-      try { const d = decodeLayout(def.code); applyLayout(d.spec, d.openings, true, d.extra); }
+      try { const d = decodeLayout(def.code); applyLayout(d.spec, d.openings, true, d.extra, d.prices); }
       catch (e) { /* fall back to whatever was baked in */ }
     }
   }
@@ -156,7 +156,7 @@ function b64urlDecode(str) {
   const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
-function encodeLayout(spec, openings, extra) {
+function encodeLayout(spec, openings, extra, prices) {
   const base = BUILDING.defaults().spec;
   const diff = {};
   for (const k of Object.keys(base)) {
@@ -172,6 +172,10 @@ function encodeLayout(spec, openings, extra) {
     const x = BUILDING.packExtra(extra || {}, spec, openings);
     if (x != null) body.x = x;
   }
+  /* Prices, but only the ones somebody typed over the shipped figures.
+     Everybody who never opened the Costs panel keeps the code they had. */
+  const p = packPrices(prices);
+  if (p) body.p = p;
   return CODE_PREFIX() + b64urlEncode(JSON.stringify(body));
 }
 function decodeLayout(code) {
@@ -201,7 +205,7 @@ function decodeLayout(code) {
   }));
   const extra = data.x != null && BUILDING.unpackExtra
     ? BUILDING.unpackExtra(data.x, spec, openings) : {};
-  return { spec, openings, extra };
+  return { spec, openings, extra, prices: unpackPrices(data.p) };
 }
 
 /* ---- this browser's saved layouts ---- */
@@ -219,7 +223,7 @@ function writeSaved(list) {
 }
 
 /* ---- a plain-language description, for pasting into an email ---- */
-function layoutSummary(spec, openings, extra) {
+function layoutSummary(spec, openings, extra, prices) {
   const L = [];
   L.push(BUILDING.name.toUpperCase());
   for (const [k, v] of BUILDING.titleFacts(spec, null)) L.push(`${k}: ${v}`);
@@ -248,7 +252,7 @@ function layoutSummary(spec, openings, extra) {
   }
   L.push('');
   L.push('Layout code (paste this into the model to see it):');
-  L.push(encodeLayout(spec, openings, extra));
+  L.push(encodeLayout(spec, openings, extra, prices));
   return L.join('\n');
 }
 
@@ -271,11 +275,12 @@ async function copyText(text, sourceEl) {
 /* ---- panel ---- */
 /* `quiet` applies a layout as a starting point rather than a choice, so a
    later-arriving library default can still replace it. */
-function applyLayout(spec, openings, quiet, extra) {
+function applyLayout(spec, openings, quiet, extra, prices) {
   if (!quiet) touched = true;
   state.spec = { ...spec };
   state.openings = openings.map((o, i) => ({ ...o, id: o.id || `k${i}` }));
   state.extra = extra || {};
+  state.prices = prices || {};
   state.selected = null;
   document.getElementById('readout').classList.remove('on');
   scheduleRebuild();
@@ -340,7 +345,7 @@ function renderLayouts() {
   const p = $('#panel-layouts');
   if (!p) return;
   p.textContent = '';
-  const code = encodeLayout(state.spec, state.openings, state.extra);
+  const code = encodeLayout(state.spec, state.openings, state.extra, state.prices);
 
   p.append(note('A layout is the whole building — sizes, openings, and everything else '
     + 'you have edited. It travels as a file you keep or a code you paste.'));
@@ -415,7 +420,7 @@ function renderLayouts() {
       try {
         const found = readLayoutFile(r.result, file.name);
         const d = decodeLayout(found.code);
-        applyLayout(d.spec, d.openings, false, d.extra);
+        applyLayout(d.spec, d.openings, false, d.extra, d.prices);
         say(`Loaded ${found.name || file.name}`
           + (found.found > 1 ? ` — first of ${found.found} in the file` : ''));
       } catch (err) {
@@ -461,8 +466,8 @@ function renderLayouts() {
   const bLoad = el('button', 'btn', 'Load the code');
   bLoad.addEventListener('click', () => {
     try {
-      const { spec, openings, extra } = decodeLayout(inp.value);
-      applyLayout(spec, openings, false, extra);
+      const { spec, openings, extra, prices } = decodeLayout(inp.value);
+      applyLayout(spec, openings, false, extra, prices);
       say('Loaded');
     } catch (err) {
       say(err.message, true);
@@ -487,7 +492,7 @@ function renderLayouts() {
   bCode.addEventListener('click', async () => { status.textContent = await copyText(code, ta); });
   const bSum = el('button', 'btn', 'Copy written summary');
   bSum.addEventListener('click', async () => {
-    const text = layoutSummary(state.spec, state.openings, state.extra);
+    const text = layoutSummary(state.spec, state.openings, state.extra, state.prices);
     ta.value = text; ta.rows = 8;
     status.textContent = await copyText(text, ta);
   });
@@ -523,7 +528,7 @@ function renderLayouts() {
     p.append(note('Nothing published yet. Yours would be the first.'));
   } else {
     for (const item of sharedLayouts) {
-      p.append(layoutRow(item, (d) => applyLayout(d.spec, d.openings, false, d.extra)));
+      p.append(layoutRow(item, (d) => applyLayout(d.spec, d.openings, false, d.extra, d.prices)));
     }
   }
 
@@ -541,7 +546,7 @@ function renderLayouts() {
   }
   for (const item of saved) {
     p.append(layoutRow(item,
-      (d) => applyLayout(d.spec, d.openings, false, d.extra),
+      (d) => applyLayout(d.spec, d.openings, false, d.extra, d.prices),
       () => { writeSaved(loadSaved().filter((x) => x.name !== item.name)); renderLayouts(); }));
   }
 }

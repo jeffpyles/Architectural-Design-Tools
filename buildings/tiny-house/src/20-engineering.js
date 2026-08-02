@@ -198,6 +198,15 @@ function auditBuilding(spec, openings) {
   const out = [];
   const add = (level, title, body) => out.push({ level, title, body });
 
+  /* Anything in the catalog that will not go together — cedar with nothing
+     to nail to, a lapped roof panel at 1.5/12, aluminium bolted to steel.
+     Core owns these because they are facts about the material, not about
+     this building. */
+  for (const f of assemblyReview(spec, {
+    pitch: roofPitch(spec), girtSpacing: spec.girtSpacing,
+    sheathed: spec.wallSkin === 'sheathing',
+  })) out.push(f);
+
   /* Openings that have wandered off the wall, or into each other. */
   for (const o of openings) {
     const st = stockFor(o);
@@ -347,12 +356,26 @@ function auditBuilding(spec, openings) {
     const model0 = buildModel(spec, openings);
     const w0 = takeoff(model0, spec).weight;
 
+    const sh = wallShear(spec);
     const worst = lateralCheck(spec, openings)
       .flatMap((d) => d.lines.map((l) => ({ ...l, dir: d.name })))
       .sort((a, b) => a.ratio - b.ratio)[0];
-    if (worst.ratio < 1) {
+    /* No rated panel anywhere on the wall is a different problem from not
+       enough of one, and it wants a different sentence: no amount of wall
+       fixes it, only a different sheet. */
+    if (!sh.plf) {
+      add('crit', 'Nothing on this wall is a shear panel',
+        `${sh.why}. Racking capacity is zero everywhere, so the ${fmtN(worst.demand, 0)} lb `
+        + `the wind puts on the worst line has nowhere to go. `
+        + (sh.spaced
+          ? 'The sheet is fine — the framing is too far apart for it. Close the studs up or go '
+            + 'to a thicker panel.'
+          : 'Pick a rated sheet for the inside face, or sheathe the outside and keep the lining '
+            + 'as a surface.'));
+    } else if (worst.ratio < 1) {
       add('crit', `${WALLS[worst.wall].label} wall is short on racking at ${worst.ratio.toFixed(2)}×`,
-        `${fmtN(worst.capacity, 0)} lb of capacity against ${fmtN(worst.demand, 0)} lb of demand. `
+        `${fmtN(worst.capacity, 0)} lb of capacity against ${fmtN(worst.demand, 0)} lb of demand, `
+        + `at ${fmtN(sh.plf, 0)} plf — ${sh.why}. `
         + (worst.piers.length
           ? `It needs ${fmtIn(worst.required)} of full-height sheathing and has ${fmtIn(worst.braced)}.`
           : `Nothing on it is wide enough to count — the widest unbroken run is ${fmtIn(worst.widest)} `
@@ -360,9 +383,9 @@ function auditBuilding(spec, openings) {
             + 'openings fixes that.'));
     } else {
       add('info', `Racking clears everywhere, worst line ${worst.ratio.toFixed(2)}×`,
-        `${WALLS[worst.wall].label} wall, ${worst.dir.toLowerCase()}. Sheathing the whole interior face `
-        + 'rather than just the corners is what buys this — every full-height run between the openings '
-        + 'is a shear pier.');
+        `${WALLS[worst.wall].label} wall, ${worst.dir.toLowerCase()}, at ${fmtN(sh.plf, 0)} plf — `
+        + `${sh.why}. Sheathing the whole face rather than just the corners is what buys this: `
+        + 'every full-height run between the openings is a shear pier.');
     }
 
     const st = stabilityCheck(spec, w0);
@@ -638,8 +661,37 @@ function windPressure(spec) {
    135" wall makes the narrowest useful pier about 39". The shop uses a flat
    4'-0" minimum instead because it is leaning on the prescriptive braced-wall
    tables; nothing about an 11'-3" wall is prescriptive. */
-const OSB_ALLOW = 240;          // plf
+const OSB_ALLOW = 240;          // plf — ⁷⁄₁₆" OSB, and the default
 const MAX_ASPECT = 3.5;
+
+/* What this wall's panels are actually allowed to carry.
+
+   Both faces can brace: the interior finish is the default shear wall here,
+   and sheathing the outside adds its own. Whichever is doing the work, the
+   allowable is the one on that panel's catalog row — not a constant. This
+   used to be `OSB_ALLOW` regardless of what was selected, so a ¼" plywood
+   lining, which is not a shear panel at all, reported ⁷⁄₁₆" OSB's capacity
+   and the racking number never moved. */
+function wallShear(spec) {
+  const faces = [];
+  const inside = panelShear('interior', spec.interiorFinish, spec.studSpacing);
+  faces.push({ face: 'inside', ...inside });
+  if (spec.wallSkin === 'sheathing') {
+    faces.push({ face: 'outside', ...panelShear('sheathing', wallSheet(spec), spec.studSpacing) });
+  }
+  const plf = faces.reduce((a, f) => a + f.plf, 0);
+  const working = faces.filter((f) => f.plf > 0);
+  return {
+    plf, faces, working,
+    /* Why it is zero, or which faces are carrying it — a bare 0 in a review
+       note tells nobody what to change. */
+    why: working.length ? working.map((f) => f.why).join(' + ')
+      : faces.map((f) => f.why).join('; '),
+    /* A panel rated at 16" o.c. on 24" framing is the trap worth naming
+       separately: the sheet is fine, the spacing is not. */
+    spaced: faces.some((f) => f.spaced),
+  };
+}
 
 function shearPiers(wall, spec, openings) {
   const minW = (spec.wallHeight - spec.subfloor) / MAX_ASPECT;
@@ -667,17 +719,20 @@ function lateralCheck(spec, openings) {
     const V = force / 2;                                 // half goes to the roof line
     const perLine = V / d.lines.length;
     const minW = (spec.wallHeight - spec.subfloor) / MAX_ASPECT;
+    const sh = wallShear(spec);
     const lines = d.lines.map((wall) => {
       const segs = solidSegments(wall, spec, openings).map(([a, b]) => ({ a, w: b - a }));
       const piers = segs.filter((p) => p.w >= minW);
       const braced = piers.reduce((a, p) => a + p.w, 0);
-      const capacity = braced / 12 * OSB_ALLOW;
+      const capacity = braced / 12 * sh.plf;
       const widest = Math.max(0, ...segs.map((s) => s.w));
-      return { wall, segs, piers, braced, capacity, widest, minW,
+      return { wall, segs, piers, braced, capacity, widest, minW, allow: sh.plf,
         demand: perLine, ratio: perLine > 0 ? capacity / perLine : 1,
-        required: capacity > 0 ? perLine / OSB_ALLOW * 12 : Infinity };
+        /* With no rated panel anywhere on the wall there is no width of wall
+           that would do — which is a different answer from "build more of it". */
+        required: sh.plf > 0 ? perLine / sh.plf * 12 : Infinity };
     });
-    return { ...d, q, force, V, perLine, minW, lines };
+    return { ...d, q, force, V, perLine, minW, shear: sh, lines };
   });
 }
 

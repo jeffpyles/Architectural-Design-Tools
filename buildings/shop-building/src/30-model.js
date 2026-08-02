@@ -562,8 +562,7 @@ function buildModel(spec, openings, extra) {
   const panelW = 36;
   const roofW = W + spec.rakeOverhang * 2;
   const nPanels = Math.ceil(roofW / panelW);
-  const roofMat = spec.roofing === 'metal' ? 'metal' : 'shingle';
-  const roofPsf = spec.roofing === 'metal' ? 0.9 : 2.6;
+  const rf = assembly('roofing', spec.roofing) || assembly('roofing', 'metal');
   for (const s of [-1, 1]) {
     const midAlong = roofRunSloped / 2;
     const zEave = s < 0 ? -spec.eaveOverhang : D + spec.eaveOverhang;
@@ -576,15 +575,14 @@ function buildModel(spec, openings, extra) {
     for (let i = 0; i < nPanels; i++) {
       const pw = Math.min(panelW, roofW - i * panelW);
       const cx = -spec.rakeOverhang + i * panelW + pw / 2;
-      add('roof', 'roofing', roofMat,
-        spec.roofing === 'metal' ? '26 ga metal roof panel' : 'Architectural shingle',
+      add('roof', 'roofing', rf.mat, rf.label,
         boxPart([cx, y, z], [pw - 0.5, 0.7, roofRunSloped], s * tr.angle),
-        { area: pw * roofRunSloped / 144, psf: roofPsf });
+        { area: pw * roofRunSloped / 144, psf: rf.psf, asm: 'roofing.' + rf.id });
     }
   }
   const vented = spec.venting === 'ridge-gable' || spec.venting === 'ridge-soffit';
-  add('roof', 'roofing', roofMat,
-    vented ? 'Vented ridge cap' : (spec.roofing === 'metal' ? 'Ridge cap' : 'Hip & ridge'),
+  add('roof', 'roofing', rf.mat,
+    vented ? 'Vented ridge cap' : (rf.mat === 'metal' ? 'Ridge cap' : 'Hip & ridge'),
     boxPart([W / 2, tr.peakY + tr.perp + (vented ? 2.6 : 1.6), tr.half], [roofW, vented ? 3.4 : 2.4, 14]),
     { len: roofW, lb: roofW / 12 * 1.6 });
 
@@ -611,7 +609,7 @@ function buildModel(spec, openings, extra) {
   /* ---------- 6. Siding, doors, windows ---------- */
   /* What a square foot of each covering actually weighs. The model draws
      panel at 0.7" so it reads on screen; 26 ga steel is 0.018". */
-  const sidePsf = spec.siding === 'metal' ? 0.9 : 2.0;
+  const sd = assembly('siding', spec.siding) || assembly('siding', 'metal');
   const skinOut = spec.wallSkin === 'girts' ? 0.4375 + LUMBER[spec.girtSize].t : 0.4375;
   const sidingT = spec.siding === 'metal' ? 0.75 : 0.5;
 
@@ -621,24 +619,23 @@ function buildModel(spec, openings, extra) {
     const segs = solidSegments(wall, openings, spec);
     // Siding below the plate, broken around the openings
     for (const sg of segs) {
-      add('skin', 'siding', spec.siding === 'metal' ? 'metal' : 'trim',
-        spec.siding === 'metal' ? 'Metal wall panel' : 'Lap siding',
+      add('skin', 'siding', sd.mat, sd.label,
         wallBox(wall, spec, sg.a, sg.w, 0, H, T + skinOut, sidingT),
-        { area: sg.w * H / 144, psf: sidePsf });
+        { area: sg.w * H / 144, psf: sd.psf, asm: 'siding.' + sd.id });
     }
     // Head and sill strips over the openings
-    const sidingName = spec.siding === 'metal' ? 'Metal wall panel' : 'Lap siding';
+    const sidingName = sd.label;
     for (const { o, st } of ops) {
       if (H - o.head > 1) {
         add('skin', 'siding', spec.siding === 'metal' ? 'metal' : 'trim', sidingName,
           wallBox(wall, spec, o.off, st.w, o.head, H - o.head, T + skinOut, sidingT),
-          { area: st.w * (H - o.head) / 144, psf: sidePsf });
+          { area: st.w * (H - o.head) / 144, psf: sd.psf, asm: 'siding.' + sd.id });
       }
       const sill = o.head - st.h;
       if (sill > 1) {
         add('skin', 'siding', spec.siding === 'metal' ? 'metal' : 'trim', sidingName,
           wallBox(wall, spec, o.off, st.w, 0, sill, T + skinOut, sidingT),
-          { area: st.w * sill / 144, psf: sidePsf });
+          { area: st.w * sill / 144, psf: sd.psf, asm: 'siding.' + sd.id });
       }
     }
     // Gable infill above the plate
@@ -646,7 +643,7 @@ function buildModel(spec, openings, extra) {
       const gx = wall === 'W' ? -skinOut - sidingT : W + skinOut;
       add('skin', 'siding', spec.siding === 'metal' ? 'metal' : 'trim', sidingName,
         prismPart([[0, H], [D, H], [tr.half + 0.01, tr.peakY + tr.perp]], gx, gx + sidingT),
-        { area: D * (tr.peakY + tr.perp - H) / 2 / 144, psf: sidePsf });
+        { area: D * (tr.peakY + tr.perp - H) / 2 / 144, psf: sd.psf, asm: 'siding.' + sd.id });
     }
     // Corner trim
     for (const uu of [e.u0, e.u1 - 3]) {

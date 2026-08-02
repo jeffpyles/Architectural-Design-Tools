@@ -15,6 +15,10 @@ const state = {
      it carries it into build() and audit(), puts it in the share code through
      the building's own packer, and otherwise leaves it alone. */
   extra: {},
+  /* Prices somebody typed over the shipped ones, keyed `group.option`. Core
+     owns these rather than a building, because what a sheet of plywood costs
+     is not a fact about a shop or a tiny house. */
+  prices: {},
   stage: 0,
   stack: true,
   cutaway: 2,
@@ -66,7 +70,7 @@ function footprint(spec) {
 /* ---- rebuild ---- */
 function rebuild() {
   model = BUILDING.build(state.spec, state.openings, state.extra);
-  take = takeoff(model, state.spec);
+  take = takeoff(model, state.spec, state.prices);
   findings = BUILDING.audit(state.spec, state.openings, state.extra);
 
   const fp = footprint(state.spec);

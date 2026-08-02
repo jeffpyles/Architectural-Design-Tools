@@ -32,8 +32,8 @@ building.json           name, blurb and facts for the landing page
 src/10-spec.js          dimensions, materials, window schedule, stages, walls
 src/20-engineering.js   loads, header sizing, truss geometry, bracing, lean-to, foundation, audit
 src/30-model.js         turns the spec into ~790 individual parts
-src/40-panels.js        Openings, Review, Foundation and Truss panels
-src/45-plans.js         the six drawing sheets
+src/40-panels.js        Openings, Review, Electrical, Foundation and Truss panels
+src/45-plans.js         the ten drawing sheets
 src/50-building.js      the BUILDING object the shell reads — no DOM
 docs/sketch-notes.md    how the sketches were read
 dist/index.html         standalone page, what GitHub Pages serves
@@ -265,6 +265,36 @@ door to buy, not the same one moved.
 nothing on the shelf behind it, sized only by what you type. It gets a tag, a header, a
 row in the schedule reading *Not on hand — to buy*, and travels in the share code like
 any other opening.
+
+## Comparing skins
+
+The **Compare** tab holds every siding and roofing option against each other on this
+building — weight, material cost, and hours for one person working alone. Every row is a
+real rebuild with that one thing swapped, so the weight is the number the Weight tab will
+show once you pick it.
+
+Against the default (26 ga metal on girts, metal roof, 127,514 lb):
+
+| siding | weight | cost |
+|---|---|---|
+| Aluminium ribbed panel | −453 lb | +$2,295 |
+| Aluminium lap siding | −704 lb | +$874 — **needs sheathing** |
+| Lap siding | +1,186 lb | +$437 |
+| Cedar shakes | +967 lb | +$6,119 |
+
+Weight is mostly a curiosity on a slab — the shop is 127,000 lb and 40,000 of that is the
+compacted base under it. Cost and hours are the columns that matter here, and the one that
+decides most of it is labour: cedar shakes are 6.5 hours per hundred square feet against
+1.6 for a metal panel, which on this building is three extra weeks of weekends.
+
+The tab refuses to let you pretend two things. Anything coursed or flat — cedar, the
+stamped aluminium shake, aluminium lap — needs ⅜" of nailable sheathing behind it, and
+this wall is girts. And a lapped roof panel or a shingle wants 3/12 or steeper, which the
+3/12 default only just clears; drop the pitch and the row goes red.
+
+Prices are ballpark as of August 2026, material only, and you can type your own over any
+of them — they travel with the layout.
+
 
 ## The lean-to
 

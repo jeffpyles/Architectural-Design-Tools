@@ -290,6 +290,66 @@ console.log('  ok  every tab renders');
   }
 }
 
+/* 5b. The Compare panel. Every row is a real rebuild, so the things worth
+   asserting are that the rows are there, that a typed price moves the money,
+   and that picking one actually changes the building. */
+{
+  const before = errors.length;
+  const hasCompare = await page.evaluate(() => !!document.querySelector('.tabs button[data-tab="compare"]'));
+  if (hasCompare) {
+    await page.click('.tabs button[data-tab="compare"]');
+    await page.waitForTimeout(900);
+    const rows = () => page.$$eval('#panel-compare .cmp-row', (rs) => rs.map((r) => ({
+      name: r.querySelector('.cmp-head b').textContent,
+      nums: [...r.querySelectorAll('.cmp-cell b')].map((b) => b.textContent),
+      current: r.classList.contains('cur'),
+      broken: r.classList.contains('bad'),
+    })));
+    const r0 = await rows();
+    if (errors.length > before) fail(`the compare tab threw: ${errors[before]}`);
+    if (r0.length < 3) fail(`only ${r0.length} options to compare`);
+    if (!r0.some((r) => r.current)) fail('no row is marked as the current choice');
+    if (!r0.some((r) => r.broken)) fail('nothing is flagged as unbuildable — cedar on girts should be');
+    for (const r of r0) {
+      if (r.nums.length !== 3) fail(`${r.name} shows ${r.nums.length} numbers, expected weight/cost/hours`);
+      if (r.nums.some((n) => /NaN|undefined/.test(n))) fail(`${r.name} shows "${r.nums.join(' ')}"`);
+      if (!/lb/.test(r.nums[0]) || !/\$/.test(r.nums[1]) || !/hr/.test(r.nums[2])) {
+        fail(`${r.name} numbers read "${r.nums.join(' / ')}"`);
+      }
+    }
+    console.log(`  ok  ${r0.length} options compared, ${r0.filter((r) => r.broken).length} flagged unbuildable`);
+
+    /* A price you type has to move the money on that row and nothing else. */
+    const money = async (i) => (await rows())[i].nums[1];
+    const idx = r0.findIndex((r) => !r.broken);
+    const before$ = await money(idx);
+    const inp = page.locator('#panel-compare .cmp-row').nth(idx).locator('input').first();
+    await inp.fill('99.00');
+    await inp.press('Enter');
+    await page.waitForTimeout(700);
+    if (await money(idx) === before$) fail('typing a price changed nothing');
+    else console.log(`  ok  typing a price moves the money (${before$} → ${await money(idx)})`);
+    const reset = page.locator('#panel-compare .cmp-row').nth(idx).locator('button:has-text("Reset")');
+    if (!(await reset.count())) fail('a typed price offers no way back to the shipped one');
+    else {
+      await reset.first().click();
+      await page.waitForTimeout(700);
+      if (await money(idx) !== before$) fail('resetting a price did not restore it');
+      else console.log('  ok  and resets');
+    }
+
+    /* And picking one has to change the building. */
+    const pick = page.locator('#panel-compare .cmp-row:not(.cur) button:has-text("Use this one")').first();
+    const w0 = await page.$eval('#panel-compare .cmp-row.cur .cmp-cell b', (b) => b.textContent);
+    await pick.click();
+    await page.waitForTimeout(900);
+    const w1 = await page.$eval('#panel-compare .cmp-row.cur .cmp-cell b', (b) => b.textContent);
+    if (errors.length > before) fail(`picking an option threw: ${errors[before]}`);
+    if (w0 === w1) fail('picking a different option did not change the building');
+    else console.log(`  ok  picking one rebuilds it (${w0} → ${w1})`);
+  }
+}
+
 /* 6. The save system, end to end: a layout goes out as a file and comes back
    in as one. Downloading was always there and loading a file never was, so
    the file the tool wrote was a file nothing could read. */

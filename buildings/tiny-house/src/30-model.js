@@ -22,13 +22,14 @@ function wallBox(wall, spec, u, y, t, du, dy, dt) {
 
 /* What a square foot of each sheet good actually weighs. The model draws
    them at a thickness you can see; these are the thickness they are. */
+/* Roofing, siding and the interior face used to be three more tables here.
+   They live in the assembly catalog now, with what they cost and how long
+   they take beside what they weigh — two tables for one decision is how the
+   racking check ended up crediting a ¼" lining with OSB's shear. */
 const PSF = {
   subfloor: 2.3, osb: 1.4, floorFoam: 0.7,
-  roofing: { standing: 1.4, metal: 0.9, comp: 2.6 },
-  siding: { metal: 0.9, lap: 2.0 },
   glazing: 5.5, door: 4.5, trim: 0.8,
   wallBatt: 0.35, lidBatt: 0.9,
-  interior: { ply: 0.75, gyp: 2.2, osb: 1.4 },
 };
 
 /* The rectangles a sheet layer is left with once the openings are cut out
@@ -166,7 +167,7 @@ function buildModel(spec, openings) {
     { area: (L - rail.w * 2) * (W - rail.w * 2) / 144, psf: PSF.floorFoam });
   add('floor', 'deck', 'osb', '¾" subfloor',
     boxPart([L / 2, spec.subfloor / 2, W / 2], [L, spec.subfloor, W]),
-    { area: L * W / 144, psf: PSF.subfloor });
+    { area: L * W / 144, psf: PSF.subfloor, asm: 'sheathing.ply34' });
 
   /* ---------- 3. Wall framing ---------- */
   const y0 = spec.subfloor;                           // walls sit on the subfloor
@@ -303,7 +304,8 @@ function buildModel(spec, openings) {
       { size: spec.loftJoist, len: lf.x1 - lf.x0, note: lf.name });
     add('loft', 'deck', 'osb', '¾" loft deck',
       boxPart([(lf.x0 + lf.x1) / 2, y - 0.375, W / 2], [lf.x1 - lf.x0, 0.75, W - T * 2]),
-      { area: (lf.x1 - lf.x0) * (W - T * 2) / 144, psf: PSF.subfloor, note: lf.name });
+      { area: (lf.x1 - lf.x0) * (W - T * 2) / 144, psf: PSF.subfloor, asm: 'sheathing.ply34',
+        note: lf.name });
   }
 
   /* ---------- 5. Roof framing ---------- */
@@ -350,9 +352,10 @@ function buildModel(spec, openings) {
   } else {
     for (const wall of ['N', 'S', 'W', 'E']) {
       for (const r of skinRects(wall, spec, openings, y0, H)) {
-        add('dryin', 'sheathing', 'osb', '7/16" OSB sheathing',
+        const sh = assembly('sheathing', wallSheet(spec));
+        add('dryin', 'sheathing', sh.mat, sh.label,
           wallBox(wall, spec, r.u0, r.y0, T, r.u1 - r.u0, r.y1 - r.y0, 0.4375),
-          { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: PSF.osb });
+          { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: sh.psf, asm: 'sheathing.' + sh.id });
       }
     }
   }
@@ -364,14 +367,15 @@ function buildModel(spec, openings) {
         boxPart([L / 2, roofY(zMid, spec) + rdEl.d + 0.22,
           side < 0 ? (halfW - spec.eaveOverhang) / 2 : W - (halfW - spec.eaveOverhang) / 2],
         [L + spec.rakeOverhang * 2, 0.4375, slope], side * angle),
-        { area: (L + spec.rakeOverhang * 2) * slope / 144, psf: PSF.osb });
+        { area: (L + spec.rakeOverhang * 2) * slope / 144, psf: PSF.osb,
+          asm: 'sheathing.osb716' });
     }
   }
 
   /* ---------- 7. Skin, windows and doors ---------- */
-  const roofKind = spec.roofing === 'standing' ? 'Standing seam roof panel'
-    : spec.roofing === 'metal' ? 'Metal roof panel' : 'Architectural shingle';
-  const roofMat = spec.roofing === 'comp' ? 'shingle' : 'metal';
+  const rf = assembly('roofing', spec.roofing) || assembly('roofing', 'standing');
+  const roofKind = rf.label;
+  const roofMat = rf.mat;
   for (const side of [-1, 1]) {
     const zMid = side < 0 ? (W / 2) / 2 : W - (W / 2) / 2;
     const slope = Math.hypot(halfW + spec.eaveOverhang, rise);
@@ -379,22 +383,24 @@ function buildModel(spec, openings) {
       boxPart([L / 2, roofY(zMid, spec) + rdEl.d + 0.75,
         side < 0 ? (halfW - spec.eaveOverhang) / 2 : W - (halfW - spec.eaveOverhang) / 2],
       [L + spec.rakeOverhang * 2, 0.5, slope], side * angle),
-      { area: (L + spec.rakeOverhang * 2) * slope / 144, psf: PSF.roofing[spec.roofing] });
+      { area: (L + spec.rakeOverhang * 2) * slope / 144, psf: rf.psf,
+        asm: 'roofing.' + rf.id });
   }
-  const sideKind = spec.siding === 'metal' ? 'Metal wall panel' : 'Lap siding';
+  const sd = assembly('siding', spec.siding) || assembly('siding', 'metal');
+  const sideKind = sd.label;
   const skinT = spec.wallSkin === 'girts' ? LUMBER[spec.girtSize].d : 0.4375;
   for (const wall of ['N', 'S', 'W', 'E']) {
     for (const r of skinRects(wall, spec, openings, y0, H)) {
-      add('skin', 'siding', 'metal', sideKind,
+      add('skin', 'siding', sd.mat, sideKind,
         wallBox(wall, spec, r.u0, r.y0, T + skinT, r.u1 - r.u0, r.y1 - r.y0, 0.5),
-        { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: PSF.siding[spec.siding] });
+        { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: sd.psf, asm: 'siding.' + sd.id });
     }
     /* The gable triangle above the plate, which has no openings in it. */
     if (WALLS[wall].gable) {
       const gx = WALLS[wall].x === 0 ? -T - skinT - 0.5 : L + T + skinT;
-      add('skin', 'siding', 'metal', sideKind,
+      add('skin', 'siding', sd.mat, sideKind,
         prismPart([[0, H], [W, H], [W / 2, H + spec.ridgeRise]], gx, gx + 0.5),
-        { area: W * spec.ridgeRise / 2 / 144, psf: PSF.siding[spec.siding] });
+        { area: W * spec.ridgeRise / 2 / 144, psf: sd.psf, asm: 'siding.' + sd.id });
     }
   }
 
@@ -432,16 +438,15 @@ function buildModel(spec, openings) {
         { area: L * halfW / 144, psf: PSF.lidBatt });
     }
   }
-  const finishName = spec.interiorFinish === 'gyp' ? '½" wall board'
-    : spec.interiorFinish === 'osb' ? '7/16" OSB, braced and finished'
-    : '¼" plywood lining';
-  const finishMat = spec.interiorFinish === 'gyp' ? 'drywall'
-    : spec.interiorFinish === 'osb' ? 'osb' : 'plywood';
-  for (const wall of ['N', 'S', 'W', 'E']) {
-    for (const r of skinRects(wall, spec, openings, y0, H)) {
-      add('finish', 'drywall', finishMat, finishName,
-        wallBox(wall, spec, r.u0, r.y0, -0.5, r.u1 - r.u0, r.y1 - r.y0, 0.5),
-        { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: PSF.interior[spec.interiorFinish] });
+  const inF = assembly('interior', spec.interiorFinish) || assembly('interior', 'osb');
+  if (inF.mat) {
+    for (const wall of ['N', 'S', 'W', 'E']) {
+      for (const r of skinRects(wall, spec, openings, y0, H)) {
+        add('finish', 'drywall', inF.mat, inF.label,
+          wallBox(wall, spec, r.u0, r.y0, -0.5, r.u1 - r.u0, r.y1 - r.y0, 0.5),
+          { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: inF.psf,
+            asm: 'interior.' + inF.id });
+      }
     }
   }
 

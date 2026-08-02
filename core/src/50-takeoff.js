@@ -61,7 +61,65 @@ function weighedBy(p) {
   return DENSITY[p.mat] ? 'volume × density' : 'not weighed';
 }
 
-function takeoff(model, spec) {
+/* ---- what it costs and how long it takes ----
+   Summed off the same parts list the weight comes from, so the dollars and
+   the pounds are describing the same building. A part that came from an
+   assembly choice carries its catalog key in `asm`; lumber is priced off
+   what you actually buy rather than what ends up in the wall, because the
+   offcut is bought too.
+
+   This is a comparison, not an estimate. NOT_COSTED lists what is missing
+   and the panel repeats it — the number is for holding two walls up against
+   each other, not for telling anybody what a house costs. */
+function buildCost(model, buyRows, spec, prices) {
+  const rows = new Map();
+  const put = (key, label, add) => {
+    const e = rows.get(key) || { key, label, usd: 0, hr: 0, sf: 0, lf: 0, quoted: false };
+    e.usd += add.usd || 0; e.hr += add.hr || 0;
+    e.sf += add.sf || 0; e.lf += add.lf || 0;
+    e.quoted = e.quoted || !!add.quoted;
+    rows.set(key, e);
+  };
+
+  /* Surfaces, off the catalog. */
+  for (const p of model.parts) {
+    if (!p.asm || !p.area) continue;
+    const [group, id] = p.asm.split('.');
+    const a = assembly(group, id, prices);
+    if (!a) continue;
+    put(p.asm, a.label, { usd: p.area * a.usd, hr: p.area / 100 * (a.hr || 0),
+      sf: p.area, quoted: a.quoted });
+  }
+
+  /* Lumber, off the purchase list. Labour goes on the member length actually
+     framed, which is the thing that takes the time. */
+  for (const b of buyRows) {
+    const usdFt = LUMBER_USD[b.size] || 0;
+    if (usdFt) put('lumber.' + b.size, `${b.size} lumber`, { usd: b.lf * usdFt, lf: b.lf });
+  }
+  const sm = assembly('studMaterial', (spec && spec.studMaterial) || 'wood', prices)
+    || assembly('studMaterial', 'wood', prices);
+  let framedFt = 0;
+  for (const p of model.parts) if (p.len && p.size && LUMBER[p.size]) framedFt += p.len / 12;
+  if (framedFt) put('labour.framing', 'Framing labour', { hr: framedFt / 100 * sm.hr, lf: framedFt });
+
+  /* Concrete, where a building has any. */
+  let cuIn = 0;
+  for (const p of model.parts) if (p.mat === 'concrete') cuIn += partVolume(p.geom);
+  if (cuIn) put('concrete', 'Concrete', { usd: cuIn / 46656 * CONCRETE_USD });
+
+  const list = [...rows.values()].sort((a, b) => (b.usd - a.usd) || (b.hr - a.hr));
+  return {
+    rows: list,
+    usd: list.reduce((a, r) => a + r.usd, 0),
+    hr: list.reduce((a, r) => a + r.hr, 0),
+    quoted: list.some((r) => r.quoted),
+    priced: PRICED,
+    notCosted: NOT_COSTED,
+  };
+}
+
+function takeoff(model, spec, prices) {
   const lumber = new Map();
   const sheets = new Map();
   let concreteCuIn = 0;
@@ -167,6 +225,7 @@ function takeoff(model, spec) {
 
   return {
     cuts, buyRows, sheetRows, gussets, weight, steelRows,
+    cost: buildCost(model, buyRows, spec, prices),
     concrete: { cuYd, order: Math.ceil(cuYd * 1.1 * 2) / 2 },
     roofSf, sideSf, ceilSf, wallSf, dwSf, battSf, blownSf,
     roofKind: biggest(roofing), sideKind: biggest(siding),

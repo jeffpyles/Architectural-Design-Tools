@@ -426,6 +426,13 @@ function auditBuilding(spec, openings, extra) {
   const add = (level, title, body) => out.push({ level, title, body });
   const tr = trussGeometry(spec);
 
+  /* Anything in the catalog that will not go together. Core owns these
+     because they are facts about the material, not about this building. */
+  for (const f of assemblyReview(spec, {
+    pitch: spec.pitch, girtSpacing: spec.girtSpacing,
+    sheathed: spec.wallSkin === 'sheathing',
+  })) out.push(f);
+
   // Openings vs. framing reality
   for (const o of openings) {
     const st = stockFor(o);

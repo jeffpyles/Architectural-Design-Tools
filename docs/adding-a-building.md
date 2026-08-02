@@ -238,6 +238,72 @@ resized it. And anything derived from *not knowing* a size — the tiny house fl
 windows `measured: false` — has to notice when somebody types one in: typing both
 dimensions is what measuring a window looks like from in here.
 
+## The assembly catalog
+
+`core/src/25-assembly.js` holds one row per option — every siding, roofing,
+interior face, sheathing panel and stud material a building can pick — and every
+number about that option lives on that row:
+
+| | |
+|---|---|
+| `psf` | lb per square foot |
+| `usd` | material dollars per square foot (material **only**) |
+| `hr` | labour hours per 100 sf, or per 100 lineal feet for framing, one person alone |
+| `R` | what the layer itself adds |
+| `shear` | plf, blocked, 8d at 6" o.c. edges. `0` means it is not a shear panel |
+| `maxStud` | the widest framing spacing that shear is rated at |
+| `spans` | widest bare framing the skin will hang on; `null` = needs solid sheathing |
+| `nailable` | minimum substrate thickness it must fasten into |
+| `minPitch` | rise per 12 a covering is rated down to |
+
+**Everything reads the row, nothing keeps its own copy.** That is the whole
+point. The tiny house used to hold a `PSF.siding` table beside the catalog's
+weights and a `const OSB_ALLOW = 240` beside its shear values, and the result was
+that picking a ¼" plywood lining — which is not a shear panel at all — left the
+racking check reporting ⁷⁄₁₆" OSB's capacity. Two tables for one decision is how
+that happens. When you add an option, add a row; do not add a lookup beside one.
+
+Model parts tag themselves with `asm: 'siding.alum'`, which is how the takeoff
+prices them off the same parts list it weighs. A part carrying `asm` must also
+carry `area`, and a check asserts its `psf` matches its row.
+
+Three helpers do the reading:
+
+- `assembly(group, id, prices)` — the row with its price resolved, plus `quoted`
+  if that price is somebody's own rather than the shipped one. Everything goes
+  through this so nothing gets a default by accident.
+- `panelShear(group, id, studSpacing)` — `{ plf, why }`. Returns 0 both for a
+  panel that is not rated and for one rated at closer framing than it has got,
+  and `why` says which, because a bare 0 in a review note tells nobody what to
+  change.
+- `assemblyReview(spec, ctx)` — the findings for combinations that will not
+  build. `ctx` is the little core cannot know: `{ pitch, girtSpacing, sheathed }`.
+  Call it from the building's `audit()` and spread the result in.
+
+### Prices
+
+Shipped figures are ballpark for a US owner-builder as of the `PRICED` date, and
+they go stale — OSB alone ran from $9 a sheet to over $50 inside eighteen months
+in 2020–21. `state.prices` holds anything typed over them, keyed `group.option`,
+and `packPrices` puts only the changed ones into the share code, so a layout from
+somebody who never opened the Compare tab is the length it always was.
+
+`NOT_COSTED` lists what the totals leave out, and the panel prints it. These
+numbers are for holding two walls against each other, not for telling anybody
+what a house costs.
+
+### The Compare panel
+
+`core/src/70-compare.js`, offered to any building whose spec has the matching
+key — the shop has no `interiorFinish`, so it is not offered that comparison.
+Every row is a **real rebuild**: swap the one spec key, build the whole model
+again, take it off, report what came back. A few milliseconds a row, and it means
+the weight on Compare is the number the Weight tab will show once you pick it,
+because it was produced the same way. It also gets the constraints for free —
+switching to cedar on a girt wall makes the building's own `audit()` raise a
+critical note, and the row prints it instead of quietly showing a lighter wall
+that cannot be built.
+
 ## Saving a layout
 
 A layout is the spec's diff from the defaults, the openings, and whatever `packExtra`

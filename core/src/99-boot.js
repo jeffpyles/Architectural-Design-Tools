@@ -26,7 +26,7 @@ function boot() {
       style: 'padding:24px;color:var(--ink-2);font-size:13px',
     }));
     model = BUILDING.build(state.spec, state.openings, state.extra);
-    take = takeoff(model, state.spec);
+    take = takeoff(model, state.spec, state.prices);
     findings = BUILDING.audit(state.spec, state.openings, state.extra);
     renderPanels();
     wireChrome();
@@ -41,11 +41,13 @@ function boot() {
   if (shared) {
     state.spec = shared.spec; state.openings = shared.openings;
     state.extra = shared.extra || {};
+    state.prices = shared.prices || {};
     openedFromLink = true;
   } else if (typeof BAKED_DEFAULT === 'string' && BAKED_DEFAULT) {
     try {
       const dl = decodeLayout(BAKED_DEFAULT);
       state.spec = dl.spec; state.openings = dl.openings; state.extra = dl.extra || {};
+      state.prices = dl.prices || {};
     } catch (e) { /* keep BUILDING.defaults() */ }
   }
 

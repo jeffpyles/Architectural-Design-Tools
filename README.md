@@ -13,15 +13,16 @@ model. Everything runs in the browser — no server, no dependencies at runtime.
 | | |
 |---|---|
 | [`buildings/shop-building/`](buildings/shop-building/) | A 24' × 26' stick-framed shop with a 3/12 gable, built from a pair of pencil sketches. 3D model, truss cut list, racking check, slab and footing design, lean-to solver, material takeoff, electrical rough-in with NEC box fill and circuit loading, and ten printable drawing sheets. |
-| [`buildings/tiny-house/`](buildings/tiny-house/) | A 12' × 34' tiny house on a steel trailer frame, framed around a set of salvaged windows. 3D model, window schedule, weight and centre of gravity, tow statics, material takeoff. |
+| [`buildings/tiny-house/`](buildings/tiny-house/) | A 12' × 34' tiny house on a steel trailer frame, framed around a set of salvaged windows. 3D model, window schedule, weight and centre of gravity, tow statics, material takeoff, and a Compare tab for the weight/cost/labour trade across every wall and roof assembly. |
 
-The shell — viewport, camera, stage rail, legend, takeoff, layout library, share codes —
-is shared. A building supplies its own spec, engineering, model and panels through a
+The shell — viewport, camera, stage rail, legend, takeoff, assembly catalog, layout
+library, share codes — is shared. A building supplies its own spec, engineering, model and panels through a
 single `BUILDING` object, and adding one is a new directory under `buildings/` with
 nothing else to register. See **[docs/adding-a-building.md](docs/adding-a-building.md)**.
 
 ```
-core/                shell: units, lumber, geometry, WebGL, takeoff, layouts, chrome
+core/                shell: units, lumber, assemblies, geometry, WebGL, takeoff,
+                     drafting, compare, layouts, chrome
 buildings/<id>/      one building: spec, engineering, model, panels, BUILDING
 layouts/<id>/        saved layouts for that building, one file each
 tools/               build, checks, local server

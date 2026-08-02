@@ -221,6 +221,56 @@ At 12'-0" wide, any move is a permitted, pilot-car, daylight-hours job whatever 
 underneath. Which is a good argument for designing it as a building and solving the move
 if it ever comes up.
 
+## Comparing walls
+
+The **Compare** tab holds every siding, roofing, interior face, sheathing panel and
+stud material against each other on this building — weight, material cost, and hours
+for one person working alone. Every row is a real rebuild with that one thing swapped,
+so the weight is the number the Weight tab will show once you pick it.
+
+What it says about this house, against the as-sketched wall (metal on girts, ⁷⁄₁₆" OSB
+inside, 12,110 lb shell):
+
+| siding | weight | cost | per lb saved |
+|---|---|---|---|
+| Aluminium ribbed panel | −356 lb | +$1,869 | $5.25 |
+| Aluminium shake profile | −356 lb | +$4,095 | $11.50 |
+| Aluminium lap siding | −561 lb | +$712 | $1.27 — **but it needs sheathing** |
+| Cedar shingles | +223 lb | +$3,650 | — |
+| Cedar shakes | +801 lb | +$4,985 | — |
+
+| roofing | weight | cost | per lb saved |
+|---|---|---|---|
+| 26 ga standing seam | −137 lb | **−$458** | free |
+| .032 aluminium standing seam | −412 lb | +$2,061 | $5.00 |
+
+The 26 ga row is the one worth noticing: lighter *and* cheaper than the 24 ga the model
+opened with. It oil-cans more, and some double-lock profiles are 24 ga minimum — at
+1.5/12 you have to seam mechanically, so ask the supplier before specifying it.
+
+Two things the tab will refuse to let you pretend:
+
+- **Cedar cannot be nailed to a girt.** Anything coursed or flat — cedar, the stamped
+  aluminium shake, aluminium lap — needs ⅜" of nailable sheathing behind it, and the
+  row says so in red. Sheathing the wall or furring it at the exposure both buy back
+  most of the weight the thinner skin saved.
+- **The interior face is the whole shear wall.** Metal on girts gives the outside no
+  shear at all, so the inside panel carries the racking on its own. A ¼" lining takes
+  it to **0.00×**; ⅜" plywood is rated at 16" o.c. and the studs are at 24", so that is
+  0.00× too until the studs close up. ¹⁵⁄₃₂" plywood weighs the same as the OSB and
+  raises it from 1.63× to 1.91×.
+
+That last one used to be silently wrong: the racking check had a fixed 240 plf in it
+and never looked at what was selected, so a ¼" lining reported OSB's capacity.
+
+Steel studs are on the tab too. They take about 715 lb off the wall framing for roughly
+2× the material cost — and drop the wall from about R-13 effective to about R-8, because
+steel conducts 400× better than wood and the studs short-circuit the batt. The tab shows
+the weight and the money; the Review tab is where the R-value shows up.
+
+Prices are ballpark as of August 2026, material only, and you can type your own over any
+of them — they travel with the layout.
+
 ## Saving a layout
 
 The Layouts tab names the layout once and saves it four ways: **a file** on this
