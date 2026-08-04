@@ -434,6 +434,10 @@ main[data-inspector="closed"] .collapse { transform: translateX(-100%) rotate(18
 .cmp-d { font-family: var(--f-mono); font-size: 11px; }
 .cmp-d.good { color: var(--ok); }
 .cmp-d.bad { color: var(--keel); }
+.cmp-own {
+  margin-top: 7px; padding-top: 6px; border-top: 1px dotted var(--rule-soft);
+  font-family: var(--f-mono); font-size: 11px; color: var(--ink-2);
+}
 .cmp-facts {
   margin-top: 6px; font-family: var(--f-mono); font-size: 11px; color: var(--ink-2);
 }

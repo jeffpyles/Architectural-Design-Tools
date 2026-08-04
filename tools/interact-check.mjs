@@ -302,6 +302,8 @@ console.log('  ok  every tab renders');
     const rows = () => page.$$eval('#panel-compare .cmp-row', (rs) => rs.map((r) => ({
       name: r.querySelector('.cmp-head b').textContent,
       nums: [...r.querySelectorAll('.cmp-cell b')].map((b) => b.textContent),
+      subs: [...r.querySelectorAll('.cmp-cell > span')].map((b) => b.textContent),
+      own: (r.querySelector('.cmp-own') || {}).textContent || '',
       current: r.classList.contains('cur'),
       broken: r.classList.contains('bad'),
     })));
@@ -315,6 +317,22 @@ console.log('  ok  every tab renders');
       if (r.nums.some((n) => /NaN|undefined/.test(n))) fail(`${r.name} shows "${r.nums.join(' ')}"`);
       if (!/lb/.test(r.nums[0]) || !/\$/.test(r.nums[1]) || !/hr/.test(r.nums[2])) {
         fail(`${r.name} numbers read "${r.nums.join(' / ')}"`);
+      }
+      /* The totals are the whole building, and have to say so — read as the
+         price of the siding otherwise, which is exactly what happened. */
+      if (!r.subs.slice(0, 3).some((s) => /whole/i.test(s))) {
+        fail(`${r.name} labels its totals "${r.subs.slice(0, 3).join(' / ')}" — none says whole`);
+      }
+      /* And each row has to break out how much of that total it is. */
+      if (!/\$/.test(r.own) || !/sf|lineal/.test(r.own)) {
+        fail(`${r.name} does not say what share of the total it is: "${r.own}"`);
+      }
+      /* That line is arithmetic somebody will check. */
+      const m = r.own.match(/([\d,.]+) sf × \$([\d.]+) = \$([\d,]+)/);
+      if (m) {
+        const want = parseFloat(m[1].replace(/,/g, '')) * parseFloat(m[2]);
+        const got = parseFloat(m[3].replace(/,/g, ''));
+        if (Math.abs(want - got) > 2) fail(`${r.name}: "${r.own}" does not multiply out`);
       }
     }
     console.log(`  ok  ${r0.length} options compared, ${r0.filter((r) => r.broken).length} flagged unbuildable`);

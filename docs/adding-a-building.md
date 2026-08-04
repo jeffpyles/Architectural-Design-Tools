@@ -297,7 +297,13 @@ what a house costs.
 `core/src/70-compare.js`, offered to any building whose spec has the matching
 key — the shop has no `interiorFinish`, so it is not offered that comparison.
 Every row is a **real rebuild**: swap the one spec key, build the whole model
-again, take it off, report what came back. A few milliseconds a row, and it means
+again, take it off, report what came back.
+
+The three headline numbers are the **whole building**, which is what makes the ±
+figures right — changing a skin moves the lumber and the hours with it. That also
+makes them easy to misread as the price of the one layer, so each row prints its
+own share underneath (`890 sf × $2.40 = $2,137 of it`) and a check asserts that
+line multiplies out. A few milliseconds a row, and it means
 the weight on Compare is the number the Weight tab will show once you pick it,
 because it was produced the same way. It also gets the constraints for free —
 switching to cedar on a girt wall makes the building's own `audit()` raise a

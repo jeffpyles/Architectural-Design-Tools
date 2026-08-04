@@ -348,6 +348,22 @@ for (const n of notes) {
       }
     }
 
+    /* Every priced surface is its own area at its own price. This is the line
+       the Compare panel prints under the totals — "890 sf × $2.40 = $2,137 of
+       it" — and it exists because the three big numbers are the whole
+       building, which read as the price of the siding until it was said. */
+    for (const r of c.rows) {
+      if (!r.sf) continue;
+      const [g, id] = r.key.split('.');
+      const a = A.assembly(g, id);
+      if (!a) continue;
+      if (Math.abs(r.usd - r.sf * a.usd) > 0.5) {
+        fail(`${r.key} is ${r.sf.toFixed(0)} sf at $${a.usd.toFixed(2)} `
+          + `but its row costs $${r.usd.toFixed(0)}`);
+      }
+      if (r.usd > c.usd) fail(`${r.key} costs more on its own than the whole building does`);
+    }
+
     /* Doubling one price raises the total by exactly that row. */
     const priced = c.rows.filter((r) => r.sf > 0 && r.usd > 0)[0];
     if (priced) {

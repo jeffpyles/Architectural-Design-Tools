@@ -43,11 +43,16 @@ function compareOptions(groupKey) {
 
   const rows = Object.keys(ASSEMBLY[groupKey]).map((id) => {
     const spec = { ...state.spec, [g.key]: id };
-    let lb = 0, usd = 0, hr = 0, breaks = [];
+    let lb = 0, usd = 0, hr = 0, own = null, breaks = [];
     try {
       const m = BUILDING.build(spec, state.openings, state.extra);
       const t = takeoff(m, spec, state.prices);
       lb = t.weight.total; usd = t.cost.usd; hr = t.cost.hr;
+      /* This option's own share of that total, so the big number can be the
+         whole building — which is what makes the deltas honest, since a
+         change here moves lumber and labour too — without anybody having to
+         guess which of the two it is. */
+      own = t.cost.rows.find((x) => x.key === `${groupKey}.${id}`) || null;
       breaks = BUILDING.audit(spec, state.openings, state.extra)
         .filter((f) => f.level === 'crit' && !critNow.has(f.title))
         .map((f) => f.title);
@@ -55,7 +60,7 @@ function compareOptions(groupKey) {
       breaks = ['This option throws: ' + e.message];
     }
     const a = assembly(groupKey, id, state.prices);
-    return { id, a, lb, usd, hr, breaks, current: state.spec[g.key] === id };
+    return { id, a, lb, usd, hr, own, breaks, current: state.spec[g.key] === id };
   });
 
   const cur = rows.find((r) => r.current) || rows[0];
@@ -82,8 +87,11 @@ function renderCompare() {
   if (!compareGroup || !groups.some((x) => x.group === compareGroup)) compareGroup = groups[0].group;
 
   p.append(note('Every row here is a real rebuild of the whole building with that one thing '
-    + 'swapped, so the weight is the number the Weight tab will show once you pick it. '
-    + 'Costs are material only — see the bottom of this panel for what is not in them.'));
+    + 'swapped, so the weight is the number the Weight tab will show once you pick it.'));
+  p.append(note('The three big numbers are the WHOLE BUILDING, not the layer — that is what '
+    + 'makes the ± figures right, because changing a skin moves the lumber and the hours with '
+    + 'it. Each row also says how much of the total that one layer is. Costs are material '
+    + 'only; the bottom of the panel lists what is left out.'));
 
   /* Which decision to look at. */
   const seg = el('div', 'seg');
@@ -133,11 +141,19 @@ function renderCompare() {
         + (unit === '$' ? '' : ' ' + unit));
     };
     nums.append(
-      cell(`${fmtN(r.lb, 0)} lb`, 'building', r.current ? null : dTag(r.dLb, 'lb', 'less')),
-      cell(`$${fmtN(r.usd, 0)}`, 'material', r.current ? null : dTag(r.dUsd, '$', 'less')),
-      cell(`${fmtN(r.hr, 0)} hr`, 'to build', r.current ? null : dTag(r.dHr, 'hr', 'less')),
+      cell(`${fmtN(r.lb, 0)} lb`, 'whole building', r.current ? null : dTag(r.dLb, 'lb', 'less')),
+      cell(`$${fmtN(r.usd, 0)}`, 'all material', r.current ? null : dTag(r.dUsd, '$', 'less')),
+      cell(`${fmtN(r.hr, 0)} hr`, 'whole build', r.current ? null : dTag(r.dHr, 'hr', 'less')),
     );
     row.append(nums);
+
+    /* And how much of those totals this one layer actually is. Without this
+       line the $8,000 above reads as the price of the siding. */
+    if (r.own && r.own.sf) {
+      row.append(el('div', 'cmp-own',
+        `this layer: ${fmtN(r.own.sf, 0)} sf × $${r.a.usd.toFixed(2)} = `
+        + `$${fmtN(r.own.usd, 0)} and ${fmtN(r.own.hr, 1)} hr of it`));
+    }
 
     /* The line that decides it, when there is one. */
     const facts = [];
