@@ -112,6 +112,13 @@ Two different things look the same here and are not, and the tool keeps them apa
   tags it *resized*. If the unit really is that size, correcting the schedule entry in
   `10-spec.js` is the honest fix.
 
+The inventory at the bottom of the Openings tab has two halves, because an opening is
+either fitted with something that exists or it is not. **The windows** is the salvage
+list — each unit *in* a wall or *on the shelf*, at the size the opening says once it has
+been measured. **To find or buy** is everything with nothing behind it: custom openings,
+and any opening resized off its unit. Clicking a row selects that opening and takes you
+to its card.
+
 Every card also has a **Call it** box. The name is about the hole — "kitchen, over the
 sink" — and the unit behind it keeps its catalogue name underneath, in the inventory and
 in the review notes. Names travel in the share code and the layout file.

@@ -143,6 +143,59 @@ const offsetInput = () => page.locator('#panel-openings .op').first()
   }
 }
 
+/* 2c. Every opening is accounted for somewhere in the inventory at the bottom
+   of the panel: a salvaged unit shows in/on the shelf, and anything with no
+   unit behind it — a custom opening, or one resized off its unit — shows as
+   something to find or buy. A custom opening used to appear in neither. */
+{
+  const before = errors.length;
+  const inv = () => page.evaluate(() => ({
+    stock: [...document.querySelectorAll('#stockList .stock-row')].length,
+    buy: [...document.querySelectorAll('#buyList .stock-row')].map((r) => ({
+      name: r.querySelector('b').textContent,
+      tag: (r.querySelector('.tag') || {}).textContent,
+      text: r.textContent,
+    })),
+    headShown: (() => {
+      const h = document.getElementById('buyHead');
+      return !!h && getComputedStyle(h).display !== 'none';
+    })(),
+  }));
+  const i0 = await inv();
+  if (errors.length > before) fail(`the inventory threw: ${errors[before]}`);
+  if (!i0.stock) fail('the stock inventory lists nothing');
+  /* 2b added a custom opening, so there has to be at least that one. */
+  if (!i0.buy.length) fail('a custom opening does not appear in the inventory at all');
+  else if (!i0.headShown) fail('there are rows to find or buy and the heading is hidden');
+  else {
+    for (const r of i0.buy) {
+      if (!r.name || /undefined|NaN/.test(r.text)) fail(`a to-buy row reads "${r.text}"`);
+      if (!/to buy|resized/i.test(r.tag || '')) fail(`a to-buy row is tagged "${r.tag}"`);
+    }
+    console.log(`  ok  ${i0.stock} units on the list, ${i0.buy.length} to find or buy`);
+  }
+  /* Clicking a row selects the opening it stands for, which is also how you
+     get from "something to buy" to the card that sizes it. Then take that one
+     out and it has to leave the list. */
+  if (i0.buy.length) {
+    await page.click('#buyList .stock-row');
+    await page.waitForTimeout(600);
+    const sel = await page.$('#panel-openings .op.sel');
+    if (!sel) fail('clicking a to-buy row selected no opening');
+    else {
+      const rm = await sel.$('button.danger');
+      await rm.click();
+      await page.waitForTimeout(600);
+      const i1 = await inv();
+      if (i1.buy.length !== i0.buy.length - 1) {
+        fail(`removing it went ${i0.buy.length} → ${i1.buy.length} rows`);
+      } else if (!i1.buy.length && i1.headShown) {
+        fail('the to-find-or-buy heading is showing with nothing under it');
+      } else console.log('  ok  a row selects its opening, and leaves when the opening does');
+    }
+  }
+}
+
 /* 3. Dragging in the model moves it. Hunt for a point that picks something
    — the readout opening is the signal — then drag from there and check the
    opening actually travelled. */

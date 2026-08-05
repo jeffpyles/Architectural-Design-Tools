@@ -14,12 +14,15 @@ function openingsScaffold() {
   if (sec.firstChild) return;
   const list = el('div'); list.id = 'opList';
   const stock = el('div', 'stock'); stock.id = 'stockList';
+  const buyHead = el('h3', null, 'To find or buy'); buyHead.id = 'buyHead';
+  const buy = el('div', 'stock'); buy.id = 'buyList';
   const add = el('div', 'btn-row'); add.id = 'addRow';
   sec.append(
     el('p', 'note', 'Drag an opening across its wall in the model, or type an offset. '
       + 'Offsets are measured to the near edge of the rough opening, from the corner named on each card.'),
     list,
     el('h3', null, 'Windows on hand'), stock,
+    buyHead, buy,
     el('h3', null, 'Add an opening'), add,
   );
 }
@@ -105,6 +108,31 @@ function renderOpenings() {
       el('span', 'tag ' + (rem < 0 ? 'over' : rem === 0 ? 'used' : 'left'),
         rem < 0 ? `${-rem} short` : rem === 0 ? 'all used' : `${rem} spare`));
     inv.append(row);
+  }
+
+  /* Openings with nothing on the shelf behind them — a custom one never had
+     a unit, a resized one gave its unit back. Both are things to order. */
+  const buy = $('#buyList');
+  buy.textContent = '';
+  const wanting = state.openings
+    .map((o) => ({ o, st: stockFor(o) }))
+    .filter(({ st }) => st.id === 'custom' || st.resized);
+  $('#buyHead').style.display = wanting.length ? '' : 'none';
+  for (const { o, st } of wanting) {
+    const row = el('div', 'stock-row' + (state.selected === o.id ? ' sel' : ''));
+    row.addEventListener('click', () => { state.selected = o.id; showReadout(o); renderPanels(); });
+    const name = el('div');
+    name.append(el('b', null, st.label));
+    const kind = o.kind === 'overhead' ? 'overhead door'
+      : o.kind === 'man' ? 'man door' : 'window';
+    const sub = el('div', null, `${fmtIn(st.w)} × ${fmtIn(st.h)} rough — ${kind}`
+      + (st.resized ? `, cut off ${o.stock}` : ', not on the sketch'));
+    sub.style.cssText = 'font-size:11px;color:var(--ink-3);font-family:var(--f-body)';
+    name.append(sub);
+    row.append(name,
+      el('span', null, WALLS[o.wall].label),
+      el('span', 'tag left', st.resized ? 'resized' : 'to buy'));
+    buy.append(row);
   }
 
   const add = $('#addRow');

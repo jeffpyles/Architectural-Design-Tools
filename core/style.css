@@ -385,6 +385,10 @@ main[data-inspector="closed"] .collapse { transform: translateX(-100%) rotate(18
   border: 1px solid var(--rule-soft); border-radius: 2px; background: var(--paper);
 }
 .stock-row b { font-family: var(--f-body); font-size: 12.5px; }
+/* A row that stands for one opening rather than one unit is clickable, and
+   highlights with the card it selects. */
+.stock-row.sel { border-color: var(--chalk); background: var(--surface-2); }
+.stock-row.sel, #buyList .stock-row { cursor: pointer; }
 .tag {
   font-family: var(--f-display); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
   padding: 1px 6px; border-radius: 2px; white-space: nowrap;

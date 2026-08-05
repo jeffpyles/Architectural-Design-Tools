@@ -150,9 +150,14 @@ function renderCompare() {
     /* And how much of those totals this one layer actually is. Without this
        line the $8,000 above reads as the price of the siding. */
     if (r.own && r.own.sf) {
+      /* Multiply out what is shown, not what is stored. Printing a rounded
+         area beside dollars derived from the unrounded one gives a line that
+         visibly does not add up, and a line like this exists precisely to be
+         checked on the back of an envelope. */
+      const sf = Math.round(r.own.sf);
       row.append(el('div', 'cmp-own',
-        `this layer: ${fmtN(r.own.sf, 0)} sf × $${r.a.usd.toFixed(2)} = `
-        + `$${fmtN(r.own.usd, 0)} and ${fmtN(r.own.hr, 1)} hr of it`));
+        `this layer: ${fmtN(sf, 0)} sf × $${r.a.usd.toFixed(2)} = `
+        + `$${fmtN(Math.round(sf * r.a.usd), 0)} and ${fmtN(r.own.hr, 1)} hr of it`));
     }
 
     /* The line that decides it, when there is one. */

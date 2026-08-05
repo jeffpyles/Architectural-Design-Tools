@@ -23,12 +23,15 @@ function openingsScaffold() {
   if (sec.firstChild) return;
   const list = el('div'); list.id = 'opList';
   const stock = el('div', 'stock'); stock.id = 'stockList';
+  const buyHead = el('h3', null, 'To find or buy'); buyHead.id = 'buyHead';
+  const buy = el('div', 'stock'); buy.id = 'buyList';
   const addRow = el('div', 'btn-row'); addRow.id = 'addRow';
   sec.append(
     el('p', 'note', 'Drag an opening along its wall in the model, or type an offset. Offsets run to the '
       + 'near edge of the rough opening, from the corner named on each card.'),
     list,
     el('h3', null, 'The windows'), stock,
+    buyHead, buy,
     el('h3', null, 'Put one in a wall'), addRow,
   );
 }
@@ -112,11 +115,18 @@ function renderOpenings() {
   inv.textContent = '';
   for (const s of WINDOW_STOCK) {
     const placed = stockPlaced(s, state.openings);
+    /* Once the unit is in a wall, the size to show is the one the opening
+       says — the catalogue entry is still the spreadsheet's guess, and
+       reporting that after somebody has measured it is how this list ends up
+       contradicting the card two inches above it. */
+    const st = placed.length ? stockFor(placed[0]) : null;
     const row = el('div', 'stock-row');
     const name = el('div');
     name.append(el('b', null, s.label));
-    const sub = el('div', null, `${fmtIn(s.w)} × ${fmtIn(s.h)}`
-      + (s.measured === false ? ' — scaled off the sketch, not measured' : '')
+    const guessed = st ? st.measured === false : s.measured === false;
+    const sub = el('div', null, `${fmtIn(st ? st.w : s.w)} × ${fmtIn(st ? st.h : s.h)}`
+      + (guessed ? ' — scaled off the sketch, not measured'
+        : st && st.corrected ? ' — measured' : '')
       + (s.opens ? ' · opens' : '') + (s.frosted ? ' · frosted' : ''));
     sub.style.cssText = 'font-size:11px;color:var(--ink-3);font-family:var(--f-body)';
     name.append(sub);
@@ -125,6 +135,32 @@ function renderOpenings() {
       el('span', 'tag ' + (placed.length > 1 ? 'over' : placed.length ? 'used' : 'left'),
         placed.length > 1 ? `${placed.length} placed` : placed.length ? 'in' : 'on the shelf'));
     inv.append(row);
+  }
+
+  /* The other half of the inventory: openings with nothing on the shelf
+     behind them. A custom opening never had a unit, and a resized one gave
+     its unit back — either way something has to be found or bought, and
+     until this list existed neither showed up anywhere. */
+  const buy = $('#buyList');
+  buy.textContent = '';
+  const wanting = state.openings
+    .map((o) => ({ o, st: stockFor(o) }))
+    .filter(({ st }) => st.id === 'custom' || st.resized);
+  $('#buyHead').style.display = wanting.length ? '' : 'none';
+  for (const { o, st } of wanting) {
+    const row = el('div', 'stock-row' + (state.selected === o.id ? ' sel' : ''));
+    row.addEventListener('click', () => { state.selected = o.id; showReadout(o); renderPanels(); });
+    const name = el('div');
+    name.append(el('b', null, st.label));
+    const sub = el('div', null, `${fmtIn(st.w)} × ${fmtIn(st.h)}`
+      + (st.resized ? ` — the hole was cut off ${st.stockLabel}, so that unit is back on the shelf`
+        : o.kind === 'door' ? ' — a door, not on the list' : ' — not on the list'));
+    sub.style.cssText = 'font-size:11px;color:var(--ink-3);font-family:var(--f-body)';
+    name.append(sub);
+    row.append(name,
+      el('span', null, WALLS[o.wall].label),
+      el('span', 'tag left', st.resized ? 'resized' : 'to buy'));
+    buy.append(row);
   }
 
   const add = $('#addRow');
