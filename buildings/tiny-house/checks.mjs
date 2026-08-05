@@ -131,52 +131,107 @@ export function run({ A, spec, openings, model, take, fail, log, permute }) {
   log(`  ok  ${A.WINDOW_STOCK.length - shelf.length} windows placed, ${shelf.length} on the shelf`
     + (shelf.length ? ` (${shelf.map((s) => '#' + s.n).join(', ')})` : ''));
 
-  /* Typing a size on an opening. The salvaged schedule is a list of things
-     that exist, so an opening cut to a different size is no longer that
-     window — and a size somebody typed is a size somebody measured. */
+  /* Typing a size on an opening. There are two different things that look
+     the same and are not, and getting them confused put three measured
+     windows back on the shelf:
+
+       MEASURING  — the unit had no size in the spreadsheet, so the model was
+                    guessing. Somebody went out with a tape. It is still that
+                    window, still in that wall, and no longer a guess.
+       RESIZING   — the unit had a size somebody knew, and the hole is being
+                    cut to a different one. That is a hole for something else,
+                    so the unit goes back on the shelf. */
   {
     const src = openings.find((o) => A.stockFor(o).measured === false);
-    if (!src) fail('no unmeasured window to resize — this check has nothing to bite on');
+    if (!src) fail('no unmeasured window to correct — this check has nothing to bite on');
+    else {
+      const base = A.stockFor(src);
+      const tape = { ...src, w: base.w - 1.25, h: base.h + 0.5 };
+      const st = A.stockFor(tape);
+      if (Math.abs(st.w - (base.w - 1.25)) > 1e-9 || Math.abs(st.h - (base.h + 0.5)) > 1e-9) {
+        fail('a typed size did not reach stockFor');
+      }
+      if (!st.corrected) fail('measuring a guessed window does not report corrected');
+      if (st.resized) fail('measuring a guessed window reported it as RESIZED — it is still that window');
+      if (st.measured !== true) fail('typing both dimensions did not count as measuring the window');
+      if (st.stockLabel !== base.stockLabel) fail('a measured salvage unit lost its catalogue name');
+      /* The hole follows the unit by exactly the shim allowance, both ways. */
+      const ro = A.roughOf(tape), ro0 = A.roughOf(src);
+      if (Math.abs((ro.w - ro0.w) + 1.25) > 1e-9 || Math.abs((ro.h - ro0.h) - 0.5) > 1e-9) {
+        fail('the rough opening did not follow the unit size');
+      }
+      /* Only the width was typed, so the height is still a guess — and a
+         half-measured window is still not a resized one. */
+      const half = A.stockFor({ ...src, w: base.w - 1.25 });
+      if (half.measured !== false) fail('typing only the width should leave the window unmeasured');
+      if (half.resized) fail('half-measuring a guessed window reported it as resized');
+
+      /* Measuring it must NOT free the unit, and must clear it off the
+         not-measured list. This is the pair that was wrong. */
+      const list = openings.map((o) => (o === src ? tape : o));
+      if (A.stockPlaced({ id: src.stock }, openings).length !== 1) {
+        fail('the unmeasured window is not counted as placed');
+      }
+      if (A.stockPlaced({ id: src.stock }, list).length !== 1) {
+        fail('measuring a window put it back on the shelf — it is still in the wall');
+      }
+      const guessedIn = (ops) => A.auditBuilding(spec, ops).filter((f) => /not measured/.test(f.title))
+        .map((f) => f.title)[0] || '';
+      const before = guessedIn(openings), after = guessedIn(list);
+      if (before === after) fail('measuring a window did not change the not-measured note');
+      log(`  ok  measuring #${base.n} keeps it in the wall and off the guess list `
+        + `— "${before}" → "${after || 'gone'}"`);
+    }
+  }
+
+  /* And the other half: a unit the spreadsheet DID size, cut to a different
+     size, is a hole for something else. */
+  {
+    const src = openings.find((o) => {
+      const st = A.stockFor(o);
+      return st.measured !== false && st.id !== 'custom' && /^W/.test(o.stock || '');
+    });
+    if (!src) fail('no measured window to resize — this check has nothing to bite on');
     else {
       const base = A.stockFor(src);
       const wider = { ...src, w: base.w + 12, h: base.h + 6 };
       const st = A.stockFor(wider);
-      if (Math.abs(st.w - (base.w + 12)) > 1e-9 || Math.abs(st.h - (base.h + 6)) > 1e-9) {
-        fail('a typed size did not reach stockFor');
-      }
-      if (!st.resized) fail('an opening cut 12" wider than its unit does not report resized');
-      if (st.measured !== true) fail('typing both dimensions did not count as measuring the window');
-      if (st.label !== base.label) fail('a resized salvage unit lost its name, which the audit reads');
-      /* The hole follows the unit by exactly the shim allowance, both ways. */
-      const ro = A.roughOf(wider), ro0 = A.roughOf(src);
-      if (Math.abs((ro.w - ro0.w) - 12) > 1e-9 || Math.abs((ro.h - ro0.h) - 6) > 1e-9) {
-        fail('the rough opening did not follow the unit size');
-      }
-      /* Only the width was typed, so the height is still a guess. */
-      if (A.stockFor({ ...src, w: base.w + 12 }).measured !== false) {
-        fail('typing only the width should leave the window unmeasured');
-      }
+      if (!st.resized) fail(`${base.stockLabel} cut 12" wider does not report resized`);
+      if (st.corrected) fail('resizing a known unit was recorded as measuring it');
+      if (st.stockLabel !== base.stockLabel) fail('a resized unit lost its catalogue name');
 
-      /* The wall has to lose exactly the width that the opening gained.
-         Measured with the opening on its own, because on the real wall it
-         has neighbours near enough that the holes merge. */
-      const list = openings.map((o) => (o === src ? wider : o));
+      /* The wall loses exactly the width the opening gained. Measured with
+         the opening on its own, because on the real wall it has neighbours
+         near enough that the holes merge. */
       const solidOf = (ops) => A.solidSegments(src.wall, spec, ops)
         .reduce((a, [x, y]) => a + (y - x), 0);
       const lost = solidOf([src]) - solidOf([wider]);
       if (Math.abs(lost - 12) > 0.01) fail(`widening an opening 12" took ${lost.toFixed(2)}" off the wall`);
 
-      /* It is off the shelf while it is that window and back on it once it
-         is not — and the audit stops naming it as a guess. */
-      if (A.stockPlaced({ id: src.stock }, openings).length !== 1) fail('the unmeasured window is not counted as placed');
-      if (A.stockPlaced({ id: src.stock }, list).length !== 0) fail('a resized opening still claims the unit on the shelf');
-      const guessedIn = (ops) => A.auditBuilding(spec, ops).filter((f) => /not measured/.test(f.title))
-        .map((f) => f.title)[0] || '';
-      const before = guessedIn(openings), after = guessedIn(list);
-      if (before === after) fail('measuring a window did not change the not-measured note');
-      log(`  ok  resizing ${base.label.replace(/ .*/, '')} measures it, frees the unit, `
-        + `and takes ${lost.toFixed(0)}" off the wall — "${before}" → "${after || 'gone'}"`);
+      const list = openings.map((o) => (o === src ? wider : o));
+      if (A.stockPlaced({ id: src.stock }, openings).length !== 1) fail('the window is not counted as placed');
+      if (A.stockPlaced({ id: src.stock }, list).length !== 0) {
+        fail('a resized opening still claims the unit on the shelf');
+      }
+      log(`  ok  resizing ${base.stockLabel} frees the unit and takes ${lost.toFixed(0)}" off the wall`);
     }
+  }
+
+  /* A name somebody typed wins on screen and nowhere else — the inventory and
+     the review notes are about the unit, not what the hole got called. */
+  {
+    const src = openings[0];
+    const base = A.stockFor(src);
+    const named = A.stockFor({ ...src, name: 'Kitchen, over the sink' });
+    if (named.label !== 'Kitchen, over the sink') fail('a typed name did not reach the label');
+    if (named.stockLabel !== base.stockLabel) fail('naming an opening renamed the unit behind it');
+    if (named.w !== base.w || named.h !== base.h) fail('naming an opening changed its size');
+    const list = openings.map((o) => (o === src ? { ...o, name: 'Kitchen' } : o));
+    if (A.stockPlaced({ id: src.stock }, list).length
+        !== A.stockPlaced({ id: src.stock }, openings).length) {
+      fail('naming an opening moved the unit on or off the shelf');
+    }
+    log('  ok  a typed name renames the hole, not the unit');
   }
 
   /* A custom opening: a hole with nothing on the shelf behind it. It has to

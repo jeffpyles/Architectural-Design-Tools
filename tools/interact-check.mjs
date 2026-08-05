@@ -53,12 +53,27 @@ await page.waitForTimeout(1400);
 console.log(`interaction: ${building}`);
 if (errors.length) fail(`page errors at boot: ${errors[0]}`);
 
-/* The wall picker is a row of radios; the offset is the first text box. */
-const OFFSET = '#panel-openings .op .op-fields input[type=text]';
-const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c) => {
-  const i = c.querySelector('.op-fields input[type=text]');
-  return `${c.querySelector('.op-name').textContent}=${i ? i.value : '?'}`;
-}));
+/* Find a field by its label rather than its position. Positional selectors
+   broke the moment a "Call it" box went in ahead of the offset, and the
+   failure looked like dragging had stopped working. */
+const byLabel = (card, re) => {
+  const f = [...card.querySelectorAll('.field')].find((x) => {
+    const l = x.querySelector('label');
+    return l && re.test(l.textContent.trim());
+  });
+  return f ? f.querySelector('input') : null;
+};
+const OFFSET = '#panel-openings .op .field:has(label[for]) input[type=text]';
+const offsets = () => page.$$eval('#panel-openings .op', (cards, src) => {
+  const find = eval(`(${src})`);
+  return cards.map((c) => {
+    const i = find(c, /^from /i);
+    return `${c.querySelector('.op-name').textContent}=${i ? i.value : '?'}`;
+  });
+}, byLabel.toString());
+const offsetInput = () => page.locator('#panel-openings .op').first()
+  .locator('.field').filter({ hasText: /^From /i }).locator('input')
+  .first();
 
 /* 1. Clicking an opening card must fill the readout. This is the call that
    was throwing, and it throws before anything visible changes. */
@@ -83,7 +98,7 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
 {
   const before = errors.length;
   const b0 = await offsets();
-  const f = page.locator(OFFSET).first();
+  const f = offsetInput();
   await f.fill(`8'-0"`);
   await f.press('Enter');
   await page.waitForTimeout(400);
@@ -131,6 +146,7 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
 /* 3. Dragging in the model moves it. Hunt for a point that picks something
    — the readout opening is the signal — then drag from there and check the
    opening actually travelled. */
+let pickPoint = null;
 {
   const before = errors.length;
   const box = await page.locator('#cv').boundingBox();
@@ -144,7 +160,7 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
       await page.mouse.down();
       const hit = await page.evaluate(() => document.getElementById('readout').classList.contains('on'));
       await page.mouse.up();
-      if (hit) { picked = { x, y }; break outer; }
+      if (hit) { picked = { x, y }; pickPoint = picked; break outer; }
     }
   }
   if (!picked) {
@@ -163,6 +179,61 @@ const offsets = () => page.$$eval('#panel-openings .op', (cards) => cards.map((c
     if (errors.length > before) fail(`dragging threw: ${errors[before]}`);
     if (b0.join() === b1.join()) fail('dragging an opening in the model moved nothing');
     else console.log('  ok  dragging an opening in the model moves it');
+  }
+}
+
+/* 3a. Picking something in the model has to put you in front of the card that
+   edits it. Picking a window and then hunting for it in a list of fifteen is
+   the thing this replaces. */
+{
+  const before = errors.length;
+  /* Hunt afresh: the drag above moved the opening off the point it was found
+     at. Scanning selects things as it goes, which now switches tabs by
+     itself, so the tab gets forced back before the click that is being
+     measured. */
+  const box = await page.locator('#cv').boundingBox();
+  let hitAt = null;
+  outer3:
+  for (let fy = 0.30; fy <= 0.72 && !hitAt; fy += 0.06) {
+    for (let fx = 0.22; fx <= 0.80; fx += 0.045) {
+      const x = box.x + box.width * fx, y = box.y + box.height * fy;
+      await page.evaluate(() => document.getElementById('readout').classList.remove('on'));
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      const on = await page.evaluate(() => document.getElementById('readout').classList.contains('on'));
+      await page.mouse.up();
+      if (on) { hitAt = { x, y }; break outer3; }
+    }
+  }
+  if (!hitAt) {
+    fail('found nothing to pick, so the snap-to-card check cannot run');
+  } else {
+    await page.click('.tabs button[data-tab="structure"]');
+    await page.waitForTimeout(350);
+    const away = await page.evaluate(() =>
+      (document.querySelector('.tabs button[aria-selected="true"]') || {}).dataset.tab);
+    if (away !== 'structure') fail(`could not switch away from the openings tab (on ${away})`);
+    await page.mouse.move(hitAt.x, hitAt.y);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForTimeout(900);
+    /* Whatever got picked, the tab that owns its card has to be the one now
+       open — an electrical box belongs to the electrical panel, not this one. */
+    const r = await page.evaluate(() => {
+      const tab = (document.querySelector('.tabs button[aria-selected="true"]') || {}).dataset.tab;
+      const sec = document.getElementById('panel-' + tab);
+      const card = sec && sec.querySelector('.sel');
+      if (!card) return { tab, card: false };
+      const cb = card.getBoundingClientRect(), sb = sec.getBoundingClientRect();
+      return { tab, card: true,
+        inView: cb.bottom > sb.top + 1 && cb.top < sb.bottom - 1,
+        name: (card.querySelector('.op-name') || {}).textContent };
+    });
+    if (errors.length > before) fail(`picking in the model threw: ${errors[before]}`);
+    if (r.tab === 'structure') fail('picking in the model did not leave the structure tab');
+    else if (!r.card) fail(`picking took me to the ${r.tab} tab but selected no card there`);
+    else if (!r.inView) fail(`the card for ${r.name} is selected but scrolled out of sight`);
+    else console.log(`  ok  picking in the model snaps to its card — ${r.tab}: ${r.name}`);
   }
 }
 
@@ -408,7 +479,7 @@ console.log('  ok  every tab renders');
   /* Change the building, then load the file and watch it come back. */
   await page.click('.tabs button[data-tab="openings"]');
   await page.waitForTimeout(300);
-  const off = page.locator(OFFSET).first();
+  const off = offsetInput();
   await off.fill(`2'-6"`);
   await off.press('Enter');
   await page.waitForTimeout(450);

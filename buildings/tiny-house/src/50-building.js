@@ -40,7 +40,7 @@ const CONTROLS = [
   { g: 'Lofts', k: 'eastLoft', label: 'Master loft, in from the east', type: 'len' },
   { g: 'Lofts', k: 'westLoft', label: 'Library loft, in from the west', type: 'len' },
   { g: 'Lofts', k: 'loftJoist', label: 'Loft joists', type: 'sel',
-    opts: [['2x6', '2x6'], ['2x8', '2x8'], ['2x10', '2x10'], ['2x12', '2x12']] },
+    opts: [['2x4', '2x4'], ['2x6', '2x6'], ['2x8', '2x8'], ['2x10', '2x10'], ['2x12', '2x12']] },
 
   { g: 'Skin & finish', k: 'roofing', label: 'Roofing', type: 'sel',
     opts: assemblyOpts('roofing') },

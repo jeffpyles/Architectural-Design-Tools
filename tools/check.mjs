@@ -38,7 +38,7 @@ const WANT = ['buildModel', 'takeoff', 'auditBuilding', 'DEFAULT_SPEC', 'DEFAULT
   'BUILDING', 'encodeLayout', 'decodeLayout', 'layoutSummary', 'fmtFt', 'fmtIn', 'fmtN',
   'layoutFile', 'readLayoutFile', 'layoutFacts',
   'ASSEMBLY', 'assembly', 'assemblyOpts', 'assemblyReview', 'panelShear', 'wallSheet',
-  'priceKey', 'basePrice', 'packPrices', 'unpackPrices', 'PRICED', 'NOT_COSTED',
+  'priceKey', 'basePrice', 'packPrices', 'unpackPrices', 'PRICED', 'NOT_COSTED', 'isSheathed',
   'LUMBER_USD', 'CFS', 'buildCost',
   'stockFor', 'wallExtent', 'WALLS', 'pickMember', 'openingsOn', 'solidSegments', 'partWeight',
   ...(bChecks && bChecks.api ? bChecks.api : [])];
@@ -303,12 +303,20 @@ for (const n of notes) {
 /* 7f. What will not go together has to say so. A tool that lets you compare
    a wall that cannot be built against one that can is worse than no tool. */
 {
-  const ctx = { pitch: 6, girtSpacing: 24, sheathed: false };
-  const crits = (over, c) => A.assemblyReview({ ...spec, ...over }, { ...ctx, ...c })
+  const ctx = { pitch: 6, girtSpacing: 24 };
+  const crits = (over, c) => A.assemblyReview({ ...spec, wallSkin: 'girts', ...over }, { ...ctx, ...c })
     .filter((f) => f.level === 'crit').map((f) => f.title);
   if (!crits({ siding: 'cedarShake' }).length) fail('cedar on a girt wall raised nothing');
-  if (crits({ siding: 'cedarShake' }, { sheathed: true }).length) {
+  if (crits({ siding: 'cedarShake', wallSkin: 'sheathing', sheathingPanel: 'osb716' }).length) {
     fail('cedar on a sheathed wall is refused when it should not be');
+  }
+  /* And a wall sheathed in nothing is a girt wall, whatever the wall system
+     says — two controls can say no sheathing and they have to agree. */
+  if (!crits({ siding: 'cedarShake', wallSkin: 'sheathing', sheathingPanel: 'none' }).length) {
+    fail('cedar on a wall sheathed in "none" was allowed');
+  }
+  if (A.isSheathed({ ...spec, wallSkin: 'girts', sheathingPanel: 'osb716' })) {
+    fail('a girt wall reports as sheathed because a sheet is still named');
   }
   if (!crits({ roofing: 'comp' }, { pitch: 1.5 }).length) fail('shingles at 1.5/12 raised nothing');
   if (crits({ roofing: 'comp' }, { pitch: 6 }).length) fail('shingles at 6/12 were refused');

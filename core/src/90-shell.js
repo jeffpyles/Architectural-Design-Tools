@@ -272,10 +272,12 @@ function initInput() {
       state.selected = item.it.id;
       renderPanels();
       showItemReadout(item.it);
+      revealSelected(item.it.panel);
     } else if (hit) {
       mode = 'opening'; drag = hit;
       state.selected = hit.o.id;
       renderPanels(); showReadout(hit.o);
+      revealSelected('openings');
     } else {
       mode = (e.button === 1 || e.shiftKey || e.button === 2) ? 'pan' : 'orbit';
       cv.classList.add('dragging');
@@ -362,6 +364,21 @@ function moveOpening(o, off) {
   showReadout(o);
   scheduleRebuild();
 }
+/* Clicking something in the model should put you in front of the card that
+   edits it — otherwise you pick a window, and then go hunting for it in a
+   list of fifteen. Switching tabs has to redraw before the card exists to
+   scroll to, so this runs after renderPanels rather than inside it, and the
+   scroll beats the per-panel scroll restore for the same reason. */
+function revealSelected(panelId) {
+  const id = panelId || 'openings';
+  if (!BUILDING.panels.some((pn) => pn.id === id)) return;
+  if (state.tab !== id) { state.tab = id; renderPanels(); }
+  const sec = $(`#panel-${id}`);
+  const card = sec && sec.querySelector('.sel');
+  if (!card) return;
+  if (card.scrollIntoView) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
 /* The floating readout over the viewport. What it says about an opening is
    the building's business — the shop wants its header and its girts, a house
    on a trailer wants the unit against the hole it has to fit. The shell only

@@ -245,9 +245,13 @@ function stockFor(op) {
   const h = op.h != null ? op.h : base.h;
   const resized = base.id !== 'custom'
     && (Math.abs(w - base.w) > 0.01 || Math.abs(h - base.h) > 0.01);
+  const auto = base.id === 'custom' || resized ? `${fmtFt(w)} × ${fmtFt(h)}` : base.label;
   return {
     ...base, w, h, resized,
-    label: base.id === 'custom' || resized ? `${fmtFt(w)} × ${fmtFt(h)}` : base.label,
+    /* The catalogue name, for the inventory and the schedule, and the name on
+       screen, which somebody can type over. */
+    stockLabel: auto,
+    label: op.name || auto,
   };
 }
 function wallRun(wall, spec) {
@@ -430,7 +434,6 @@ function auditBuilding(spec, openings, extra) {
      because they are facts about the material, not about this building. */
   for (const f of assemblyReview(spec, {
     pitch: spec.pitch, girtSpacing: spec.girtSpacing,
-    sheathed: spec.wallSkin === 'sheathing',
   })) out.push(f);
 
   // Openings vs. framing reality

@@ -56,21 +56,29 @@ function stockFor(o) {
   const base = OPENING_STOCK.find((s) => s.id === o.stock) || customBase(o);
   const w = o.w != null ? o.w : base.w;
   const h = o.h != null ? o.h : base.h;
-  /* A custom opening was never any other size, so it is not a resized
-     anything — it is only ever what it says. */
-  const resized = base.id !== 'custom'
-    && (Math.abs(w - base.w) > 0.01 || Math.abs(h - base.h) > 0.01);
+  const differs = Math.abs(w - base.w) > 0.01 || Math.abs(h - base.h) > 0.01;
+  /* A unit the spreadsheet never sized was only ever a guess, so typing a
+     number on it is MEASURING it, not resizing it. It is still that window
+     and it is still in that wall — which is the whole point of going out
+     with a tape. Only changing a size somebody actually knew is a resize,
+     and only a resize frees the unit back to the shelf.
+
+     A custom opening was never any other size, so it is neither. */
+  const guess = base.measured === false;
+  const corrected = guess && differs;
+  const resized = base.id !== 'custom' && !guess && differs;
   return {
-    ...base, w, h, resized,
-    measured: base.measured === false ? (o.w != null && o.h != null) : base.measured,
-    /* A salvaged unit keeps its name even when the size is corrected — it is
-       still #5, and the audit reads the number off the front of the label.
-       A custom opening has no name but its size. */
-    label: base.id === 'custom' ? `Custom ${fmtIn(w)} × ${fmtIn(h)}` : base.label,
+    ...base, w, h, resized, corrected,
+    measured: guess ? (o.w != null && o.h != null) : base.measured,
+    /* A salvaged unit keeps its catalogue name whatever else changes — the
+       inventory and the review notes are about the unit, not the hole. What
+       gets shown on screen is `label`, which somebody can rename. */
+    stockLabel: base.id === 'custom' ? `Custom ${fmtIn(w)} × ${fmtIn(h)}` : base.label,
+    label: o.name || (base.id === 'custom' ? `Custom ${fmtIn(w)} × ${fmtIn(h)}` : base.label),
   };
 }
-/* A unit is off the shelf only while it is in a wall at the size it actually
-   is; resize an opening and it is a hole for something else. */
+/* A unit is off the shelf while it is in a wall as itself. Measuring it does
+   not take it off; cutting the hole to a different size does. */
 function stockPlaced(s, openings) {
   return openings.filter((o) => o.stock === s.id && !stockFor(o).resized);
 }

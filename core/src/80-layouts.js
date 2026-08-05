@@ -163,7 +163,7 @@ function encodeLayout(spec, openings, extra, prices) {
     if (spec[k] !== base[k]) diff[k] = spec[k];
   }
   const ops = openings.map((o) => [o.wall, o.stock, o.kind, o.off, o.head,
-    o.w == null ? 0 : o.w, o.h == null ? 0 : o.h]);
+    o.w == null ? 0 : o.w, o.h == null ? 0 : o.h, o.name || 0]);
   const body = { v: 1, s: diff, o: ops };
   /* Whatever else the building lets you edit, packed by the building — the
      shell has no idea what is in there and does not need one. A building that
@@ -202,6 +202,8 @@ function decodeLayout(code) {
   const openings = data.o.map((a, i) => ({
     id: `l${i}`, wall: a[0], stock: a[1], kind: a[2], off: a[3], head: a[4],
     ...(a[5] ? { w: a[5] } : {}), ...(a[6] ? { h: a[6] } : {}),
+    /* Older codes are seven long and simply have no name. */
+    ...(a[7] ? { name: String(a[7]) } : {}),
   }));
   const extra = data.x != null && BUILDING.unpackExtra
     ? BUILDING.unpackExtra(data.x, spec, openings) : {};

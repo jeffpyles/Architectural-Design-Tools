@@ -100,15 +100,21 @@ schedule in `10-spec.js` is what the spreadsheet says; the numbers on the card a
 the opening actually is, and they win. The rough opening follows by the ½"-a-side shim
 allowance, the header is re-sized from the new width, and the girts move out of the way.
 
-Two things follow from typing a size, and both are the point:
+Two different things look the same here and are not, and the tool keeps them apart:
 
-- **Typing both dimensions counts as measuring it.** The four windows flagged *not
-  measured* are flagged because nobody has been out to them with a tape. Once both
-  numbers are typed they stop being guesses, and the Review note drops them.
-- **A resized opening is no longer the unit on the shelf.** #7 cut 6" wider is a hole
-  for something else, so the inventory puts #7 back on the shelf and the audit says so.
-  If the unit really is that size, correcting the schedule entry in `10-spec.js` is the
-  honest fix; the card is for one-offs and for finding out.
+- **Measuring.** #1, #2, #3 and #14 have no size in the spreadsheet, so the model is
+  guessing. Type what the tape says and the guess is gone — the card tags it *measured*,
+  the Review note drops it, and **it is still that window in that wall.** Measuring a
+  window does not put it back on the shelf. (It used to, which is what "on the shelf tag
+  not being updated?" was about.)
+- **Resizing.** #7 is 23½" × 35½" because somebody wrote that down. Cut the hole 6"
+  wider and it is a hole for something else, so the inventory hands #7 back and the card
+  tags it *resized*. If the unit really is that size, correcting the schedule entry in
+  `10-spec.js` is the honest fix.
+
+Every card also has a **Call it** box. The name is about the hole — "kitchen, over the
+sink" — and the unit behind it keeps its catalogue name underneath, in the inventory and
+in the review notes. Names travel in the share code and the layout file.
 
 **+ Custom window** and **+ Custom door** make an opening with no salvaged unit behind
 it at all — a hole sized from nothing, for something bought rather than found. It frames,

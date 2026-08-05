@@ -340,7 +340,7 @@ function buildModel(spec, openings) {
   /* Girts outside, because the metal hangs on them and there is no exterior
      sheathing. The bracing sheathing is on the inside face, and goes on with
      the interior finish. */
-  if (spec.wallSkin === 'girts') {
+  if (!isSheathed(spec)) {
     const gs = LUMBER[spec.girtSize];
     for (const wall of ['N', 'S', 'W', 'E']) {
       for (const g of girtRuns(wall, spec, openings)) {
@@ -388,7 +388,7 @@ function buildModel(spec, openings) {
   }
   const sd = assembly('siding', spec.siding) || assembly('siding', 'metal');
   const sideKind = sd.label;
-  const skinT = spec.wallSkin === 'girts' ? LUMBER[spec.girtSize].d : 0.4375;
+  const skinT = isSheathed(spec) ? 0.4375 : LUMBER[spec.girtSize].d;
   for (const wall of ['N', 'S', 'W', 'E']) {
     for (const r of skinRects(wall, spec, openings, y0, H)) {
       add('skin', 'siding', sd.mat, sideKind,

@@ -204,7 +204,6 @@ function auditBuilding(spec, openings) {
      this building. */
   for (const f of assemblyReview(spec, {
     pitch: roofPitch(spec), girtSpacing: spec.girtSpacing,
-    sheathed: spec.wallSkin === 'sheathing',
   })) out.push(f);
 
   /* Openings that have wandered off the wall, or into each other. */
@@ -254,7 +253,7 @@ function auditBuilding(spec, openings) {
   const guessed = openings.map(stockFor).filter((s) => s.measured === false);
   if (guessed.length) {
     add('warn', `${guessed.length} window${guessed.length > 1 ? 's are' : ' is'} not measured`,
-      `${guessed.map((s) => s.label.replace(/ .*/, '')).join(', ')} — the spreadsheet gives no size for `
+      `${guessed.map((s) => '#' + s.n).join(', ')} — the spreadsheet gives no size for `
       + 'these, so the model is using dimensions scaled off the sketch. Every framing number that '
       + 'depends on them is provisional.');
   }
@@ -676,7 +675,7 @@ function wallShear(spec) {
   const faces = [];
   const inside = panelShear('interior', spec.interiorFinish, spec.studSpacing);
   faces.push({ face: 'inside', ...inside });
-  if (spec.wallSkin === 'sheathing') {
+  if (isSheathed(spec)) {
     faces.push({ face: 'outside', ...panelShear('sheathing', wallSheet(spec), spec.studSpacing) });
   }
   const plf = faces.reduce((a, f) => a + f.plf, 0);

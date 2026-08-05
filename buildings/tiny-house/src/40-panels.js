@@ -52,12 +52,26 @@ function renderOpenings() {
       const head = el('div', 'op-head');
       head.append(el('span', 'op-name', st.label));
       if (st.measured === false) head.append(el('span', 'tag over', 'not measured'));
+      /* Measuring a guessed window and resizing a known one look the same on
+         the card and are not the same thing — one keeps the unit, the other
+         gives it back. */
+      if (st.corrected) head.append(el('span', 'tag used', 'measured'));
       if (st.resized) head.append(el('span', 'tag used', 'resized'));
       card.append(head);
+      /* Which unit is behind the hole, once somebody has renamed it. */
+      if (o.name && st.stockLabel !== st.label) {
+        const sub = el('div', null, st.stockLabel);
+        sub.style.cssText = 'font-size:11px;color:var(--ink-3);margin:-2px 0 4px';
+        card.append(sub);
+      }
       card.append(wallPicker(o, st));
 
       const fields = el('div', 'op-fields');
       fields.append(
+        textField('Call it', o.name || '', (v) => {
+          if (v.trim()) o.name = v.trim(); else delete o.name;
+          scheduleRebuild();
+        }, { placeholder: st.stockLabel }),
         numField('From the ' + WALLS[wall].from, o.off, (v) => moveOpening(o, v)),
         numField('Head height', o.head, (v) => { o.head = v; scheduleRebuild(); }),
         /* The unit, not the hole — the rough opening follows it. Type a size

@@ -43,11 +43,20 @@ function renderOpenings() {
       head.append(el('span', 'op-name', st.label));
       if (st.resized) head.append(el('span', 'tag used', `${o.stock} resized`));
       card.append(head);
+      if (o.name && st.stockLabel !== st.label) {
+        const sub = el('div', null, st.stockLabel);
+        sub.style.cssText = 'font-size:11px;color:var(--ink-3);margin:-2px 0 4px';
+        card.append(sub);
+      }
 
       card.append(wallPicker(o, st));
 
       const fields = el('div', 'op-fields');
       fields.append(
+        textField('Call it', o.name || '', (v) => {
+          if (v.trim()) o.name = v.trim(); else delete o.name;
+          scheduleRebuild();
+        }, { placeholder: st.stockLabel }),
         numField('From ' + WALLS[wall].from, o.off, (v) => moveOpening(o, v)),
         numField('Head height', o.head, (v) => { o.head = v; scheduleRebuild(); }),
         numField('Rough width', st.w, (v) => {

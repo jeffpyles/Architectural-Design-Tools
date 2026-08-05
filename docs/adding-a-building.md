@@ -232,11 +232,23 @@ makes it free: `w` and `h` are already opening fields, so they go into the share
 come back without touching `encodeLayout`, and `stock: 'custom'` needs no new state at
 all — it is an id that nothing in the list matches.
 
-Two consequences worth handling rather than ignoring. A stock list that means *units on
-hand* is a claim about a specific size, so count a unit as placed only while nothing has
-resized it. And anything derived from *not knowing* a size — the tiny house flags four
-windows `measured: false` — has to notice when somebody types one in: typing both
-dimensions is what measuring a window looks like from in here.
+Two consequences worth handling rather than ignoring, and the second one bit.
+
+A stock list that means *units on hand* is a claim about a specific size, so count a unit
+as placed only while nothing has **resized** it. But **measuring** is not resizing:
+anything derived from *not knowing* a size — the tiny house flags four windows
+`measured: false` — has to treat a typed number as the guess being corrected, not as a
+different unit being chosen. Conflating the two put three freshly-measured windows back
+on the shelf while they were sitting in walls. `stockFor` returns both flags:
+
+```js
+const guess     = base.measured === false;
+const corrected = guess && differs;      // somebody went out with a tape
+const resized   = !guess && differs;     // a hole for something else now
+```
+
+`o.name` is separate again: it renames the *hole*, and `stockLabel` keeps the unit's
+catalogue name for the inventory and the review notes.
 
 ## The assembly catalog
 

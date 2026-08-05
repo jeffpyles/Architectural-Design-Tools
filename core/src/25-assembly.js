@@ -151,6 +151,10 @@ const SHEATHING = {
   ply34:   { label: '¾" plywood deck', psf: 2.30, usd: 1.85, hr: 2.2, R: 0.93,
     shear: 340, maxStud: 24, mat: 'plywood', nail: 0.75,
     note: 'Subfloor and loft deck weight. Over joists at 16" o.c. ⅝" would do.' },
+  none:    { label: 'None — girts only', psf: 0, usd: 0, hr: 0, R: 0,
+    shear: 0, maxStud: 0, mat: null, nail: 0,
+    note: 'No exterior sheathing. Lightest and cheapest, and it leaves the outside face '
+      + 'with no shear and nothing to nail a coursed siding to.' },
 };
 
 /* Stud material. Steel is 10–25% lighter than a 2x4 at the same capacity —
@@ -260,12 +264,16 @@ function assemblyOpts(group) {
   return Object.entries(ASSEMBLY[group] || {}).map(([k, v]) => [k, v.label]);
 }
 
-/* Which structural sheet a wall is sheathed with. A building that does not
-   offer the choice gets the default rather than nothing. */
+/* Which structural sheet a wall is sheathed with, or 'none'. Two controls
+   can say no sheathing — the wall system set to girts, or the sheet set to
+   none — and they have to agree, so girts wins and the Exterior sheet
+   control reads honestly instead of naming a sheet that is not there. */
 function wallSheet(spec) {
+  if (spec && spec.wallSkin === 'girts') return 'none';
   const id = spec && spec.sheathingPanel;
   return ASSEMBLY.sheathing[id] ? id : 'osb716';
 }
+function isSheathed(spec) { return wallSheet(spec) !== 'none'; }
 
 /* ---- what will not go together ----
    Every building can pick any row out of the catalog, and some of those
@@ -274,26 +282,29 @@ function wallSheet(spec) {
    leaks below 3/12. The tool is no use if it lets you compare a wall that
    cannot exist against one that can, so it says so.
 
-   `ctx` is the little the building has to hand over: its roof pitch, how far
-   apart the girts are, and whether the wall is sheathed. */
+   `ctx` is the little the building has to hand over: its roof pitch and how
+   far apart the girts are. Whether the wall is sheathed is not among them —
+   that follows from the spec, and asking the caller was how a check ended up
+   claiming a girt wall was sheathed. */
 function assemblyReview(spec, ctx) {
   const out = [];
   const add = (level, title, body) => out.push({ level, title, body });
   const sd = assembly('siding', spec.siding);
   const rf = assembly('roofing', spec.roofing);
-  const sheet = ctx.sheathed ? assembly('sheathing', wallSheet(spec)) : null;
+  const sheet = assembly('sheathing', wallSheet(spec));
   const behind = sheet ? (sheet.nail || 0) : 0;
+  const sheathed = behind > 0;
 
   if (sd) {
     /* Something coursed or flat, with nothing continuous to fasten to. */
     if (sd.nailable > 0 && behind < sd.nailable) {
       add('crit', `${sd.label} has nothing to fasten to`,
         `It needs at least ${fmtIn(sd.nailable)} of nailable sheathing behind it and the wall `
-        + (ctx.sheathed ? `is sheathed in ${sheet ? sheet.label : 'something thinner'}.`
-          : 'is girts with no sheathing at all.')
+        + (sheathed ? `is sheathed in ${sheet.label}.`
+          : 'has no exterior sheathing at all.')
         + ' Sheathe the wall, or fur it out horizontally at the exposure — which is girts by '
         + 'another name, so it buys back the weight the thinner skin saved.');
-    } else if (sd.spans && ctx.girtSpacing > sd.spans && !ctx.sheathed) {
+    } else if (sd.spans && ctx.girtSpacing > sd.spans && !sheathed) {
       add('warn', `${sd.label} is spanning further than it wants to`,
         `Rated across ${fmtIn(sd.spans)} and the girts are at ${fmtIn(ctx.girtSpacing)}. It will `
         + 'oil-can between them, and in a gust it drums. Close the girts up or go a gauge heavier.');

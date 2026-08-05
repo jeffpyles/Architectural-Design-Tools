@@ -188,6 +188,7 @@ const BUILDING = {
       u: d.u, v: d.v,
       hw: (d.panel ? 20 : box.w) / 2, hh: (d.panel ? 30 : box.h) / 2,
       label: deviceLabel(d),
+      panel: 'electrical',
       move: (u, v) => moveDevice(d, u, v),
       readout: () => deviceReadout(d, spec),
     };
