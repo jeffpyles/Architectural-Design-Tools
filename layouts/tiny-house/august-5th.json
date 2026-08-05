@@ -1,0 +1,20 @@
+{
+  "kind": "architectural-design-tools/layout",
+  "tool": "tiny-house",
+  "toolName": "Tiny House",
+  "name": "August 5th",
+  "note": "",
+  "saved": "2026-08-05T20:23:47.761Z",
+  "describes": [
+    "Trailer: 12'-0\" × 34'-0\"",
+    "Floor: 408 sf",
+    "Walls: 11'-3\"",
+    "Pitch: 1.5/12",
+    "Ridge: 12'-0\" above the frame",
+    "Studs: 2x4 @ 24\" o.c.",
+    "Lofts: 10'-4\" east · 6'-0\" west",
+    "Snow: 20 psf",
+    "11'-3\" walls · 15 openings · worst racking 1.63"
+  ],
+  "code": "THOW1-eyJ2IjoxLCJzIjp7ImpvaXN0U3BhY2luZyI6MjQsImxvZnRIZWlnaHQiOjg0LCJsb2Z0Sm9pc3QiOiIyeDYiLCJ3ZXN0TG9mdCI6NzIsImdpcnRTcGFjaW5nIjozMCwicm9vZkRlY2siOmZhbHNlfSwibyI6W1siUyIsIlcxNCIsbnVsbCwzNSwxMjgsMCwyN10sWyJTIiwiRDEiLCJkb29yIiwzNCw4MSwwLDBdLFsiUyIsIlc5IixudWxsLDkxLDEyNSwwLDBdLFsiRSIsIlcxMSIsbnVsbCw1NCw3OCwwLDBdLFsiUyIsIlcxMCIsbnVsbCwyNDAuNSwxMjIsMCwwXSxbIlMiLCJXNCIsbnVsbCwzMDMsNzEsMCwwXSxbIlMiLCJXMiIsbnVsbCwyNDEsODIsMjMuNSwyMy41XSxbIk4iLCJXMyIsbnVsbCwyNyw3MCwxMy4yNSwzNi43NV0sWyJOIiwiRDIiLCJkb29yIiwxNTMsODUsMCwwXSxbIk4iLCJXNSIsbnVsbCwyMDcuNSw4MSwwLDBdLFsiTiIsIlc3IixudWxsLDMzOC41LDExMywwLDBdLFsiRSIsIlcxMyIsbnVsbCw0Ny41LDEyNCwwLDBdLFsiVyIsImN1c3RvbSIsbnVsbCw1Ny41LDY5LDI5LjUsNDEuNV0sWyJOIiwiY3VzdG9tIixudWxsLDI3LjUsMTIwLDM1Ljc1LDI5Ljc1XSxbIlMiLCJjdXN0b20iLG51bGwsOTgsODIsNDMsNDEuNV1dfQ"
+}
