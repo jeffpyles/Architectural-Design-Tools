@@ -56,9 +56,18 @@ const ROOFING = {
   metal:      { label: 'Lapped metal panel', psf: 0.90, usd: 2.40, hr: 1.6, R: 0,
     minPitch: 3, seam: 'lap', mat: 'metal',
     note: 'Cheapest metal there is, and it wants 3/12 or steeper.' },
-  comp:       { label: 'Architectural shingle', psf: 2.60, usd: 1.60, hr: 2.8, R: 0.44,
+  comp:       { label: 'Architectural shingle', psf: 4.00, usd: 1.60, hr: 2.8, R: 0.44,
     minPitch: 2, seam: 'lap', mat: 'shingle',
-    note: 'The heaviest covering on the list, and not rated below 2/12 even doubled up.' },
+    note: 'The heaviest covering on the list by a factor of three, and not rated below '
+      + '2/12 even doubled up. Laminated architectural shingle runs 3½–4½ psf with its '
+      + 'underlayment; a 3-tab is nearer 2½.' },
+  poly:       { label: 'Polycarbonate, 0.8 mm corrugated', psf: 0.20, usd: 1.70, hr: 2.0, R: 0.10,
+    minPitch: 1, seam: 'lap', mat: 'poly', spans: 24, translucent: true, expands: 3.75e-5,
+    life: 15,
+    note: 'Suntuf and the like. A quarter the weight of the lightest metal and cheaper — '
+      + 'and a 10-to-15 year translucent panel that goes brittle with UV. Right over a '
+      + 'porch, a shed or a greenhouse, where daylight is the point and nothing is '
+      + 'sleeping under it.' },
 };
 
 /* Siding. `spans` is the constraint people trip over: a ribbed panel bridges
@@ -92,6 +101,11 @@ const SIDING = {
     spans: null, nailable: 0.375, mat: 'trim',
     note: 'Medium ½" butt at 10" exposure. Half a ton heavier than metal on a house this '
       + 'size, and the slowest thing here to hang.' },
+  poly:        { label: 'Polycarbonate, 0.8 mm corrugated', psf: 0.20, usd: 1.70, hr: 2.0, R: 0.10,
+    spans: 24, nailable: 0, mat: 'poly', translucent: true, expands: 3.75e-5, life: 15,
+    note: 'The lightest and cheapest skin here by some way, and you can see through it. '
+      + 'A greenhouse wall, a shed, a porch screen. Not a wall somebody sleeps behind — '
+      + 'see the Review tab.' },
 };
 
 /* The interior face. On the tiny house this is also the entire shear wall,
@@ -311,6 +325,19 @@ function assemblyReview(spec, ctx) {
         `Rated across ${fmtIn(sd.spans)} and the girts are at ${fmtIn(ctx.girtSpacing)}. It will `
         + 'oil-can between them, and in a gust it drums. Close the girts up or go a gauge heavier.');
     }
+    if (sd.translucent) {
+      /* Whether this is a feature or a mistake depends on what is behind it,
+         and only the building knows that. */
+      add(ctx.conditioned ? 'warn' : 'info', `${sd.label} is a light-transmitting panel`,
+        'Clear runs about 90% transmission and even the opal and smoke colours are near '
+        + '35%, so at night the studs and the insulation are silhouetted from outside and '
+        + 'by day the cavity glows. '
+        + (ctx.conditioned
+          ? 'On an insulated wall it is also a solar collector — it cooks the cavity, '
+            + 'drives moisture into it, and puts UV on the weather barrier. Right for a '
+            + 'greenhouse or a porch; wrong for a wall somebody sleeps behind.'
+          : 'On an unheated wall — a greenhouse, a shed, a porch — that is the point.'));
+    }
     if (/alum/i.test(sd.id)) {
       add('info', 'Aluminium against steel is a battery',
         'Aluminium siding fastened with plated steel screws, or run down onto a steel frame, '
@@ -332,6 +359,19 @@ function assemblyReview(spec, ctx) {
         + 'mechanical seam with sealant in the seam is what works down here, which means a seaming '
         + 'machine on site and a price nearer the top of the range than the bottom.');
     }
+  }
+
+  /* Plastic moves, and it is the fasteners that pay for it. */
+  for (const a of [sd, rf]) {
+    if (!a || !a.expands) continue;
+    const move = 144 * a.expands * 100;         // a 12-foot sheet through 100°F
+    add('info', `${a.label} moves ${fmtN(move, 2)}" a sheet`,
+      `Polycarbonate expands about ${(a.expands * 1e6).toFixed(0)} millionths per °F — five `
+      + 'times steel and three times aluminium — so a 12-foot sheet travels '
+      + `${fmtN(move, 2)}" through a 100°F swing. Oversized holes (⅜" for a ¼" screw), `
+      + 'washers, and never run the screws tight. It is also soft: under suction the limit '
+      + 'is the screw pulling through the sheet, not the sheet tearing, so the washers do '
+      + `the work. Reckon on ${a.life} years before it yellows and goes brittle.`);
   }
 
   const sm = assembly('studMaterial', spec.studMaterial || 'wood');

@@ -33,7 +33,13 @@ function roofPitch(spec) {
 function roofLoads(spec) {
   const pf = 0.7 * 0.9 * 1.1 * 1.0 * spec.groundSnow;
   const snow = Math.max(pf, 20);                      // minimum roof live load
-  const deadPsf = (spec.roofing === 'standing' ? 1.6 : spec.roofing === 'metal' ? 1.2 : 2.8)
+  /* The covering comes off the catalog rather than a second table here. It
+     used to be three hardcoded numbers, which meant every roofing option
+     added since — 26 ga, aluminium standing seam, polycarbonate — fell into
+     the `else` branch and got loaded as asphalt shingle at 2.8 psf. An
+     aluminium roof was being designed for five times its own weight. */
+  const rf = assembly('roofing', spec.roofing) || assembly('roofing', 'standing');
+  const deadPsf = rf.psf + 0.2                        // covering, plus underlayment and screws
     + (spec.sheathing ? 1.5 : 0) + 3.0                // framing
     + (spec.ceilingInsulation ? 1.2 : 0) + 1.0;       // insulation and interior face
   return { snow, dead: deadPsf, total: snow + deadPsf, pf };
@@ -204,6 +210,9 @@ function auditBuilding(spec, openings) {
      this building. */
   for (const f of assemblyReview(spec, {
     pitch: roofPitch(spec), girtSpacing: spec.girtSpacing,
+    /* Whether a see-through wall is the point or a mistake depends on what is
+       behind it, and only the building knows that. */
+    conditioned: spec.wallInsulation !== 'none' || spec.interiorFinish !== 'none',
   })) out.push(f);
 
   /* Openings that have wandered off the wall, or into each other. */

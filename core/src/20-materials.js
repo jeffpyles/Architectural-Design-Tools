@@ -22,6 +22,7 @@ const MATERIALS = {
   wrap:     { c: [0.91, 0.92, 0.89], name: 'Housewrap' },
   metal:    { c: [0.62, 0.67, 0.70], name: 'Metal panel' },
   shingle:  { c: [0.30, 0.31, 0.32], name: 'Asphalt shingle' },
+  poly:     { c: [0.80, 0.86, 0.87], name: 'Polycarbonate panel' },
   trim:     { c: [0.90, 0.90, 0.88], name: 'Trim' },
   door:     { c: [0.47, 0.42, 0.37], name: 'Door' },
   ohdoor:   { c: [0.80, 0.81, 0.80], name: 'Overhead door' },

@@ -12,7 +12,7 @@ const DENSITY = {
   fir: 0.0185, firDark: 0.0185, treated: 0.0197, lvl: 0.0260, plywood: 0.0206,
   osb: 0.0226,
   steel: 0.2836, steelDk: 0.2836, rubber: 0.0400, metal: 0.2836,
-  shingle: 0.0400, trim: 0.0185, door: 0.0180, ohdoor: 0.0150,
+  shingle: 0.0400, trim: 0.0185, door: 0.0180, ohdoor: 0.0150, poly: 0.0434,
   glass: 0.0900, drywall: 0.0272, batt: 0.00055, blown: 0.00075, foam: 0.00115,
   wrap: 0.0002, panel: 0.0500, conduit: 0.0300, box: 0.0300, fixture: 0.0100,
 };

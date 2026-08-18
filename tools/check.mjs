@@ -40,7 +40,7 @@ const WANT = ['buildModel', 'takeoff', 'auditBuilding', 'DEFAULT_SPEC', 'DEFAULT
   'ASSEMBLY', 'assembly', 'assemblyOpts', 'assemblyReview', 'panelShear', 'wallSheet',
   'priceKey', 'basePrice', 'packPrices', 'unpackPrices', 'PRICED', 'NOT_COSTED', 'isSheathed',
   'LUMBER_USD', 'CFS', 'buildCost', 'girtSection', 'girtCheck', 'claddingPressure',
-  'LUMBER', 'windPressure',
+  'LUMBER', 'windPressure', 'roofLoads',
   'stockFor', 'wallExtent', 'WALLS', 'pickMember', 'openingsOn', 'solidSegments', 'partWeight',
   ...(bChecks && bChecks.api ? bChecks.api : [])];
 vm.runInContext(`${src}
@@ -408,6 +408,65 @@ for (const n of notes) {
       + `${Math.round(c.hr)} hours over ${c.rows.length} rows, priced ${c.priced}, `
       + `and prices survive the code`);
   }
+}
+
+/* 7g2. The roof dead load has to follow the covering. It was a hardcoded
+   branch in both buildings, so every covering added after it was written
+   fell into the `else` — an aluminium standing seam roof at 0.5 psf was
+   being designed as asphalt shingle at 2.8, and polycarbonate would have
+   been too. The spread of dead loads across the coverings has to equal the
+   spread of their catalog weights exactly, because nothing else moves. */
+if (A.roofLoads && A.ASSEMBLY && A.ASSEMBLY.roofing) {
+  const deadOf = (r) => {
+    const L = A.roofLoads({ ...spec, roofing: r });
+    return L.dead != null ? L.dead : L.tcDead;
+  };
+  const ids = Object.keys(A.ASSEMBLY.roofing);
+  const dead = ids.map(deadOf), psf = ids.map((r) => A.ASSEMBLY.roofing[r].psf);
+  const spread = (v) => Math.max(...v) - Math.min(...v);
+  if (Math.abs(spread(dead) - spread(psf)) > 0.01) {
+    fail(`roof dead load spans ${spread(dead).toFixed(2)} psf across the coverings `
+      + `and their weights span ${spread(psf).toFixed(2)} — the load is not following them`);
+  }
+  const order = [...ids].sort((x, y) => A.ASSEMBLY.roofing[x].psf - A.ASSEMBLY.roofing[y].psf);
+  for (let i = 1; i < order.length; i++) {
+    if (deadOf(order[i]) < deadOf(order[i - 1]) - 1e-9) {
+      fail(`${order[i]} is heavier than ${order[i - 1]} and loads the roof less`);
+    }
+  }
+  console.log(`  ok  roof dead load tracks the covering, `
+    + `${Math.min(...dead).toFixed(1)}–${Math.max(...dead).toFixed(1)} psf across ${ids.length}`);
+}
+
+/* 7g3. Polycarbonate is a light-transmitting plastic, and both facts have to
+   reach the Review tab: you can see through it, and it moves five times as
+   much as steel. Whether the first is a feature depends on what is behind
+   it, which is the building's to say and not core's. */
+if (A.ASSEMBLY.siding.poly) {
+  const titles = (over, ctx) => A.assemblyReview({ ...spec, ...over },
+    { pitch: 6, girtSpacing: 24, ...ctx }).map((f) => `${f.level}:${f.title}`);
+  const warm = titles({ siding: 'poly' }, { conditioned: true });
+  const cold = titles({ siding: 'poly' }, { conditioned: false });
+  if (!warm.some((t) => /^warn:.*light-transmitting/.test(t))) {
+    fail('a see-through wall on a heated building is not warned about');
+  }
+  if (!cold.some((t) => /^info:.*light-transmitting/.test(t))) {
+    fail('a see-through wall on a greenhouse is not even mentioned');
+  }
+  if (cold.some((t) => /^warn:.*light-transmitting/.test(t))) {
+    fail('a greenhouse is warned off its own glazing');
+  }
+  if (!warm.some((t) => /moves/.test(t))) fail('nothing says the plastic moves');
+  /* Wider than it is rated to span still has to bite. */
+  if (!titles({ siding: 'poly' }, { girtSpacing: 36 }).some((t) => /spanning further/.test(t))) {
+    fail('polycarbonate at 36" girts is not flagged as over-spanned');
+  }
+  const asRoof = titles({ roofing: 'poly' }, { pitch: 0.5 });
+  if (!asRoof.some((t) => /^crit:/.test(t))) fail('polycarbonate at 0.5/12 is allowed');
+  if (titles({ roofing: 'poly' }, { pitch: 3 }).some((t) => /^crit:/.test(t))) {
+    fail('polycarbonate at 3/12 is refused');
+  }
+  console.log('  ok  polycarbonate reports what it is: see-through, moving, and 24" span');
 }
 
 /* 7h. Girts, for the buildings that have them. A girt spans stud to stud

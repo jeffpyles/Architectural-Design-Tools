@@ -11,8 +11,13 @@ function roofLoads(spec) {
   const Ct = spec.heated ? 1.0 : 1.2;
   const pf = 0.7 * Ct * spec.groundSnow;
   const live = Math.max(pf, 20);
-  const tcDead = spec.roofing === 'comp' ? 12
-    : spec.roofDeck === 'osb' ? 8 : 5.5;
+  /* Covering off the catalog, so it moves when the covering does. It used to
+     be two hardcoded numbers that only knew comp from everything else, which
+     meant 26 ga, aluminium standing seam and polycarbonate all weighed the
+     same as 24 ga steel. The rest is deck, purlins and the truss's own top
+     chord, which do not change with the covering. */
+  const rf = assembly('roofing', spec.roofing) || assembly('roofing', 'metal');
+  const tcDead = rf.psf + (spec.roofDeck === 'osb' ? 1.5 : 0) + 4.6;
   const bcDead = spec.ceilingDrywall ? 10 : 3;
   return { live, pf, tcDead, bcDead, total: live + tcDead + bcDead };
 }
@@ -465,6 +470,7 @@ function auditBuilding(spec, openings, extra) {
      because they are facts about the material, not about this building. */
   for (const f of assemblyReview(spec, {
     pitch: spec.pitch, girtSpacing: spec.girtSpacing,
+    conditioned: !!spec.insulation,
   })) out.push(f);
 
   // Openings vs. framing reality

@@ -267,6 +267,17 @@ number about that option lives on that row:
 | `spans` | widest bare framing the skin will hang on; `null` = needs solid sheathing |
 | `nailable` | minimum substrate thickness it must fasten into |
 | `minPitch` | rise per 12 a covering is rated down to |
+| `translucent` | you can see through it; raises a finding whose level depends on `ctx.conditioned` |
+| `expands` | thermal movement per °F, where it is enough to detail around |
+| `life` | years before it wants replacing, where that is short enough to say |
+
+A building's own engineering has to read the row too. Both buildings had a
+hardcoded roof dead load — `roofing === 'standing' ? 1.6 : … : 2.8` — so every
+covering added after that line was written fell into the `else` and got loaded
+as asphalt shingle. An aluminium standing seam roof at 0.5 psf was being
+designed for 2.8. A check now asserts the spread of dead loads across the
+coverings equals the spread of their catalog weights, because nothing else in
+that sum moves.
 
 **Everything reads the row, nothing keeps its own copy.** That is the whole
 point. The tiny house used to hold a `PSF.siding` table beside the catalog's
@@ -289,8 +300,11 @@ Three helpers do the reading:
   and `why` says which, because a bare 0 in a review note tells nobody what to
   change.
 - `assemblyReview(spec, ctx)` — the findings for combinations that will not
-  build. `ctx` is the little core cannot know: `{ pitch, girtSpacing, sheathed }`.
-  Call it from the building's `audit()` and spread the result in.
+  build. `ctx` is the little core cannot know: `{ pitch, girtSpacing, conditioned }`.
+  Call it from the building's `audit()` and spread the result in. `conditioned`
+  is there because whether a see-through wall is a feature or a mistake depends
+  on what is behind it, and the two buildings answer that from different spec
+  keys.
 
 ### Prices
 

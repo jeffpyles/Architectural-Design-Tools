@@ -256,6 +256,17 @@ inside, 12,110 lb shell):
 |---|---|---|---|
 | 26 ga standing seam | −137 lb | **−$458** | free |
 | .032 aluminium standing seam | −412 lb | +$2,061 | $5.00 |
+| polycarbonate | −550 lb | **−$1,282** | free — *see below* |
+
+**Polycarbonate** (Suntuf and the like) is on both lists, and on paper it wins
+everything: −623 lb and −$623 as siding, −550 lb and −$1,282 as roofing. It is there
+for the shed, porch and greenhouse cases, not for this house. It is a 10–15 year
+translucent panel — clear is ~90% transmission and even opal is ~35%, so the studs
+are silhouetted at night and the cavity glows by day. On an insulated wall it is also
+a solar collector, cooking the cavity and putting UV on the weather barrier, and the
+Review tab warns about exactly that when the wall is heated. It also moves **0.54" a
+sheet** through a 100°F swing, five times steel, which wants oversized holes and
+screws never run tight — on something that flexes down the road as well.
 
 The 26 ga row is the one worth noticing: lighter *and* cheaper than the 24 ga the model
 opened with. It oil-cans more, and some double-lock profiles are 24 ga minimum — at
