@@ -7,6 +7,11 @@
 /* Nominal → actual dressed lumber, plus section properties used by
    the header sizer. Sx/Ix are per ply, dry-service S4S. */
 const LUMBER = {
+  /* 1x is furring, and it is here to be a girt. Sold as boards rather than
+     stress-graded lumber, so nothing sizes a structural member out of it —
+     girtCheck gives it a deliberately conservative Fb and says so. */
+  '1x3':  { t: 0.75, d: 2.5, Sx: 0.781, Ix: 0.977, Cf: 1.5 },
+  '1x4':  { t: 0.75, d: 3.5, Sx: 1.531, Ix: 2.679, Cf: 1.5 },
   '2x4':  { t: 1.5, d: 3.5,   Sx: 3.06,  Ix: 5.36,   Cf: 1.5  },
   '2x6':  { t: 1.5, d: 5.5,   Sx: 7.56,  Ix: 20.80,  Cf: 1.3  },
   '2x8':  { t: 1.5, d: 7.25,  Sx: 13.14, Ix: 47.63,  Cf: 1.2  },
@@ -15,6 +20,63 @@ const LUMBER = {
   '4x6':  { t: 3.5, d: 5.5,   Sx: 17.65, Ix: 48.53,  Cf: 1.3  },
   '6x6':  { t: 5.5, d: 5.5,   Sx: 27.73, Ix: 76.26,  Cf: 1.0  },
 };
+/* How a girt sits on the wall, which is not the same question for every size.
+
+   A 2x goes ON EDGE, pole-barn fashion: 3½" of projection, and 1½" of face
+   for the siding screws to find. A 1x goes FLAT, because on edge it would
+   present a ¾" edge to a screw line running the length of a 34-foot wall,
+   and nobody hits that. Flat it gives 2½" or 3½" of target — better than the
+   2x it replaces — and the wall gets 2¾" thinner a side.
+
+   `face` is the vertical dimension, which is the screw target. `out` is the
+   projection past the framing, which is what the siding stands off by and
+   what the girt bends about under wind. */
+function girtSection(size, flat) {
+  const L = LUMBER[size];
+  if (!L) return null;
+  /* A building can lay them all flat — the shop does. Left unsaid, 1x goes
+     flat because it has to and 2x goes on edge, which is how the tiny house
+     was drawn. */
+  const lay = flat == null ? /^1x/.test(size) : !!flat;
+  return { ...L, size, flat: lay, face: lay ? L.d : L.t, out: lay ? L.t : L.d };
+}
+
+/* Wind on a girt is a components-and-cladding load, not the whole-building
+   one: a girt at 24" o.c. spanning 24" has four square feet of tributary
+   area, which is the small-area end of the GC_p curve and worse than the
+   figure the racking check uses. Suction at a corner governs. */
+function claddingPressure(spec, zone) {
+  const Kz = spec.exposure === 'B' ? 0.70 : spec.exposure === 'D' ? 1.03 : 0.85;
+  const qz = 0.00256 * spec.windSpeed * spec.windSpeed * Kz * 0.85;
+  const GCp = zone === 'field' ? 1.1 : 1.4;      // ASCE 7 Fig 30.3-1, small area
+  return qz * (GCp + 0.18) * 0.6;                // enclosed, then ASD
+}
+
+/* Does the girt carry that between the studs? Bending out of the wall plane,
+   and deflection, which is what makes a metal panel ripple long before
+   anything breaks. */
+function girtCheck(spec, flat) {
+  const g = girtSection(spec.girtSize, flat);
+  if (!g) return null;
+  const span = spec.studSpacing;                 // girts span stud to stud
+  const p = claddingPressure(spec);
+  const w = p * (spec.girtSpacing / 12);         // plf
+  const M = w / 12 * span * span / 8;            // lb-in
+  const S = g.face * g.out * g.out / 6;
+  const I = g.face * g.out * g.out * g.out / 12;
+  /* Boards have no published design values, so 1x is given a conservative
+     500 psi against the 900 × C_f the graded sizes get. Both take C_D 1.6
+     for wind and C_r 1.15 for a row of them; flat girts take the flat-use
+     bump as well. */
+  const Fb = (g.flat ? 500 * 1.1 : 900 * g.Cf) * 1.15 * 1.6;
+  const E = g.flat ? 1.2e6 : 1.6e6;
+  const defl = 5 * (w / 12) * span ** 4 / (384 * E * I);
+  const limit = span / 180;
+  const bend = M / (Fb * S), sag = defl / limit;
+  return { ...g, span, p, w, M, S, I, Fb, E, fb: M / S, defl, limit,
+    bend, sag, ratio: Math.max(bend, sag), ok: bend <= 1 && sag <= 1 };
+}
+
 const LVL = {
   '1.75x11.875': { t: 1.75, d: 11.875, Sx: 41.13, Ix: 244.2 },
   '1.75x14':     { t: 1.75, d: 14.0,   Sx: 57.17, Ix: 400.2 },

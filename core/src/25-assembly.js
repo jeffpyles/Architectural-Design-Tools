@@ -198,7 +198,9 @@ const ASSEMBLY = {
    cost more per foot than studs do, which is most of why 1x framing is a bad
    trade — it saves a quarter of the wood and spends more money on it. */
 const LUMBER_USD = {
-  '1x3': 0.70, '1x4': 0.85, '1x6': 1.30,
+  /* Furring and utility grade, which is what a girt wants — a finished
+     board of the same size runs half again as much. */
+  '1x3': 0.55, '1x4': 0.80, '1x6': 1.30,
   '2x4': 0.65, '2x6': 1.00, '2x8': 1.45, '2x10': 2.00, '2x12': 2.70,
   '4x4': 2.20, '4x6': 3.60, '6x6': 5.60,
 };

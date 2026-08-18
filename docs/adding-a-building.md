@@ -322,6 +322,22 @@ switching to cedar on a girt wall makes the building's own `audit()` raise a
 critical note, and the row prints it instead of quietly showing a lighter wall
 that cannot be built.
 
+### Girts
+
+`girtSection(size, flat)` decides how a girt sits: `face` is the vertical dimension the
+siding screws hit, `out` is the projection past the framing. Left unsaid, 1x goes flat and
+2x on edge; a building that lays them all flat passes `true` (the shop does).
+
+That existed because the shop labelled its girts "(flat)", placed its siding as if they
+were flat, and drew them on edge — so the siding ran two inches inside them. Three places
+each held their own opinion about one piece of wood. One function now, and a check asserts
+the drawn section is the one `girtCheck` sized.
+
+`girtCheck(spec, flat)` runs the girt against `claddingPressure(spec)` — components and
+cladding on a small tributary area, which is a worse load than the whole-building figure
+the racking check uses, and a check asserts that ordering. **Deflection usually governs**,
+because a metal panel ripples long before a board breaks.
+
 ## Saving a layout
 
 A layout is the spec's diff from the defaults, the openings, and whatever `packExtra`

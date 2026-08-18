@@ -430,6 +430,38 @@ function auditBuilding(spec, openings, extra) {
   const add = (level, title, body) => out.push({ level, title, body });
   const tr = trussGeometry(spec);
 
+  /* The girts, which nothing checked until furring became an option. They
+     span stud to stud and carry the wind on the siding, and what governs a
+     thin one is deflection — a metal panel ripples long before a board
+     breaks. */
+  {
+    const g = girtCheck(spec, true);
+    if (g) {
+      const how = g.flat ? 'flat' : 'on edge';
+      if (!g.ok) {
+        add('crit', `${spec.girtSize} girts ${how} will not carry the siding`,
+          `${fmtN(g.p, 1)} psf of corner suction over a ${fmtIn(g.span)} span at `
+          + `${fmtIn(spec.girtSpacing)} o.c. gives ${fmtN(g.fb, 0)} psi against `
+          + `${fmtN(g.Fb, 0)} allowable (${(g.bend * 100).toFixed(0)}% used) and `
+          + `${g.defl.toFixed(3)}" of sag against the ${g.limit.toFixed(3)}" L/180 allows `
+          + `(${(g.sag * 100).toFixed(0)}%). `
+          + (g.sag > g.bend
+            ? 'Deflection governs, and what you would see is the panel rippling between '
+              + 'the studs. Close the girts up, or go a size deeper.'
+            : 'Go a size deeper, or bring the girts closer together.'));
+      } else {
+        add('info', `${spec.girtSize} girts ${how}, ${(g.ratio * 100).toFixed(0)}% used`,
+          `${fmtN(g.p, 1)} psf of corner suction over a ${fmtIn(g.span)} span: bending `
+          + `${(g.bend * 100).toFixed(0)}%, sag ${g.defl.toFixed(3)}" of the `
+          + `${g.limit.toFixed(3)}" L/180 allows. They stand ${fmtIn(g.out)} off the framing `
+          + `and give ${fmtIn(g.face)} of face for the siding screws.`
+          + (g.flat ? ' 1x is sold as boards rather than graded lumber, so this is run at a '
+            + 'conservative 500 psi — buy furring that is straight and reasonably clear.' : ''));
+      }
+    }
+  }
+
+
   /* Anything in the catalog that will not go together. Core owns these
      because they are facts about the material, not about this building. */
   for (const f of assemblyReview(spec, {

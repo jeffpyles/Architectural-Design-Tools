@@ -341,11 +341,11 @@ function buildModel(spec, openings) {
      sheathing. The bracing sheathing is on the inside face, and goes on with
      the interior finish. */
   if (!isSheathed(spec)) {
-    const gs = LUMBER[spec.girtSize];
+    const gs = girtSection(spec.girtSize);
     for (const wall of ['N', 'S', 'W', 'E']) {
       for (const g of girtRuns(wall, spec, openings)) {
-        add('dryin', 'girt', 'fir', `${spec.girtSize} girt`,
-          wallBox(wall, spec, g.u0, g.y, T, g.u1 - g.u0, gs.t, gs.d),
+        add('dryin', 'girt', 'fir', `${spec.girtSize} girt${gs.flat ? ', flat' : ' on edge'}`,
+          wallBox(wall, spec, g.u0, g.y, T, g.u1 - g.u0, gs.face, gs.out),
           { size: spec.girtSize, len: g.u1 - g.u0, wall, y: g.y, u0: g.u0, u1: g.u1 });
       }
     }
@@ -388,7 +388,7 @@ function buildModel(spec, openings) {
   }
   const sd = assembly('siding', spec.siding) || assembly('siding', 'metal');
   const sideKind = sd.label;
-  const skinT = isSheathed(spec) ? 0.4375 : LUMBER[spec.girtSize].d;
+  const skinT = isSheathed(spec) ? 0.4375 : girtSection(spec.girtSize).out;
   for (const wall of ['N', 'S', 'W', 'E']) {
     for (const r of skinRects(wall, spec, openings, y0, H)) {
       add('skin', 'siding', sd.mat, sideKind,

@@ -512,16 +512,16 @@ function buildModel(spec, openings, extra) {
   // side, and every opening gets one at its head and sill so the trim and
   // the cut edge of the panel have backing.
   if (spec.wallSkin === 'girts') {
-    const gl = LUMBER[spec.girtSize];
+    const gl = girtSection(spec.girtSize, true);
     const rows = [];
     for (let y = spec.girtSpacing; y < H - 6; y += spec.girtSpacing) rows.push(y);
     rows.push(H - 5);
     for (const wall of ['N', 'S', 'W', 'E']) {
       const e = wallExtent(wall, spec);
       for (const y of rows) {
-        for (const sg of girtRuns(wall, openings, spec, y, gl.t)) {
+        for (const sg of girtRuns(wall, openings, spec, y, gl.face)) {
           add('dryin', 'girt', 'fir', `${spec.girtSize} girt (flat)`,
-            wallBox(wall, spec, sg.a, sg.b - sg.a, y, gl.t, T + 0.4375, gl.d),
+            wallBox(wall, spec, sg.a, sg.b - sg.a, y, gl.face, T + 0.4375, gl.out),
             { len: sg.b - sg.a, size: spec.girtSize, wall, u0: sg.a, u1: sg.b, y });
         }
       }
@@ -531,10 +531,10 @@ function buildModel(spec, openings, extra) {
         if (b - a < 2) continue;
         const sill = o.head - st.h;
         const at = [o.head];                       // head girt, always
-        if (sill > 8) at.push(sill - gl.t);        // sill girt, unless it sits on the slab
+        if (sill > 8) at.push(sill - gl.face);     // sill girt, unless it sits on the slab
         for (const y of at) {
           add('dryin', 'girt', 'fir', `${spec.girtSize} girt at opening`,
-            wallBox(wall, spec, a, b - a, y, gl.t, T + 0.4375, gl.d),
+            wallBox(wall, spec, a, b - a, y, gl.face, T + 0.4375, gl.out),
             { len: b - a, size: spec.girtSize, wall, u0: a, u1: b, y, atOpening: true });
         }
       }
@@ -610,7 +610,8 @@ function buildModel(spec, openings, extra) {
   /* What a square foot of each covering actually weighs. The model draws
      panel at 0.7" so it reads on screen; 26 ga steel is 0.018". */
   const sd = assembly('siding', spec.siding) || assembly('siding', 'metal');
-  const skinOut = spec.wallSkin === 'girts' ? 0.4375 + LUMBER[spec.girtSize].t : 0.4375;
+  const skinOut = spec.wallSkin === 'girts'
+    ? 0.4375 + girtSection(spec.girtSize, true).out : 0.4375;
   const sidingT = spec.siding === 'metal' ? 0.75 : 0.5;
 
   for (const wall of ['N', 'S', 'W', 'E']) {

@@ -39,7 +39,8 @@ const WANT = ['buildModel', 'takeoff', 'auditBuilding', 'DEFAULT_SPEC', 'DEFAULT
   'layoutFile', 'readLayoutFile', 'layoutFacts',
   'ASSEMBLY', 'assembly', 'assemblyOpts', 'assemblyReview', 'panelShear', 'wallSheet',
   'priceKey', 'basePrice', 'packPrices', 'unpackPrices', 'PRICED', 'NOT_COSTED', 'isSheathed',
-  'LUMBER_USD', 'CFS', 'buildCost',
+  'LUMBER_USD', 'CFS', 'buildCost', 'girtSection', 'girtCheck', 'claddingPressure',
+  'LUMBER', 'windPressure',
   'stockFor', 'wallExtent', 'WALLS', 'pickMember', 'openingsOn', 'solidSegments', 'partWeight',
   ...(bChecks && bChecks.api ? bChecks.api : [])];
 vm.runInContext(`${src}
@@ -50,6 +51,8 @@ for (const n of ${JSON.stringify(WANT)}) {
 const A = ctx.__api;
 
 const spec = { ...A.DEFAULT_SPEC };
+/* The shop lays every girt flat; the tiny house lays 2x on edge and 1x flat. */
+const flatGirts = building === 'shop-building' ? true : undefined;
 const openings = A.DEFAULT_OPENINGS.map((o) => ({ ...o }));
 const model = A.buildModel(spec, openings);
 
@@ -406,6 +409,77 @@ for (const n of notes) {
     console.log(`  ok  $${Math.round(c.usd).toLocaleString()} of material and `
       + `${Math.round(c.hr)} hours over ${c.rows.length} rows, priced ${c.priced}, `
       + `and prices survive the code`);
+  }
+}
+
+/* 7h. Girts, for the buildings that have them. A girt spans stud to stud
+   carrying wind on the siding, and the thing that governs a thin one is
+   deflection, not rupture — a metal panel ripples long before a board
+   breaks. Nothing checked any of this until 1x furring became an option. */
+if (A.girtSection && spec.girtSize) {
+  /* Orientation is the whole question. On edge, a girt shows the siding
+     screws its thickness; flat, its width. 1x on edge gives a ¾" line to hit
+     down a 34-foot wall, which is why 1x is only offered flat. */
+  for (const size of Object.keys(A.LUMBER)) {
+    const edge = A.girtSection(size, false), flat = A.girtSection(size, true);
+    const square = Math.abs(A.LUMBER[size].t - A.LUMBER[size].d) < 0.01;
+    if (!square && !(flat.face > edge.face)) fail(`${size} flat shows no more face than on edge`);
+    if (!square && !(flat.out < edge.out)) fail(`${size} flat does not project less than on edge`);
+    if (Math.abs(edge.face * edge.out - flat.face * flat.out) > 1e-9) {
+      fail(`${size} changes cross-section when you turn it`);
+    }
+  }
+  const g = A.girtCheck(spec, flatGirts);
+  if (!g) fail('this building has a girt size the check cannot read');
+  else {
+    if (!(g.p > 0) || !(g.M > 0) || !(g.S > 0)) fail('the girt check produced no load');
+    /* C&C suction on a small area is worse than the whole-building figure the
+       racking check uses — that is the point of computing it separately. */
+    if (A.windPressure && !(g.p > A.windPressure(spec))) {
+      fail(`cladding pressure ${g.p.toFixed(1)} is not above the MWFRS ${A.windPressure(spec).toFixed(1)}`);
+    }
+    if (!g.ok) fail(`the default girts do not carry the siding (${(g.ratio * 100).toFixed(0)}%)`);
+    console.log(`  girts: ${g.size} ${g.flat ? 'flat' : 'on edge'}, ${A.fmtIn(g.out)} proud, `
+      + `${A.fmtIn(g.face)} of face · ${A.fmtN(g.p, 1)} psf over ${A.fmtIn(g.span)} `
+      + `→ bending ${(g.bend * 100).toFixed(0)}%, sag ${(g.sag * 100).toFixed(0)}% of L/180`);
+
+    /* The shape of the answer: more wind, wider spacing or a longer span is
+       always worse, and a deeper girt is always better. */
+    const at = (over) => A.girtCheck({ ...spec, ...over }, flatGirts).ratio;
+    if (!(at({ girtSpacing: spec.girtSpacing * 1.25 }) > g.ratio)) fail('spreading the girts did not load them more');
+    if (!(at({ studSpacing: spec.studSpacing * 1.5 }) > g.ratio)) fail('a longer span did not load the girt more');
+    if (!(at({ windSpeed: spec.windSpeed + 30 }) > g.ratio)) fail('more wind did not load the girt more');
+    const sizes = Object.keys(A.LUMBER).filter((k) => A.girtSection(k, flatGirts).out
+      === A.girtSection(spec.girtSize, flatGirts).out);
+    for (let i = 1; i < sizes.length; i++) {
+      const a2 = A.girtCheck({ ...spec, girtSize: sizes[i - 1] }, flatGirts);
+      const b2 = A.girtCheck({ ...spec, girtSize: sizes[i] }, flatGirts);
+      if (A.LUMBER[sizes[i]].d > A.LUMBER[sizes[i - 1]].d && b2.ratio > a2.ratio) {
+        fail(`${sizes[i]} is wider than ${sizes[i - 1]} and comes out worse`);
+      }
+    }
+    /* And it has to be capable of failing, or it is decoration. */
+    const silly = A.girtCheck({ ...spec, girtSize: '1x3', girtSpacing: 48,
+      studSpacing: 48, windSpeed: 150 }, true);
+    if (silly.ok) fail('1x3 at 48" o.c. over a 48" span in 150 mph wind still passes');
+  }
+
+  /* What is drawn is what was checked: the girt in the model has the section
+     the check used. The shop labelled its girts flat, placed its siding as if
+     they were, and drew them on edge — so the siding ran 2" inside them. */
+  const drawn = model.parts.filter((p) => p.sys === 'girt');
+  if (drawn.length) {
+    const sec = A.girtSection(spec.girtSize, flatGirts);
+    for (const p of drawn.slice(0, 40)) {
+      const s3 = [...p.geom.s].sort((x, y) => x - y);
+      if (Math.abs(s3[0] - Math.min(sec.face, sec.out)) > 0.01
+        || Math.abs(s3[1] - Math.max(sec.face, sec.out)) > 0.01) {
+        fail(`a girt is drawn ${s3.slice(0, 2).map((v) => v.toFixed(3)).join(' × ')}, `
+          + `and the check sized ${sec.face} × ${sec.out}`);
+        break;
+      }
+    }
+    console.log(`  ok  ${drawn.length} girts drawn at the section the check used`);
   }
 }
 
