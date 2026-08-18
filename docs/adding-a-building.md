@@ -324,9 +324,8 @@ that cannot be built.
 
 ### Girts
 
-`girtSection(size, flat)` decides how a girt sits: `face` is the vertical dimension the
-siding screws hit, `out` is the projection past the framing. Left unsaid, 1x goes flat and
-2x on edge; a building that lays them all flat passes `true` (the shop does).
+`girtSection(size)` decides how a girt sits — flat, every size: `face` is the wide
+dimension the siding screws hit, `out` is the projection past the framing.
 
 That existed because the shop labelled its girts "(flat)", placed its siding as if they
 were flat, and drew them on edge — so the siding ran two inches inside them. Three places

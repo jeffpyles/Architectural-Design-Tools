@@ -20,25 +20,21 @@ const LUMBER = {
   '4x6':  { t: 3.5, d: 5.5,   Sx: 17.65, Ix: 48.53,  Cf: 1.3  },
   '6x6':  { t: 5.5, d: 5.5,   Sx: 27.73, Ix: 76.26,  Cf: 1.0  },
 };
-/* How a girt sits on the wall, which is not the same question for every size.
+/* How a girt sits on the wall: wide face against the studs, always.
 
-   A 2x goes ON EDGE, pole-barn fashion: 3½" of projection, and 1½" of face
-   for the siding screws to find. A 1x goes FLAT, because on edge it would
-   present a ¾" edge to a screw line running the length of a 34-foot wall,
-   and nobody hits that. Flat it gives 2½" or 3½" of target — better than the
-   2x it replaces — and the wall gets 2¾" thinner a side.
+   On edge it would give the siding screws only its thickness to find — ¾"
+   for a 1x, down the length of a 34-foot wall — and it would stand the
+   siding off by its full depth, which on a trailer already at 12'-0" is
+   width nobody has. Flat gives 2½" or 3½" of screw target and holds the
+   skin 1½" out or less.
 
-   `face` is the vertical dimension, which is the screw target. `out` is the
-   projection past the framing, which is what the siding stands off by and
-   what the girt bends about under wind. */
-function girtSection(size, flat) {
+   `face` is the vertical dimension, which is what you aim a screw at. `out`
+   is the projection past the framing: what the siding stands off by, and the
+   depth the girt bends about under wind. */
+function girtSection(size) {
   const L = LUMBER[size];
   if (!L) return null;
-  /* A building can lay them all flat — the shop does. Left unsaid, 1x goes
-     flat because it has to and 2x goes on edge, which is how the tiny house
-     was drawn. */
-  const lay = flat == null ? /^1x/.test(size) : !!flat;
-  return { ...L, size, flat: lay, face: lay ? L.d : L.t, out: lay ? L.t : L.d };
+  return { ...L, size, flat: true, face: L.d, out: L.t };
 }
 
 /* Wind on a girt is a components-and-cladding load, not the whole-building
@@ -55,8 +51,8 @@ function claddingPressure(spec, zone) {
 /* Does the girt carry that between the studs? Bending out of the wall plane,
    and deflection, which is what makes a metal panel ripple long before
    anything breaks. */
-function girtCheck(spec, flat) {
-  const g = girtSection(spec.girtSize, flat);
+function girtCheck(spec) {
+  const g = girtSection(spec.girtSize);
   if (!g) return null;
   const span = spec.studSpacing;                 // girts span stud to stud
   const p = claddingPressure(spec);

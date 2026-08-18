@@ -51,8 +51,6 @@ for (const n of ${JSON.stringify(WANT)}) {
 const A = ctx.__api;
 
 const spec = { ...A.DEFAULT_SPEC };
-/* The shop lays every girt flat; the tiny house lays 2x on edge and 1x flat. */
-const flatGirts = building === 'shop-building' ? true : undefined;
 const openings = A.DEFAULT_OPENINGS.map((o) => ({ ...o }));
 const model = A.buildModel(spec, openings);
 
@@ -417,19 +415,23 @@ for (const n of notes) {
    deflection, not rupture — a metal panel ripples long before a board
    breaks. Nothing checked any of this until 1x furring became an option. */
 if (A.girtSection && spec.girtSize) {
-  /* Orientation is the whole question. On edge, a girt shows the siding
-     screws its thickness; flat, its width. 1x on edge gives a ¾" line to hit
-     down a 34-foot wall, which is why 1x is only offered flat. */
+  /* Girts lie flat, every size, so the screw target is the wide face and the
+     projection is the thickness. On edge a 1x would show a ¾" line to hit
+     down a 34-foot wall, and a 2x4 would stand the siding off by 3½". */
   for (const size of Object.keys(A.LUMBER)) {
-    const edge = A.girtSection(size, false), flat = A.girtSection(size, true);
+    const sec = A.girtSection(size);
     const square = Math.abs(A.LUMBER[size].t - A.LUMBER[size].d) < 0.01;
-    if (!square && !(flat.face > edge.face)) fail(`${size} flat shows no more face than on edge`);
-    if (!square && !(flat.out < edge.out)) fail(`${size} flat does not project less than on edge`);
-    if (Math.abs(edge.face * edge.out - flat.face * flat.out) > 1e-9) {
-      fail(`${size} changes cross-section when you turn it`);
+    if (!square && !(sec.face > sec.out)) fail(`${size} girts present less face than projection`);
+    if (Math.abs(sec.face * sec.out - A.LUMBER[size].t * A.LUMBER[size].d) > 1e-9) {
+      fail(`${size} changes cross-section on the way into a girt`);
+    }
+    /* Only for stock anybody would girt with — 4x6 and 6x6 are posts, and
+       flat means nothing to a timber. */
+    if (A.LUMBER[size].t <= 1.5 && sec.out > 1.75) {
+      fail(`${size} girts stand ${sec.out}" proud, which is on edge`);
     }
   }
-  const g = A.girtCheck(spec, flatGirts);
+  const g = A.girtCheck(spec);
   if (!g) fail('this building has a girt size the check cannot read');
   else {
     if (!(g.p > 0) || !(g.M > 0) || !(g.S > 0)) fail('the girt check produced no load');
@@ -445,22 +447,22 @@ if (A.girtSection && spec.girtSize) {
 
     /* The shape of the answer: more wind, wider spacing or a longer span is
        always worse, and a deeper girt is always better. */
-    const at = (over) => A.girtCheck({ ...spec, ...over }, flatGirts).ratio;
+    const at = (over) => A.girtCheck({ ...spec, ...over }).ratio;
     if (!(at({ girtSpacing: spec.girtSpacing * 1.25 }) > g.ratio)) fail('spreading the girts did not load them more');
     if (!(at({ studSpacing: spec.studSpacing * 1.5 }) > g.ratio)) fail('a longer span did not load the girt more');
     if (!(at({ windSpeed: spec.windSpeed + 30 }) > g.ratio)) fail('more wind did not load the girt more');
-    const sizes = Object.keys(A.LUMBER).filter((k) => A.girtSection(k, flatGirts).out
-      === A.girtSection(spec.girtSize, flatGirts).out);
+    const sizes = Object.keys(A.LUMBER)
+      .filter((k) => A.girtSection(k).out === A.girtSection(spec.girtSize).out);
     for (let i = 1; i < sizes.length; i++) {
-      const a2 = A.girtCheck({ ...spec, girtSize: sizes[i - 1] }, flatGirts);
-      const b2 = A.girtCheck({ ...spec, girtSize: sizes[i] }, flatGirts);
+      const a2 = A.girtCheck({ ...spec, girtSize: sizes[i - 1] });
+      const b2 = A.girtCheck({ ...spec, girtSize: sizes[i] });
       if (A.LUMBER[sizes[i]].d > A.LUMBER[sizes[i - 1]].d && b2.ratio > a2.ratio) {
         fail(`${sizes[i]} is wider than ${sizes[i - 1]} and comes out worse`);
       }
     }
     /* And it has to be capable of failing, or it is decoration. */
     const silly = A.girtCheck({ ...spec, girtSize: '1x3', girtSpacing: 48,
-      studSpacing: 48, windSpeed: 150 }, true);
+      studSpacing: 48, windSpeed: 150 });
     if (silly.ok) fail('1x3 at 48" o.c. over a 48" span in 150 mph wind still passes');
   }
 
@@ -469,7 +471,7 @@ if (A.girtSection && spec.girtSize) {
      they were, and drew them on edge — so the siding ran 2" inside them. */
   const drawn = model.parts.filter((p) => p.sys === 'girt');
   if (drawn.length) {
-    const sec = A.girtSection(spec.girtSize, flatGirts);
+    const sec = A.girtSection(spec.girtSize);
     for (const p of drawn.slice(0, 40)) {
       const s3 = [...p.geom.s].sort((x, y) => x - y);
       if (Math.abs(s3[0] - Math.min(sec.face, sec.out)) > 0.01

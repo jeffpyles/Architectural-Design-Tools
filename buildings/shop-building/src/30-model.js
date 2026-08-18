@@ -512,7 +512,7 @@ function buildModel(spec, openings, extra) {
   // side, and every opening gets one at its head and sill so the trim and
   // the cut edge of the panel have backing.
   if (spec.wallSkin === 'girts') {
-    const gl = girtSection(spec.girtSize, true);
+    const gl = girtSection(spec.girtSize);
     const rows = [];
     for (let y = spec.girtSpacing; y < H - 6; y += spec.girtSpacing) rows.push(y);
     rows.push(H - 5);
@@ -611,7 +611,7 @@ function buildModel(spec, openings, extra) {
      panel at 0.7" so it reads on screen; 26 ga steel is 0.018". */
   const sd = assembly('siding', spec.siding) || assembly('siding', 'metal');
   const skinOut = spec.wallSkin === 'girts'
-    ? 0.4375 + girtSection(spec.girtSize, true).out : 0.4375;
+    ? 0.4375 + girtSection(spec.girtSize).out : 0.4375;
   const sidingT = spec.siding === 'metal' ? 0.75 : 0.5;
 
   for (const wall of ['N', 'S', 'W', 'E']) {

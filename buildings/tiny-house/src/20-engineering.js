@@ -357,9 +357,8 @@ function auditBuilding(spec, openings) {
   {
     const g = girtCheck(spec);
     if (g) {
-      const how = g.flat ? 'flat' : 'on edge';
       if (!g.ok) {
-        add('crit', `${spec.girtSize} girts ${how} will not carry the siding`,
+        add('crit', `${spec.girtSize} girts will not carry the siding`,
           `${fmtN(g.p, 1)} psf of corner suction over a ${fmtIn(g.span)} span at `
           + `${fmtIn(spec.girtSpacing)} o.c. gives ${fmtN(g.fb, 0)} psi against `
           + `${fmtN(g.Fb, 0)} allowable (${(g.bend * 100).toFixed(0)}% used) and `
@@ -370,7 +369,7 @@ function auditBuilding(spec, openings) {
               + 'the studs. Close the girts up, or go a size deeper.'
             : 'Go a size deeper, or bring the girts closer together.'));
       } else {
-        add('info', `${spec.girtSize} girts ${how}, ${(g.ratio * 100).toFixed(0)}% used`,
+        add('info', `${spec.girtSize} girts flat, ${(g.ratio * 100).toFixed(0)}% used`,
           `${fmtN(g.p, 1)} psf of corner suction over a ${fmtIn(g.span)} span: bending `
           + `${(g.bend * 100).toFixed(0)}%, sag ${g.defl.toFixed(3)}" of the `
           + `${g.limit.toFixed(3)}" L/180 allows. They stand ${fmtIn(g.out)} off the framing `

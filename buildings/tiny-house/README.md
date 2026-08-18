@@ -286,35 +286,34 @@ of them — they travel with the layout.
 
 ## The girts
 
-**2x4 on edge** as drawn, with **1x4 and 1x3 furring, flat** as alternatives. Girts span
-stud to stud and carry the wind on the siding, so the Review tab now checks them against
-14.4 psf of corner suction (components-and-cladding on a 4 sf tributary area, which is
-worse than the 11.9 psf the racking check uses).
+**2x4 as drawn, with 1x4 and 1x3 furring** as alternatives, and **all of them flat** —
+wide face against the studs. Girts span stud to stud and carry the wind on the siding, so
+the Review tab checks them against 14.4 psf of corner suction (components-and-cladding on
+a 4 sf tributary area, worse than the 11.9 psf the racking check uses).
 
-| | projection | screw face | bending | sag vs L/180 | girts | vs 2x4 |
-|---|---|---|---|---|---|---|
-| 2x4 on edge | 3½" | 1½" | 2% | 1% | 447 lb | — |
-| 1x4 flat | ¾" | 3½" | 52% | 53% | 219 lb | **−227 lb, +$93** |
-| 1x3 flat | ¾" | 2½" | 73% | 74% | 157 lb | **−290 lb, −$36** |
+| | screw face | bending | sag vs L/180 | girts | vs 2x4 |
+|---|---|---|---|---|---|
+| 2x4 | 3½" | 13% | 7% | 447 lb | — |
+| 1x4 | 3½" | 52% | 53% | 219 lb | **−227 lb, +$93** |
+| 1x3 | 2½" | 73% | 74% | 157 lb | **−290 lb, −$36** |
 
-1x3 is the best weight-per-dollar move on the building — it is lighter *and* cheaper.
-Deflection governs, not bending: the failure you would see is the metal panel rippling
-between studs, not a board breaking.
+1x3 is the best weight-per-dollar move on the building — lighter *and* cheaper. Deflection
+governs, not bending: the failure you would see is the metal panel rippling between studs,
+not a board breaking.
 
-**Flat only, and that is not fussiness.** On edge a 1x shows the siding screws a ¾" line
-to hit down a 34-foot wall. Flat it gives 2½" or 3½" — a better target than the 2x4 it
-replaces. It is also why 1x2 is not offered: flat it fails both bending and deflection,
-and at 1½" wide you cannot get two fasteners into a stud crossing without splitting it,
-which matters because the girts are what brace the 11'-3" studs about their weak axis.
+**Flat, not on edge, and not out of fussiness.** On edge a girt shows the siding screws
+only its thickness — ¾" for a 1x, down a 34-foot wall — and stands the skin off by its
+full depth. The 2x4s used to be drawn on edge, which put the siding **7" wider than the
+studs** on a trailer already at 12'-0" and permanently oversize. Flat, that is 3", and
+every size gives 2½"–3½" of screw target.
+
+1x2 is not offered: flat it fails bending and deflection both, and at 1½" wide you cannot
+get two fasteners into a stud crossing without splitting it — which matters, because the
+girts are what brace the 11'-3" studs about their weak axis.
 
 1x is sold as boards, not stress-graded lumber, so the check runs it at a deliberately
 conservative 500 psi against the 900 × C_f the graded sizes get. Buy furring that is
 straight and reasonably clear, and pre-drill near the ends.
-
-**Worth deciding separately:** the 2x4 girts stand **3½" proud** of the framing, so the
-siding sits 7" wider than the studs overall — on a trailer already at 12'-0" and
-permanently oversize. Either 1x takes that to 1½". If the 3½" cavity is deliberate as a
-rainscreen, fine; if not, it is free width.
 
 ## Saving a layout
 
