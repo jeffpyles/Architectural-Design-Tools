@@ -148,6 +148,9 @@ const DEFAULT_SPEC = {
      is the interior face, which is also the interior surface — one layer
      doing three jobs, and the wall stays 3½" thick. */
   wallSkin: 'girts',
+  /* Wrap the studs, then the girts over it — the girts are what hold the
+     barrier tight and what make the drained cavity behind the metal. */
+  weatherBarrier: 'housewrap',
   sheathingPanel: 'osb716',   // only used when wallSkin is 'sheathing'
   studMaterial: 'wood',
   girtSpacing: 24,

@@ -73,22 +73,28 @@ const ROOFING = {
 /* Siding. `spans` is the constraint people trip over: a ribbed panel bridges
    girts on its own, and anything flat, lapped or coursed does not. */
 const SIDING = {
+  metal29:     { label: 'Metal panel, 29 ga steel', psf: 0.70, usd: 1.90, hr: 1.6, R: 0,
+    spans: 24, nailable: 0, mat: 'metal', impervious: true,
+    note: 'The farm-store ag panel, and the standard for exactly this wall. Lighter and '
+      + 'cheaper than 26 ga; it oil-cans and dents more, and being thinner it tears '
+      + 'around an overdriven screw sooner. The coating decides its life, not the gauge — '
+      + 'ask for AZ50/AZ55 Galvalume and an SMP paint rather than cheap polyester.' },
   metal:       { label: 'Metal panel, 26 ga steel', psf: 0.90, usd: 2.40, hr: 1.6, R: 0,
-    spans: 24, nailable: 0, mat: 'metal',
+    spans: 24, nailable: 0, mat: 'metal', impervious: true,
     note: 'The default. Ribbed, so it spans girts with no sheathing behind it.' },
   metal24:     { label: 'Metal panel, 24 ga steel', psf: 1.15, usd: 3.10, hr: 1.7, R: 0,
-    spans: 30, nailable: 0, mat: 'metal',
+    spans: 30, nailable: 0, mat: 'metal', impervious: true,
     note: 'Stiffer than 26 ga — worth it if the girts go wider.' },
   alum:        { label: 'Ribbed panel, .032 aluminium', psf: 0.50, usd: 4.50, hr: 1.6, R: 0,
-    spans: 24, nailable: 0, mat: 'metal',
+    spans: 24, nailable: 0, mat: 'metal', impervious: true,
     note: 'Half the weight of 26 ga steel for about twice the money. Needs aluminium or '
       + 'stainless fasteners — plain steel screws will corrode it off the wall.' },
   alumShake:   { label: 'Aluminium shake profile', psf: 0.50, usd: 7.00, hr: 3.5, R: 0,
-    spans: null, nailable: 0.375, mat: 'metal',
+    spans: null, nailable: 0.375, mat: 'metal', impervious: true,
     note: 'Stamped and interlocking: the cedar look at aluminium weight. Wants a solid '
       + 'nailable face behind it.' },
   alumLap:     { label: 'Aluminium lap siding, .019', psf: 0.27, usd: 3.20, hr: 2.4, R: 0,
-    spans: null, nailable: 0.375, mat: 'metal',
+    spans: null, nailable: 0.375, mat: 'metal', impervious: true,
     note: 'The lightest skin on the list by some way. Dents if you look at it.' },
   lap:         { label: 'Lap siding', psf: 2.00, usd: 2.80, hr: 3.2, R: 0.40,
     spans: 16, nailable: 0, mat: 'trim',
@@ -103,6 +109,7 @@ const SIDING = {
       + 'size, and the slowest thing here to hang.' },
   poly:        { label: 'Polycarbonate, 0.8 mm corrugated', psf: 0.20, usd: 1.70, hr: 2.0, R: 0.10,
     spans: 24, nailable: 0, mat: 'poly', translucent: true, expands: 3.75e-5, life: 15,
+    impervious: true,
     note: 'The lightest and cheapest skin here by some way, and you can see through it. '
       + 'A greenhouse wall, a shed, a porch screen. Not a wall somebody sleeps behind — '
       + 'see the Review tab.' },
@@ -148,6 +155,22 @@ const WALLSKIN = {
     sheet: 'osb716', nailable: 0.4375,
     note: 'Adds shear on the outside face and a nailable surface for anything coursed — '
       + 'which is what cedar and the stamped profiles need.' },
+};
+
+/* The weather barrier. Weighs almost nothing and is on the list anyway,
+   because "almost nothing" is a number and leaving it out of the takeoff
+   means nobody buys it either. */
+const BARRIER = {
+  none:       { label: 'None', psf: 0, usd: 0, hr: 0, R: 0, mat: null,
+    note: 'The siding is the only thing between the weather and the framing. Pole barns '
+      + 'are built this way; a wall with insulation behind it should not be.' },
+  housewrap:  { label: 'Housewrap', psf: 0.012, usd: 0.22, hr: 0.8, R: 0, mat: 'wrap',
+    note: 'Tyvek HomeWrap and the like, about 1.8 oz a square yard. Listed for going over '
+      + 'sheathing — stapled to bare studs at 24" o.c. it billows and tears at the '
+      + 'fasteners, so use cap staples, do not stretch it, and get the girts on quickly.' },
+  commercial: { label: 'Reinforced housewrap', psf: 0.020, usd: 0.40, hr: 0.8, R: 0, mat: 'wrap',
+    note: 'Tyvek CommercialWrap or a woven poly. Twice the price and far tougher over open '
+      + 'framing, which is what a girt wall with no sheathing is.' },
 };
 
 /* Structural sheet, wherever it is used: exterior sheathing, roof deck,
@@ -205,7 +228,7 @@ for (const s of Object.values(CFS)) {
 
 const ASSEMBLY = {
   roofing: ROOFING, siding: SIDING, interior: INTERIOR,
-  wallSkin: WALLSKIN, sheathing: SHEATHING, studMaterial: STUDMAT,
+  wallSkin: WALLSKIN, sheathing: SHEATHING, studMaterial: STUDMAT, barrier: BARRIER,
 };
 
 /* Dimensional lumber, dollars per lineal foot of purchased stock. Boards
@@ -325,6 +348,30 @@ function assemblyReview(spec, ctx) {
         `Rated across ${fmtIn(sd.spans)} and the girts are at ${fmtIn(ctx.girtSpacing)}. It will `
         + 'oil-can between them, and in a gust it drums. Close the girts up or go a gauge heavier.');
     }
+    /* A skin water cannot pass has to be able to give it back. Metal
+       condenses on its own back face — it has no thermal mass and radiates
+       to a clear sky, so it drops below dew point from the inside — and
+       wind-driven rain gets past every lap and every screw. Both want a
+       drained, vented gap to leave by, and a barrier pinned tight under an
+       impervious sheet cannot dry either. */
+    if (sd.impervious && ctx.cavity != null) {
+      if (ctx.cavity < 0.25) {
+        add(ctx.barrier ? 'warn' : 'info', `Nothing drains behind the ${sd.label}`,
+          'It is sitting flat on '
+          + (ctx.barrier ? 'the weather barrier' : 'the sheathing')
+          + ', so water past a lap or a screw has nowhere to go and the condensation that '
+          + 'forms on the back of the panel on a clear night has nowhere to dry to. Furring '
+          + 'strips over the barrier give a ¾" drained cavity and are the cheapest fix on '
+          + 'this whole list — which is what the girts already are, on a wall that has them.');
+      } else {
+        add('info', `${fmtIn(ctx.cavity)} of drained cavity behind the ${sd.label}`,
+          'The girts hold the skin off the wall, so water past a lap or a screw drains out '
+          + 'and the back of the panel dries. Vent it top and bottom — insect screen at the '
+          + 'bottom, open under the eave flashing — or it is a cavity that only collects. '
+          + 'A vertical-ribbed panel drains through its own ribs, so horizontal girts do '
+          + 'not dam it.');
+      }
+    }
     if (sd.translucent) {
       /* Whether this is a feature or a mistake depends on what is behind it,
          and only the building knows that. */
@@ -372,6 +419,14 @@ function assemblyReview(spec, ctx) {
       + 'washers, and never run the screws tight. It is also soft: under suction the limit '
       + 'is the screw pulling through the sheet, not the sheet tearing, so the washers do '
       + `the work. Reckon on ${a.life} years before it yellows and goes brittle.`);
+  }
+
+  /* And whether there is a barrier at all. */
+  if (ctx.barrier !== undefined && ctx.conditioned && !ctx.barrier) {
+    add('warn', 'No weather barrier behind the siding',
+      'The siding is the only thing between the weather and the insulation. That is how a '
+      + 'pole barn is built and it is fine for one; a wall with batt in it wants a drainage '
+      + 'plane and an air barrier behind the skin.');
   }
 
   const sm = assembly('studMaterial', spec.studMaterial || 'wood');

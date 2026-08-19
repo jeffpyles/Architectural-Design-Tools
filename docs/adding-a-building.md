@@ -270,6 +270,7 @@ number about that option lives on that row:
 | `translucent` | you can see through it; raises a finding whose level depends on `ctx.conditioned` |
 | `expands` | thermal movement per °F, where it is enough to detail around |
 | `life` | years before it wants replacing, where that is short enough to say |
+| `impervious` | water cannot pass it and it condenses on its own back, so it wants a drained cavity — reported against `ctx.cavity` |
 
 A building's own engineering has to read the row too. Both buildings had a
 hardcoded roof dead load — `roofing === 'standing' ? 1.6 : … : 2.8` — so every
@@ -300,7 +301,9 @@ Three helpers do the reading:
   and `why` says which, because a bare 0 in a review note tells nobody what to
   change.
 - `assemblyReview(spec, ctx)` — the findings for combinations that will not
-  build. `ctx` is the little core cannot know: `{ pitch, girtSpacing, conditioned }`.
+  build. `ctx` is the little core cannot know: `{ pitch, girtSpacing, conditioned, cavity,
+  barrier }` — the last two being how far the skin stands off the wall and whether
+  there is a weather barrier at all.
   Call it from the building's `audit()` and spread the result in. `conditioned`
   is there because whether a see-through wall is a feature or a mistake depends
   on what is behind it, and the two buildings answer that from different spec

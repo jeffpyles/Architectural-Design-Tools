@@ -21,6 +21,7 @@ const COMPARE_GROUPS = [
   { group: 'roofing', key: 'roofing', label: 'Roofing' },
   { group: 'interior', key: 'interiorFinish', label: 'Interior face' },
   { group: 'sheathing', key: 'sheathingPanel', label: 'Exterior sheet' },
+  { group: 'barrier', key: 'weatherBarrier', label: 'Weather barrier' },
   { group: 'studMaterial', key: 'studMaterial', label: 'Stud material' },
 ];
 function compareGroups(spec) {

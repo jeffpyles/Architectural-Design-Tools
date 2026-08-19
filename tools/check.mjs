@@ -469,6 +469,51 @@ if (A.ASSEMBLY.siding.poly) {
   console.log('  ok  polycarbonate reports what it is: see-through, moving, and 24" span');
 }
 
+/* 7g4. A skin water cannot pass has to be able to give it back. Girts are
+   the cavity; sheathing with nothing furred over it is not, and the two get
+   opposite notes. Metal condenses on its own back face on a clear night, so
+   this is not only about rain. */
+if (A.ASSEMBLY.siding.metal) {
+  const titles = (over, ctx) => A.assemblyReview({ ...spec, ...over },
+    { pitch: 6, girtSpacing: 24, ...ctx }).map((f) => `${f.level}:${f.title}`);
+  const gap = titles({ siding: 'metal' }, { cavity: 1.5, barrier: true });
+  const flat = titles({ siding: 'metal' }, { cavity: 0, barrier: true });
+  if (!gap.some((t) => /^info:.*drained cavity/.test(t))) fail('a cavity behind the metal goes unreported');
+  if (gap.some((t) => /Nothing drains/.test(t))) fail('a wall with a cavity is told it has none');
+  if (!flat.some((t) => /^warn:.*Nothing drains/.test(t))) fail('metal flat on the barrier is not warned about');
+  /* Cedar breathes and does not condense on its back, so it does not get
+     this particular lecture — its own note already asks for a rainscreen. */
+  if (titles({ siding: 'cedarShingle' }, { cavity: 0, barrier: true })
+    .some((t) => /drains/.test(t))) fail('cedar is given the condensation warning');
+  /* A wall with insulation and no barrier at all is worth a word. */
+  if (!titles({ siding: 'metal' }, { cavity: 1.5, barrier: false, conditioned: true })
+    .some((t) => /^warn:.*No weather barrier/.test(t))) {
+    fail('an insulated wall with no weather barrier is not flagged');
+  }
+  if (titles({ siding: 'metal' }, { cavity: 1.5, barrier: true, conditioned: true })
+    .some((t) => /No weather barrier/.test(t))) fail('a wrapped wall is told it has no barrier');
+  /* Gauge: thinner is lighter and cheaper, in order, every time. */
+  const gauges = ['metal29', 'metal', 'metal24'];
+  for (let i = 1; i < gauges.length; i++) {
+    const a2 = A.assembly('siding', gauges[i - 1]), b2 = A.assembly('siding', gauges[i]);
+    if (!(b2.psf > a2.psf)) fail(`${gauges[i]} is not heavier than ${gauges[i - 1]}`);
+    if (!(b2.usd > a2.usd)) fail(`${gauges[i]} is not dearer than ${gauges[i - 1]}`);
+  }
+  console.log('  ok  the drained cavity is reported either way, and gauge orders by weight and price');
+}
+
+/* 7g5. The barrier covers the same wall the siding does — if the two areas
+   disagree, one of them is missing the gable triangles. */
+if (t.cost && A.ASSEMBLY.barrier) {
+  const of = (pre) => t.cost.rows.filter((r) => r.key.startsWith(pre))
+    .reduce((a, r) => a + r.sf, 0);
+  const wrapSf = of('barrier.'), sideSf = of('siding.');
+  if (wrapSf && Math.abs(wrapSf - sideSf) > 1) {
+    fail(`the barrier covers ${wrapSf.toFixed(0)} sf and the siding ${sideSf.toFixed(0)}`);
+  }
+  if (wrapSf) console.log(`  ok  barrier and siding cover the same ${wrapSf.toFixed(0)} sf`);
+}
+
 /* 7h. Girts, for the buildings that have them. A girt spans stud to stud
    carrying wind on the siding, and the thing that governs a thin one is
    deflection, not rupture — a metal panel ripples long before a board

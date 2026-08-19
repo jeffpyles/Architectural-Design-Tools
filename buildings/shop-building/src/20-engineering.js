@@ -471,6 +471,7 @@ function auditBuilding(spec, openings, extra) {
   for (const f of assemblyReview(spec, {
     pitch: spec.pitch, girtSpacing: spec.girtSpacing,
     conditioned: !!spec.insulation,
+    cavity: spec.wallSkin === 'girts' ? girtSection(spec.girtSize).out : 0,
   })) out.push(f);
 
   // Openings vs. framing reality

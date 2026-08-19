@@ -340,12 +340,36 @@ function buildModel(spec, openings) {
   /* Girts outside, because the metal hangs on them and there is no exterior
      sheathing. The bracing sheathing is on the inside face, and goes on with
      the interior finish. */
+  /* The barrier goes on whatever is structural — the studs on a girt wall,
+     the sheathing on a sheathed one — and the girts go over it. That order
+     is what makes the cavity: nothing has to be notched to get a flat plane
+     to wrap, and notching would destroy the gap the metal needs anyway. */
+  const wrap = assembly('barrier', spec.weatherBarrier) || assembly('barrier', 'none');
+  const wrapT = wrap.mat ? 0.05 : 0;              // drawn thickness; psf carries the weight
+  const wrapAt = isSheathed(spec) ? T + 0.4375 : T;
+  if (wrap.mat) {
+    for (const wall of ['N', 'S', 'W', 'E']) {
+      for (const r of skinRects(wall, spec, openings, y0, H)) {
+        add('dryin', 'wrap', wrap.mat, wrap.label,
+          wallBox(wall, spec, r.u0, r.y0, wrapAt, r.u1 - r.u0, r.y1 - r.y0, wrapT),
+          { area: (r.u1 - r.u0) * (r.y1 - r.y0) / 144, psf: wrap.psf,
+            asm: 'barrier.' + wrap.id });
+      }
+      if (WALLS[wall].gable) {
+        const wx = WALLS[wall].x === 0 ? -wrapAt - wrapT : L + wrapAt;
+        add('dryin', 'wrap', wrap.mat, wrap.label,
+          prismPart([[0, H], [W, H], [W / 2, H + spec.ridgeRise]], wx, wx + wrapT),
+          { area: W * spec.ridgeRise / 2 / 144, psf: wrap.psf, asm: 'barrier.' + wrap.id });
+      }
+    }
+  }
+
   if (!isSheathed(spec)) {
     const gs = girtSection(spec.girtSize);
     for (const wall of ['N', 'S', 'W', 'E']) {
       for (const g of girtRuns(wall, spec, openings)) {
         add('dryin', 'girt', 'fir', `${spec.girtSize} girt${gs.flat ? ', flat' : ' on edge'}`,
-          wallBox(wall, spec, g.u0, g.y, T, g.u1 - g.u0, gs.face, gs.out),
+          wallBox(wall, spec, g.u0, g.y, T + wrapT, g.u1 - g.u0, gs.face, gs.out),
           { size: spec.girtSize, len: g.u1 - g.u0, wall, y: g.y, u0: g.u0, u1: g.u1 });
       }
     }
@@ -388,7 +412,10 @@ function buildModel(spec, openings) {
   }
   const sd = assembly('siding', spec.siding) || assembly('siding', 'metal');
   const sideKind = sd.label;
-  const skinT = isSheathed(spec) ? 0.4375 : girtSection(spec.girtSize).out;
+  /* How far the skin stands off the framing: the barrier, plus whatever
+     holds it out. On a sheathed wall with no furring that is nothing, which
+     is what the Review tab warns about. */
+  const skinT = (isSheathed(spec) ? 0.4375 : girtSection(spec.girtSize).out) + wrapT;
   for (const wall of ['N', 'S', 'W', 'E']) {
     for (const r of skinRects(wall, spec, openings, y0, H)) {
       add('skin', 'siding', sd.mat, sideKind,

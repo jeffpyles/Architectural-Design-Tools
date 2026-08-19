@@ -50,6 +50,8 @@ const CONTROLS = [
     opts: assemblyOpts('wallSkin') },
   { g: 'Skin & finish', k: 'sheathingPanel', label: 'Exterior sheet', type: 'sel',
     opts: assemblyOpts('sheathing') },
+  { g: 'Skin & finish', k: 'weatherBarrier', label: 'Weather barrier', type: 'sel',
+    opts: assemblyOpts('barrier') },
   { g: 'Skin & finish', k: 'girtSize', label: 'Girts', type: 'sel',
     opts: [['2x4', '2x4'], ['1x4', '1x4 furring'], ['1x3', '1x3 furring']] },
   { g: 'Skin & finish', k: 'girtSpacing', label: 'Girt spacing', type: 'sel',

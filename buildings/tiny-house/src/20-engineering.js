@@ -213,6 +213,11 @@ function auditBuilding(spec, openings) {
     /* Whether a see-through wall is the point or a mistake depends on what is
        behind it, and only the building knows that. */
     conditioned: spec.wallInsulation !== 'none' || spec.interiorFinish !== 'none',
+    /* And what holds the skin off the wall, which is what decides whether
+       water past a lap has anywhere to go. Girts are the cavity; sheathing
+       with nothing furred over it is not. */
+    cavity: isSheathed(spec) ? 0 : girtSection(spec.girtSize).out,
+    barrier: !!(assembly('barrier', spec.weatherBarrier) || {}).mat,
   })) out.push(f);
 
   /* Openings that have wandered off the wall, or into each other. */

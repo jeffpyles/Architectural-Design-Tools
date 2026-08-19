@@ -246,6 +246,7 @@ inside, 12,110 lb shell):
 
 | siding | weight | cost | per lb saved |
 |---|---|---|---|
+| **29 ga steel panel** | **−178 lb** | **−$445** | free |
 | Aluminium ribbed panel | −356 lb | +$1,869 | $5.25 |
 | Aluminium shake profile | −356 lb | +$4,095 | $11.50 |
 | Aluminium lap siding | −561 lb | +$712 | $1.27 — **but it needs sheathing** |
@@ -325,6 +326,40 @@ girts are what brace the 11'-3" studs about their weak axis.
 1x is sold as boards, not stress-graded lumber, so the check runs it at a deliberately
 conservative 500 psi against the 900 × C_f the graded sizes get. Buy furring that is
 straight and reasonably clear, and pre-drill near the ends.
+
+## The weather barrier and the cavity
+
+The wall goes together in this order, and the order is the whole design:
+
+> studs → **housewrap on the studs** → girts over the wrap → metal on the girts
+
+Nothing gets notched. The girts hold the barrier tight and *are* the drained cavity —
+1½" with 2x4s, ¾" with 1x furring. **Weather barrier** on the Structure tab is
+none / housewrap / reinforced housewrap; housewrap is 890 sf, **11 lb and $196**, about
+7 hours.
+
+**Why the cavity is not optional behind metal.** Metal has no thermal mass and radiates
+to a clear night sky, so it drops below dew point and condenses on its own *back* face —
+that is what anti-condensation membranes are for on metal roofs. Add wind-driven rain
+past every lap and every screw, and a barrier pinned tight under an impervious sheet that
+cannot dry, and you have three problems the gap solves. Pick sheathing with nothing
+furred over it and the Review tab says **"Nothing drains behind the metal panel"**;
+keep the girts and it reports the cavity depth instead.
+
+Vent it top and bottom — insect screen at the bottom, open under the eave flashing — or
+it is a cavity that only collects. A vertical-ribbed panel drains through its own ribs,
+so horizontal girts do not dam it.
+
+**The one weak point:** housewrap is listed for going over sheathing. Stapled to bare
+studs at 24" o.c. it billows and tears at the fasteners before the girts pin it. Use cap
+staples, do not stretch it, get the girts on the same day — or spend the extra $160 on
+reinforced wrap, which is built for open framing.
+
+**And do not notch the girts flush.** It is tempting — a flat plane to wrap — but it
+destroys the cavity, and the studs cannot afford it. An 11'-3" 2x4 at 24" o.c. runs at
+58% of allowable; take ¾" off its depth and it is at 118%, and 1½" puts it at 302%. The
+IRC caps a notch in a bearing stud at 25% of depth (0.875") for *one* notch, and you would
+have five up each stud, on the compression face, in something that vibrates down the road.
 
 ## Saving a layout
 
