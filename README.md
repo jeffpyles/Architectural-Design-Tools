@@ -72,8 +72,20 @@ node tools/viewport-check.mjs shop-building   # browser layout, 28 window shapes
 node tools/interact-check.mjs shop-building  # picking, dragging, every tab
 node tools/weigh.mjs tiny-house      # every part, and how the takeoff weighed it
 
+node tools/framing-plan.mjs layouts/tiny-house/final-window-placement.json
+                                     # wall elevations, cut list and screw count → .html
+node tools/framing-check.mjs         # the same plan, asserted, over every saved layout
+
 node tools/serve.mjs                 # assemble _site/ as CI does, serve on :8099
 ```
+
+`tools/framing-plan.mjs` turns a saved layout into a shop drawing set: an elevation of
+each wall at ¼" = 1'-0", a cut list optimised against one stock length (`--stock 144
+--trim 0.5`, in inches), and a fastener count traced row by row to the IRC schedule. It
+reads the model rather than re-deriving it, so it cannot disagree with what is on screen
+about where anything sits — but it does two things the model does not: it splices plates
+too long for a stick, and it sizes headers for the loft as well as the roof, which is a
+load `sizeHeader` does not currently ask about.
 
 `tools/serve.mjs` is the one to use when touching anything to do with the layout library —
 it reproduces the deployed directory layout, so the relative fetch for

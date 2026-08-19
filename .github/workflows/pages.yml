@@ -35,6 +35,11 @@ jobs:
         run: |
           for id in ${{ steps.list.outputs.ids }}; do node tools/check.mjs "$id"; done
 
+      # The framing plan reads the model but splices and sizes on its own, so
+      # it can drift away from the building without the model checks noticing.
+      - name: Check the framing plan against every saved layout
+        run: node tools/framing-check.mjs
+
       - name: Build the pages
         run: node tools/build.mjs
 
